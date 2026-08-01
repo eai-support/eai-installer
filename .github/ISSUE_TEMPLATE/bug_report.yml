@@ -1,0 +1,41 @@
+name: Installer bug
+description: Report a reproducible EAI Setup problem.
+title: "bug: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Do not attach ZIP files, scripts, installers, binaries, passwords, or API keys. Paste text logs with personal names, tenant IDs, and tokens removed.
+  - type: input
+    id: version
+    attributes:
+      label: EAI Setup version
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Operating system
+      options:
+        - Windows 10
+        - Windows 11
+        - macOS Intel
+        - macOS Apple Silicon
+        - Ubuntu/Debian
+        - Other Linux
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Paste commands as text and remove credentials, tenant identifiers, and private hostnames.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Sanitised output
+      description: Do not include secrets or executable attachments.
+      render: text

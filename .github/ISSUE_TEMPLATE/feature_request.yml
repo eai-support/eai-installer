@@ -1,0 +1,19 @@
+name: Feature request
+description: Suggest a safe improvement to the cross-platform setup workflow.
+title: "feature: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: User problem
+      description: What setup or onboarding problem should this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Keep the proposal provider-neutral and do not include private platform details.
+    validations:
+      required: true
