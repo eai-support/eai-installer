@@ -11,7 +11,7 @@ private platform endpoints. It does not perform a live tenant mutation.
 - JSON and JavaScript syntax validation
 - Static secret and private-host hygiene checks
 - Rust `cargo check` for the Tauri application
-- CodeQL analysis for Rust and JavaScript
+- GitHub's repository-level default CodeQL analysis for Rust and JavaScript
 - Dependency review on pull requests
 
 ## Release checks

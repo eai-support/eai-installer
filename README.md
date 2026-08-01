@@ -25,6 +25,10 @@ silently install a commercial AI product. A public download is intentional;
 EAI access remains controlled by browser authentication, tenant membership,
 application policy, and the platform's own authorization checks.
 
+GitHub's default CodeQL setup scans this public repository; a second advanced
+CodeQL workflow is intentionally not included because GitHub does not accept
+both scanning modes at once.
+
 ## Support target
 
 - Windows 10 and 11, x64 and arm64 where the prerequisite installers support it
