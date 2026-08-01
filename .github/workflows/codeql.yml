@@ -22,6 +22,16 @@ jobs:
         language: [javascript-typescript, rust]
     steps:
       - uses: actions/checkout@v4
+      - name: Install Tauri Linux dependencies
+        if: matrix.language == 'rust'
+        run: |
+          sudo apt-get update
+          if apt-cache show libwebkit2gtk-4.1-dev >/dev/null 2>&1; then
+            WEBKIT=libwebkit2gtk-4.1-dev
+          else
+            WEBKIT=libwebkit2gtk-4.0-dev
+          fi
+          sudo apt-get install -y "$WEBKIT" libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev patchelf build-essential
       - uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
