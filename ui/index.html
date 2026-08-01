@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>EAI Setup</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Enterprise AI Group</p>
+          <h1>EAI Setup</h1>
+        </div>
+        <span id="platform" class="status">Detecting device</span>
+      </header>
+
+      <section class="intro" aria-labelledby="intro-title">
+        <h2 id="intro-title">Prepare this computer for EAI</h2>
+        <p>Install the public developer prerequisites, sign in, and initialise an EAI app in a folder you choose.</p>
+        <p class="quiet">Anyone can download this installer. Your EAI tenant access still comes from your browser sign-in and platform permissions.</p>
+      </section>
+
+      <section class="steps" aria-label="Setup steps">
+        <article class="step" data-step="git">
+          <div><span class="number">1</span><div><h3>Git</h3><p id="git-state">Checking</p></div></div>
+          <button data-action="git">Install Git</button>
+        </article>
+        <article class="step" data-step="node">
+          <div><span class="number">2</span><div><h3>Node.js and npm</h3><p id="node-state">Checking</p></div></div>
+          <button data-action="node">Install Node.js</button>
+        </article>
+        <article class="step" data-step="eai-cli">
+          <div><span class="number">3</span><div><h3>EAI CLI</h3><p id="eai-cli-state">Checking</p></div></div>
+          <button data-action="eai-cli">Install or update</button>
+        </article>
+        <article class="step" data-step="login">
+          <div><span class="number">4</span><div><h3>Sign in</h3><p>Use your browser to authenticate with EAI.</p></div></div>
+          <button data-action="login">Show login command</button>
+        </article>
+      </section>
+
+      <section class="project" aria-labelledby="project-title">
+        <div>
+          <h2 id="project-title">Start an app</h2>
+          <p>Choose a kebab-case name and an existing or new folder. EAI init will fetch the supported Gofer assets and app template.</p>
+        </div>
+        <label>Project name <input id="project-name" placeholder="my-eai-app" autocomplete="off" /></label>
+        <label>Folder <input id="project-directory" placeholder="Choose a folder in your file manager" autocomplete="off" /></label>
+        <button class="primary" data-action="init">Show init command</button>
+      </section>
+
+      <output id="output" class="output" aria-live="polite">Ready to check this computer.</output>
+      <footer>Gofer and the app template are installed by the supported <code>eai init</code> workflow. EAI Setup never stores your password or API secrets.</footer>
+    </main>
+    <script src="app.js"></script>
+  </body>
+</html>

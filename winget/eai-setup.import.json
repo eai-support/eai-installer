@@ -1,0 +1,19 @@
+{
+  "$schema": "https://aka.ms/winget-packages.schema.2.0.json",
+  "Sources": [
+    {
+      "Packages": [
+        { "PackageIdentifier": "Git.Git" },
+        { "PackageIdentifier": "OpenJS.NodeJS.LTS" }
+      ],
+      "SourceDetails": { "Argument": "https://cdn.winget.microsoft.com/cache" }
+    }
+  ],
+  "Options": {
+    "OnlyUpdate": false,
+    "Interactive": false,
+    "IgnoreVersions": false,
+    "AcceptPackageAgreements": true,
+    "AcceptSourceAgreements": true
+  }
+}

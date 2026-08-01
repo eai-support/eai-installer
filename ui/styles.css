@@ -1,0 +1,40 @@
+:root {
+  color-scheme: light;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #1d252c;
+  background: #f4f6f7;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; }
+.shell { max-width: 900px; margin: 0 auto; padding: 32px; }
+.topbar { display: flex; align-items: start; justify-content: space-between; border-bottom: 1px solid #d9dfe3; padding-bottom: 22px; }
+.eyebrow { color: #53636d; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; margin: 0 0 8px; }
+h1, h2, h3, p { margin-top: 0; }
+h1 { font-size: 30px; margin-bottom: 0; }
+h2 { font-size: 20px; margin-bottom: 8px; }
+h3 { font-size: 16px; margin: 0 0 5px; }
+p { color: #53636d; line-height: 1.45; margin-bottom: 8px; }
+.status { color: #176448; background: #e1f4ea; border: 1px solid #b6dfc9; padding: 8px 12px; border-radius: 6px; font-size: 13px; }
+.intro { padding: 28px 0 18px; }
+.quiet { font-size: 13px; color: #65747c; }
+.steps { display: grid; gap: 10px; }
+.step { display: flex; align-items: center; justify-content: space-between; gap: 20px; background: #fff; border: 1px solid #d9dfe3; border-radius: 6px; padding: 16px; }
+.step > div { display: flex; align-items: center; gap: 12px; }
+.number { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: #1d252c; color: #fff; font-size: 13px; }
+button { border: 1px solid #aebbc3; background: #fff; color: #1d252c; border-radius: 5px; padding: 9px 12px; font-weight: 600; cursor: pointer; }
+button:hover { border-color: #1b6d50; color: #15583f; }
+.project { margin-top: 26px; background: #fff; border: 1px solid #d9dfe3; border-radius: 6px; padding: 20px; display: grid; gap: 12px; }
+label { display: grid; gap: 6px; font-size: 13px; font-weight: 600; }
+input { border: 1px solid #aebbc3; border-radius: 5px; padding: 10px; font: inherit; font-weight: 400; }
+.primary { justify-self: start; background: #1b6d50; border-color: #1b6d50; color: #fff; }
+.output { display: block; margin-top: 16px; min-height: 48px; background: #202b31; color: #ecf3f1; border-radius: 5px; padding: 14px; font-size: 13px; line-height: 1.45; }
+footer { color: #65747c; font-size: 12px; line-height: 1.5; margin-top: 18px; }
+code { font-family: ui-monospace, SFMono-Regular, monospace; }
+@media (max-width: 620px) {
+  .shell { padding: 20px; }
+  .topbar { gap: 14px; flex-direction: column; }
+  .step { align-items: start; flex-direction: column; }
+  button { width: 100%; }
+  .primary { width: auto; }
+}

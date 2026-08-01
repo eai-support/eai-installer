@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "product": {
+    "id": "eai-setup",
+    "name": "EAI Setup",
+    "description": "A signed desktop setup experience for the EAI developer workflow.",
+    "publicDownload": true,
+    "accessControl": "EAI login and tenant policy control platform access"
+  },
+  "sources": {
+    "cliPackage": "@enterpriseai/cli",
+    "cliCommand": "eai",
+    "cliRepository": "https://github.com/eai-tools/eai-cli.git",
+    "goferRepository": "https://github.com/eai-tools/gofer.git",
+    "appTemplateRepository": "https://github.com/eai-tools/eai-app-template.git",
+    "initializationCommand": "eai init"
+  },
+  "prerequisites": [
+    {
+      "id": "git",
+      "command": "git",
+      "minimumVersion": "2.40",
+      "required": true,
+      "installers": {
+        "windows": "winget install --id Git.Git -e --source winget",
+        "macos": "brew install git",
+        "linux": "sudo apt-get install -y git or sudo dnf install -y git"
+      }
+    },
+    {
+      "id": "node",
+      "command": "node",
+      "minimumVersion": "20",
+      "required": true,
+      "installers": {
+        "windows": "winget install --id OpenJS.NodeJS.LTS -e --source winget",
+        "macos": "brew install node",
+        "linux": "Use the distribution package manager and verify Node.js 20 or newer"
+      }
+    },
+    {
+      "id": "npm",
+      "command": "npm",
+      "minimumVersion": "10",
+      "required": true,
+      "installers": {
+        "windows": "Installed with Node.js LTS",
+        "macos": "Installed with Node.js",
+        "linux": "Installed with Node.js package"
+      }
+    },
+    {
+      "id": "eai-cli",
+      "command": "eai",
+      "minimumVersion": "3.8.0",
+      "required": true,
+      "installers": {
+        "all": "npm install --global @enterpriseai/cli"
+      }
+    }
+  ],
+  "workflow": [
+    "detect platform and installed tools",
+    "install missing Git and Node.js prerequisites using a fixed platform adapter",
+    "install or update the EAI CLI from npm",
+    "open browser-based eai login",
+    "select or confirm the company tenant",
+    "choose an existing folder or create a new project folder",
+    "run eai init so Gofer assets and the app template are fetched by the supported CLI",
+    "verify the generated project and show the next AI/editor action"
+  ],
+  "runtime": {
+    "userCommands": [
+      "eai login",
+      "eai whoami",
+      "eai tenant list",
+      "eai tenant select <tenant>",
+      "eai init <project-name>"
+    ],
+    "secrets": "No token, password, client secret, or tenant secret is bundled in the installer.",
+    "deviceIdentity": "A random local device identifier may be stored for future activation; it is not hardware fingerprinting and is not transmitted by this repository.",
+    "aiHosts": "The installer does not silently install or authenticate commercial AI applications. It detects documented editor integrations and lets the user choose one."
+  },
+  "support": {
+    "windows": ["10", "11"],
+    "macos": ["Apple Silicon", "Intel", "recent supported macOS releases"],
+    "linux": ["Ubuntu/Debian first", "Fedora/RHEL adapter planned"],
+    "architectures": ["x64", "arm64"]
+  },
+  "security": {
+    "telemetryDefault": false,
+    "downloadsMustUseHttps": true,
+    "signedDesktopArtifactsRequiredForRelease": true,
+    "noSecretsInRepository": true
+  }
+}

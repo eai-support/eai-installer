@@ -1,0 +1,5 @@
+EAI Setup is maintained by Enterprise AI Group.
+
+This repository may download and install third-party software such as Git,
+Node.js, npm, and platform package managers. Those components remain under
+their own licences and are not included in this licence notice.
