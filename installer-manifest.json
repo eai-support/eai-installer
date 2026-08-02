@@ -17,6 +17,16 @@
   },
   "prerequisites": [
     {
+      "id": "homebrew",
+      "command": "brew",
+      "minimumVersion": "4.0",
+      "required": true,
+      "platform": "macos",
+      "installers": {
+        "macos": "Official Homebrew installer from https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh after explicit user confirmation"
+      }
+    },
+    {
       "id": "git",
       "command": "git",
       "minimumVersion": "2.40",
@@ -61,7 +71,8 @@
   ],
   "workflow": [
     "detect platform and installed tools",
-    "install missing Git and Node.js prerequisites using a fixed platform adapter",
+    "ask before installing a missing package manager or prerequisite",
+    "install missing Homebrew, Git, and Node.js prerequisites using fixed platform adapters",
     "install or update the EAI CLI from npm",
     "open browser-based eai login",
     "select or confirm the company tenant",

@@ -30,6 +30,13 @@ struct BootstrapResult {
 }
 
 fn executable(program: &str) -> String {
+    if cfg!(target_os = "macos") && program == "brew" {
+        for candidate in ["/opt/homebrew/bin/brew", "/usr/local/bin/brew"] {
+            if Path::new(candidate).exists() {
+                return candidate.to_string();
+            }
+        }
+    }
     if cfg!(target_os = "windows") && matches!(program, "npm" | "eai") {
         format!("{program}.cmd")
     } else {
@@ -135,9 +142,36 @@ fn package_install_step(step: &str, package: &str, message: &str) -> BootstrapRe
     command_result(step, false, "Linux package installation needs an elevated user action.", Some(command), None, true)
 }
 
+// Homebrew is the macOS package-manager prerequisite. The user invokes this
+// explicit step, and the downloaded official script is never built from input.
+fn homebrew_install_step() -> BootstrapResult {
+    if !cfg!(target_os = "macos") {
+        return command_result("homebrew", false, "Homebrew is only a macOS prerequisite.", None, None, false);
+    }
+    if version("brew", &["--version"]).is_some() {
+        return command_result("homebrew", true, "Homebrew is already installed.", Some("brew --version"), None, false);
+    }
+    let curl = if version("curl", &["--version"]).is_some() { "curl" } else {
+        return command_result("homebrew", false, "curl is required to fetch the official Homebrew installer.", Some("Install curl, then rerun EAI Setup."), None, true);
+    };
+    let path = env::temp_dir().join(format!("eai-homebrew-{}.sh", Uuid::new_v4()));
+    let path_string = path.to_string_lossy().to_string();
+    let url = "https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh";
+    if let Err(error) = run_program(curl, &["--fail", "--location", "--proto", "=https", "--tlsv1.2", "--output", &path_string, url]) {
+        return command_result("homebrew", false, &error, Some("Download the official Homebrew installer over HTTPS"), None, true);
+    }
+    let result = run_program("bash", &[&path_string]);
+    let _ = fs::remove_file(&path);
+    match result {
+        Ok((stdout, stderr)) => command_result("homebrew", true, "Homebrew installation completed. Restart the app if brew is not yet on PATH.", Some("official Homebrew installer"), Some(format!("{stdout}\n{stderr}")), false),
+        Err(error) => command_result("homebrew", false, &error, Some("official Homebrew installer"), None, true),
+    }
+}
+
 #[tauri::command]
 fn run_bootstrap(step: String, project_name: Option<String>, directory: Option<String>) -> BootstrapResult {
     match step.as_str() {
+        "homebrew" => homebrew_install_step(),
         "git" => package_install_step("git", "git", "Git installation completed."),
         "node" => package_install_step("node", "node", "Node.js installation completed."),
         "eai-cli" => match run_program("npm", &["install", "--global", "@enterpriseai/cli"]) {

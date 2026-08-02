@@ -2,16 +2,19 @@
 set -euo pipefail
 
 AUTO_INSTALL="${EAI_SETUP_AUTO_INSTALL:-0}"
+INSTALL_HOMEBREW="${EAI_SETUP_INSTALL_HOMEBREW:-0}"
 PROJECT_NAME=""
 PROJECT_DIR=""
 CURRENT_DIR=0
 
 usage() {
   cat <<'EOF'
-Usage: bootstrap.sh [--project <kebab-name>] [--directory <path>] [--current-dir]
+Usage: bootstrap.sh [--project <kebab-name>] [--directory <path>] [--current-dir] [--install-homebrew]
 
 The script installs only fixed, documented prerequisites. Set
-EAI_SETUP_AUTO_INSTALL=1 to allow package-manager installation.
+EAI_SETUP_AUTO_INSTALL=1 to allow package-manager installation. On macOS,
+--install-homebrew (or EAI_SETUP_INSTALL_HOMEBREW=1) explicitly permits the
+official Homebrew installer to run when brew is missing.
 EOF
 }
 
@@ -20,10 +23,14 @@ while [ "$#" -gt 0 ]; do
     --project) PROJECT_NAME="${2:?missing project name}"; shift 2 ;;
     --directory) PROJECT_DIR="${2:?missing directory}"; shift 2 ;;
     --current-dir) CURRENT_DIR=1; shift ;;
+    --install-homebrew) INSTALL_HOMEBREW=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
+
+# Explicit Homebrew consent also permits the fixed Git/Node package steps.
+if [ "$INSTALL_HOMEBREW" = "1" ]; then AUTO_INSTALL=1; fi
 
 case "$(uname -s)" in
   Darwin) PLATFORM=macos ;;
@@ -58,18 +65,40 @@ install_package() {
   esac
 }
 
+install_homebrew() {
+  if has brew; then return 0; fi
+  if [ "$INSTALL_HOMEBREW" != "1" ]; then
+    echo "Homebrew is missing. Re-run with --install-homebrew after reviewing the official installer." >&2
+    exit 1
+  fi
+  has curl || { echo "curl is required to install Homebrew from its official HTTPS source." >&2; exit 1; }
+  local installer
+  installer="$(mktemp "${TMPDIR:-/tmp}/eai-homebrew.XXXXXX.sh")"
+  trap 'rm -f "$installer"' EXIT
+  curl --fail --location --proto '=https' --tlsv1.2 \
+    --output "$installer" \
+    https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh
+  /bin/bash "$installer"
+  rm -f "$installer"
+  trap - EXIT
+  if [ -x /opt/homebrew/bin/brew ]; then
+    eval "$(/opt/homebrew/bin/brew shellenv)"
+  elif [ -x /usr/local/bin/brew ]; then
+    eval "$(/usr/local/bin/brew shellenv)"
+  fi
+  has brew || { echo "Homebrew installation completed without brew being available on PATH. Restart your shell and rerun." >&2; exit 1; }
+}
+
 if ! has git; then
   if [ "$PLATFORM" = macos ] && ! has brew; then
-    echo "Git is missing and Homebrew is not installed. Install Homebrew from https://brew.sh, then rerun." >&2
-    exit 1
+    install_homebrew
   fi
   install_package git
 fi
 
 if ! has node || ! has npm; then
   if [ "$PLATFORM" = macos ] && ! has brew; then
-    echo "Node.js is missing and Homebrew is not installed. Install Homebrew from https://brew.sh, then rerun." >&2
-    exit 1
+    install_homebrew
   fi
   install_package node
 fi

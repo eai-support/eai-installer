@@ -6,6 +6,12 @@
 required safety controls, and confirms the public source references are not
 private platform endpoints. It does not perform a live tenant mutation.
 
+The bootstrap contract tests also verify that macOS Homebrew installation is an
+explicit step, uses the official HTTPS source, and cannot be triggered by an
+arbitrary command or URL. The clean-machine matrix must include a macOS host
+without Homebrew so the consent, administrator prompt, PATH refresh, Git,
+Node.js/npm, and CLI handoff are exercised together.
+
 ## CI checks
 
 - JSON and JavaScript syntax validation

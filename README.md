@@ -7,17 +7,20 @@ hands control to the normal EAI CLI flow.
 ## What one download does
 
 1. Detects the operating system, CPU architecture, and installed tools.
-2. Installs missing Git and Node.js using the platform's package manager or a
+2. On macOS, offers to install Homebrew from the official HTTPS installer when
+   it is missing. The user must choose this step and approve any administrator
+   prompt.
+3. Installs missing Git and Node.js using the platform's package manager or a
    clear, user-approved fallback.
-3. Installs or updates the canonical `@enterpriseai/cli` npm package, whose
+4. Installs or updates the canonical `@enterpriseai/cli` npm package, whose
    command is `eai` and whose source repository is public at
    `eai-support/eai-cli`.
-4. Opens the normal browser sign-in flow with `eai login`.
-5. Lets the user confirm their tenant and choose an existing folder or a new
+5. Opens the normal browser sign-in flow with `eai login`.
+6. Lets the user confirm their tenant and choose an existing folder or a new
    project folder.
-6. Runs `eai init`, which fetches the supported Gofer assets and EAI app
+7. Runs `eai init`, which fetches the supported Gofer assets and EAI app
    template through the existing CLI contract.
-7. Verifies the project and shows the next action for the user's selected AI
+8. Verifies the project and shows the next action for the user's selected AI
    or editor host.
 
 The installer does not copy private platform code, embed a tenant secret, or
@@ -53,7 +56,7 @@ node scripts/verify-manifest.mjs
 For the shell fallback:
 
 ```bash
-EAI_SETUP_AUTO_INSTALL=1 ./scripts/bootstrap.sh
+EAI_SETUP_AUTO_INSTALL=1 ./scripts/bootstrap.sh --install-homebrew
 ./scripts/bootstrap.sh --project my-app --directory "$HOME/Code/my-app"
 ```
 

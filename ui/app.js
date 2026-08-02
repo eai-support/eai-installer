@@ -19,6 +19,14 @@ function setToolState(report) {
     if (state) state.textContent = tool.version ? `Installed: ${tool.version}` : "Not installed";
   }
   platform.textContent = `${report.platform} · ${report.architecture}`;
+  const homebrew = document.querySelector("#homebrew-state");
+  const homebrewButton = document.querySelector('[data-action="homebrew"]');
+  if (homebrew) {
+    homebrew.textContent = report.platform === "macos"
+      ? (report.package_manager === "brew" ? "Installed" : "Not installed")
+      : "Not required on this platform";
+  }
+  if (homebrewButton) homebrewButton.disabled = report.platform !== "macos";
 }
 
 async function detect() {
