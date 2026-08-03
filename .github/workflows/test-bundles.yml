@@ -69,9 +69,15 @@ jobs:
           New-Item -ItemType Directory -Force -Path $installDir | Out-Null
           & $installer.FullName /S "/D=$installDir"
           if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) { throw "Windows installer exited with code $LASTEXITCODE" }
-          $installed = @(Get-ChildItem -LiteralPath $installDir -Recurse -File | Where-Object { $_.Extension -ieq '.exe' })
+          $roots = @(
+            $installDir,
+            (Join-Path $env:LOCALAPPDATA 'EAI Setup'),
+            (Join-Path $env:LOCALAPPDATA 'Programs\EAI Setup'),
+            (Join-Path $env:ProgramFiles 'EAI Setup')
+          ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -Unique
+          $installed = @($roots | ForEach-Object { Get-ChildItem -LiteralPath $_ -Recurse -File | Where-Object { $_.Extension -ieq '.exe' } })
           $installed | Select-Object FullName, Length
-          if ($installed.Count -eq 0) { throw "Windows installer did not create an executable under $installDir" }
+          if ($installed.Count -eq 0) { throw "Windows installer did not create an executable in the expected install roots" }
 
       - name: Smoke-test macOS disk image
         if: runner.os == 'macOS'
