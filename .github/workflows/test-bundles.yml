@@ -93,6 +93,7 @@ jobs:
           set -euo pipefail
           deb="$(find src-tauri/target/release/bundle/deb -type f -name '*.deb' -print -quit)"
           test -s "$deb"
+          deb="$(realpath "$deb")"
           package="$(dpkg-deb -f "$deb" Package)"
           sudo apt-get install -y "$deb"
           test "$(dpkg-query -W -f='${Status}' "$package")" = "install ok installed"

@@ -27,6 +27,10 @@ if (!homebrew || homebrew.platform !== "macos" || !homebrew.installers?.macos?.i
 }
 
 const rust = await readFile(new URL("../src-tauri/src/main.rs", import.meta.url), "utf8");
+const windowsIcon = await readFile(new URL("../src-tauri/icons/icon.ico", import.meta.url));
+if (windowsIcon.length < 32 || windowsIcon.readUInt16LE(2) !== 1) {
+  throw new Error("Tauri Windows icon resource is missing or invalid");
+}
 for (const step of ["homebrew", "git", "node", "eai-cli", "login", "init"]) {
   if (!rust.includes(`\"${step}\"`)) throw new Error(`Tauri adapter is missing ${step}`);
 }
