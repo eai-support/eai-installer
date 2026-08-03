@@ -23,7 +23,7 @@
       "required": true,
       "platform": "macos",
       "installers": {
-        "macos": "Official Homebrew installer from https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh after explicit user confirmation"
+        "macos": "Official Homebrew installer from https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh when Homebrew is missing; macOS may request permission"
       }
     },
     {
@@ -71,8 +71,7 @@
   ],
   "workflow": [
     "detect platform and installed tools",
-    "ask before installing a missing package manager or prerequisite",
-    "install missing Homebrew, Git, and Node.js prerequisites using fixed platform adapters",
+    "detect and install only missing Homebrew, Git, and Node.js prerequisites using fixed platform adapters",
     "install or update the EAI CLI from npm",
     "open browser-based eai login",
     "select or confirm the company tenant",

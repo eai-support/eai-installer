@@ -46,7 +46,7 @@
           <h2 id="welcome-title">Set up this computer for EAI</h2>
           <p class="lead">EAI Setup checks this computer, installs only what is missing, and then guides you through sign-in and app creation.</p>
           <ul class="promise-list">
-            <li>Git, Node.js, npm, and the EAI CLI</li>
+            <li>Only the required Git, Node.js, npm, and EAI CLI components</li>
             <li>Gofer and the app template through <code>eai init</code></li>
             <li>No EAI password, token, or secret stored by this installer</li>
           </ul>
@@ -81,8 +81,7 @@
           <div class="panel-actions">
             <button class="secondary" data-back="0">Cancel</button>
             <span class="action-spacer"></span>
-            <button class="secondary" data-action="install-all">Install missing tools</button>
-            <button class="primary" data-next="3" disabled>Continue</button>
+            <button class="secondary" id="retry-install" data-action="install-all" hidden>Retry</button>
           </div>
         </section>
 
@@ -97,8 +96,7 @@
           <div class="panel-actions">
             <button class="secondary" data-back="2">Back</button>
             <span class="action-spacer"></span>
-            <button class="secondary" data-action="login">Start browser sign-in</button>
-            <button class="primary" data-next="4">I am signed in</button>
+            <button class="primary" data-action="login">Sign in with browser</button>
           </div>
         </section>
 

@@ -37,6 +37,7 @@ for (const step of ["homebrew", "git", "node", "eai-cli", "login", "init"]) {
 if (!rust.includes("@enterpriseai/cli")) throw new Error("Tauri adapter uses the wrong CLI package");
 if (!rust.includes("run_program_in_directory(\"eai\"")) throw new Error("Tauri adapter does not run eai init in the selected directory");
 if (!rust.includes("run_program(\"eai\", &[\"login\"]")) throw new Error("Tauri adapter does not run eai login");
+if (!rust.includes("pkexec")) throw new Error("Tauri adapter does not provide automatic Linux package installation");
 if (rust.includes("Command::new(user") || rust.includes("shell = user")) {
   throw new Error("Tauri adapter appears to execute user-supplied commands");
 }
@@ -47,14 +48,16 @@ const wizard = await readFile(new URL("../ui/index.html", import.meta.url), "utf
 for (const panel of ["0", "1", "2", "3", "4", "5"]) {
   if (!wizard.includes(`data-panel="${panel}"`)) throw new Error(`wizard: missing panel ${panel}`);
 }
-for (const control of ["data-action=\"start\"", "data-next=\"3\"", "data-next=\"4\"", "data-action=\"init\"", "data-action=\"finish\""]) {
+for (const control of ["data-action=\"start\"", "data-action=\"login\"", "data-action=\"init\"", "data-action=\"finish\""]) {
   if (!wizard.includes(control)) throw new Error(`wizard: missing control ${control}`);
 }
+if (wizard.includes("I am signed in")) throw new Error("wizard: sign-in still has an unnecessary confirmation step");
+if (!wizard.includes('id="retry-install"')) throw new Error("wizard: failed installation has no retry control");
 for (const control of ["id=\"activity\"", "id=\"activity-title\"", "id=\"activity-detail\""]) {
   if (!wizard.includes(control)) throw new Error(`wizard: missing activity status: ${control}`);
 }
 const app = await readFile(new URL("../ui/app.js", import.meta.url), "utf8");
-if (!app.includes("setActivity") || !app.includes("Installation complete") || !app.includes("async function startSetup")) {
+if (!app.includes("setActivity") || !app.includes("Installation complete") || !app.includes("async function startSetup") || !app.includes("setStep(4)")) {
   throw new Error("wizard: live activity status updates are missing");
 }
 const wizardState = await readFile(new URL("../ui/wizard-state.js", import.meta.url), "utf8");

@@ -15,6 +15,7 @@ const activityTitle = document.querySelector("#activity-title");
 const activityDetail = document.querySelector("#activity-detail");
 const activityBar = document.querySelector("#activity-bar");
 const activityTrack = document.querySelector(".activity-track");
+const retryInstall = document.querySelector("#retry-install");
 
 const stepNames = ["Welcome", "Computer", "Prerequisites", "Sign in", "App", "Complete"];
 const wizard = EAIWizard.createState();
@@ -100,7 +101,7 @@ function setToolState(report) {
   platform.textContent = `${report.platform} · ${report.architecture}`;
   updateEnvironmentSummary(report);
   wizard.prerequisitesReady = EAIWizard.prerequisitesReady(report, demoMode);
-  document.querySelector('[data-next="3"]').disabled = !wizard.prerequisitesReady;
+  if (retryInstall) retryInstall.hidden = true;
 }
 
 function showPreviewState() {
@@ -117,7 +118,7 @@ function showPreviewState() {
     }
   }
   wizard.prerequisitesReady = true;
-  document.querySelector('[data-next="3"]').disabled = false;
+  if (retryInstall) retryInstall.hidden = true;
 }
 
 async function detect() {
@@ -170,7 +171,7 @@ async function installPrerequisites() {
   if (!steps.length) {
     prerequisiteNote.textContent = "Everything required is already installed.";
     wizard.prerequisitesReady = true;
-    document.querySelector('[data-next="3"]').disabled = false;
+    if (retryInstall) retryInstall.hidden = true;
     show("All prerequisites are ready.");
     setActivity("Everything is ready", "Git, Node.js, npm, and the EAI CLI are already installed.", 100, false);
     return true;
@@ -181,7 +182,10 @@ async function installPrerequisites() {
     const start = Math.round((index / steps.length) * 100);
     prerequisiteNote.textContent = `Installing ${name}...`;
     setActivity(`Installing ${name}`, `Step ${index + 1} of ${steps.length}. This can take a few minutes.`, start);
-    if (!await runBootstrapStep(step)) return false;
+    if (!await runBootstrapStep(step)) {
+      if (retryInstall) retryInstall.hidden = false;
+      return false;
+    }
     await detect();
     setActivity(`${name} installed`, `Step ${index + 1} of ${steps.length} is complete.`, Math.round(((index + 1) / steps.length) * 100));
   }
@@ -192,6 +196,7 @@ async function installPrerequisites() {
     setActivity("Installation complete", "All required tools are ready. Continue to sign in.", 100, false);
     return true;
   } else {
+    if (retryInstall) retryInstall.hidden = false;
     show("Some prerequisites still need attention. Retry the installation step.");
     setActivity("Installation needs attention", "Retry the installation step after reviewing the tool statuses.", 0, false);
     return false;
@@ -211,6 +216,7 @@ async function runLogin() {
   if (result) {
     show(demoMode ? "Preview only: the signed app will open browser sign-in." : "Browser sign-in completed.");
     setActivity("Sign-in complete", "Return here to start your EAI app.", 100, false);
+    setStep(4);
   } else {
     setActivity("Sign-in needs attention", "Complete browser sign-in, then retry.", 0, false);
   }

@@ -7,17 +7,17 @@ hands control to the normal EAI CLI flow.
 ## What one download does
 
 1. Detects the operating system, CPU architecture, and installed tools.
-2. On macOS, offers to install Homebrew from the official HTTPS installer when
-   it is missing. The user must choose this step and approve any administrator
-   prompt.
-3. Installs missing Git and Node.js using the platform's package manager or a
-   clear, user-approved fallback.
+2. Installs Homebrew on macOS only when it is missing. macOS may show its normal
+   administrator permission prompt.
+3. Installs missing Git and Node.js using the platform's signed package manager.
+   Windows, macOS, and Linux may show their normal permission prompt.
 4. Installs or updates the canonical `@enterpriseai/cli` npm package, whose
    command is `eai` and whose source repository is public at
    `eai-support/eai-cli`.
 5. Opens the normal browser sign-in flow with `eai login`.
-6. Lets the user confirm their tenant and choose an existing folder or a new
-   project folder.
+6. Lets the user choose an existing folder or a new project folder. Tenant
+   selection remains part of the normal EAI CLI prompts, where the platform can
+   show only tenants the signed-in user may access.
 7. Runs `eai init`, which fetches the supported Gofer assets and EAI app
    template through the existing CLI contract.
 8. Verifies the project and shows the next action for the user's selected AI

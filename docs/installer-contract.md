@@ -10,8 +10,12 @@ commands.
 - Missing prerequisites are detected before the next step is attempted.
 - Fixed platform adapters are used; arbitrary user-supplied commands are not
   executed by the desktop app.
-- Homebrew installation is an explicit macOS step using the official HTTPS
-  installer; it is never a hidden side effect of installing Git or Node.js.
+- Homebrew installation is an automatic macOS prerequisite only when Homebrew
+  is missing, using the official HTTPS installer; macOS may still show its
+  normal administrator prompt.
+- Linux package installation uses the host's signed package manager through a
+  graphical `pkexec` permission prompt when available; the installer never
+  captures a password in its own UI.
 - The installer never receives an EAI password or secret.
 - `eai login` remains browser-based and interactive.
 - A project is created only in a user-selected directory, or in an explicit

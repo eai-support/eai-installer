@@ -140,18 +140,42 @@ fn package_install_step(step: &str, package: &str, message: &str) -> BootstrapRe
         };
     }
 
-    let command = if version("apt-get", &["--version"]).is_some() {
-        if package == "git" { "sudo apt-get install -y git" } else { "sudo apt-get install -y nodejs npm" }
-    } else if version("dnf", &["--version"]).is_some() {
-        if package == "git" { "sudo dnf install -y git" } else { "sudo dnf install -y nodejs npm" }
-    } else {
-        "Install this prerequisite using your distribution's signed package manager."
-    };
-    command_result(step, false, "Linux package installation needs an elevated user action.", Some(command), None, true)
+    if version("pkexec", &["--version"]).is_none() {
+        let command = if version("apt-get", &["--version"]).is_some() {
+            if package == "git" { "sudo apt-get install -y git" } else { "sudo apt-get install -y nodejs npm" }
+        } else if version("dnf", &["--version"]).is_some() {
+            if package == "git" { "sudo dnf install -y git" } else { "sudo dnf install -y nodejs npm" }
+        } else {
+            "Install this prerequisite using your distribution's signed package manager."
+        };
+        return command_result(step, false, "Linux needs a graphical permission helper to install packages automatically.", Some(command), None, true);
+    }
+
+    if version("apt-get", &["--version"]).is_some() {
+        let packages = if package == "git" { &["git"][..] } else { &["nodejs", "npm"][..] };
+        if let Err(error) = run_program("pkexec", &["apt-get", "update"]) {
+            return command_result(step, false, &error, Some("pkexec apt-get update"), None, true);
+        }
+        return match run_program("pkexec", [&["apt-get", "install", "-y"][..], packages].concat().as_slice()) {
+            Ok((stdout, stderr)) => command_result(step, true, message, Some("pkexec apt-get install"), Some(format!("{stdout}\n{stderr}")), false),
+            Err(error) => command_result(step, false, &error, Some("pkexec apt-get install"), None, true),
+        };
+    }
+
+    if version("dnf", &["--version"]).is_some() {
+        let packages = if package == "git" { &["git"][..] } else { &["nodejs", "npm"][..] };
+        return match run_program("pkexec", [&["dnf", "install", "-y"][..], packages].concat().as_slice()) {
+            Ok((stdout, stderr)) => command_result(step, true, message, Some("pkexec dnf install"), Some(format!("{stdout}\n{stderr}")), false),
+            Err(error) => command_result(step, false, &error, Some("pkexec dnf install"), None, true),
+        };
+    }
+
+    command_result(step, false, "No supported Linux package manager was found.", Some("Use your distribution's signed package manager, then retry."), None, true)
 }
 
-// Homebrew is the macOS package-manager prerequisite. The user invokes this
-// explicit step, and the downloaded official script is never built from input.
+// Homebrew is the macOS package-manager prerequisite. The desktop flow invokes
+// this fixed step only when brew is missing, and the downloaded official script
+// is never built from user input.
 fn homebrew_install_step() -> BootstrapResult {
     if !cfg!(target_os = "macos") {
         return command_result("homebrew", false, "Homebrew is only a macOS prerequisite.", None, None, false);
