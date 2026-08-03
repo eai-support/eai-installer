@@ -68,7 +68,7 @@ jobs:
           $installDir = Join-Path $env:RUNNER_TEMP "eai-setup-installed"
           New-Item -ItemType Directory -Force -Path $installDir | Out-Null
           & $installer.FullName /S "/D=$installDir"
-          if ($LASTEXITCODE -ne 0) { throw "Windows installer exited with code $LASTEXITCODE" }
+          if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) { throw "Windows installer exited with code $LASTEXITCODE" }
           if (-not (Get-ChildItem $installDir -Recurse -File -Include *.exe)) { throw "Windows installer did not create an executable" }
 
       - name: Smoke-test macOS disk image

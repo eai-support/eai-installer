@@ -61,4 +61,7 @@ const bundles = await readFile(new URL("../.github/workflows/test-bundles.yml", 
 for (const value of ["Windows", "macOS", "Ubuntu", "bundle: nsis", "bundle: dmg", "bundle: deb", "actions/upload-artifact@v4", "actions/download-artifact@v4", "Smoke-test Windows installer", "Smoke-test macOS disk image", "Smoke-test Ubuntu package"]) {
   if (!bundles.includes(value)) throw new Error(`test-bundles workflow is missing: ${value}`);
 }
+if (!bundles.includes("$null -ne $LASTEXITCODE")) {
+  throw new Error("test-bundles workflow does not handle GUI installer exit codes safely");
+}
 console.log("test-bundle workflow checks ok");
