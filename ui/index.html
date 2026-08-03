@@ -16,48 +16,122 @@
         <span id="platform" class="status">Detecting device</span>
       </header>
 
-      <section class="intro" aria-labelledby="intro-title">
-        <h2 id="intro-title">Prepare this computer for EAI</h2>
-        <p>Install the public developer prerequisites, sign in, and initialise an EAI app in a folder you choose.</p>
-        <p class="quiet">Anyone can download this installer. Your EAI tenant access still comes from your browser sign-in and platform permissions.</p>
-      </section>
-
-      <section class="steps" aria-label="Setup steps">
-        <article class="step" data-step="homebrew">
-          <div><span class="number">1</span><div><h3>Homebrew (macOS)</h3><p id="homebrew-state">Required on macOS when missing</p></div></div>
-          <button data-action="homebrew">Install Homebrew</button>
-        </article>
-        <article class="step" data-step="git">
-          <div><span class="number">2</span><div><h3>Git</h3><p id="git-state">Checking</p></div></div>
-          <button data-action="git">Install Git</button>
-        </article>
-        <article class="step" data-step="node">
-          <div><span class="number">3</span><div><h3>Node.js and npm</h3><p id="node-state">Checking</p></div></div>
-          <button data-action="node">Install Node.js</button>
-        </article>
-        <article class="step" data-step="eai-cli">
-          <div><span class="number">4</span><div><h3>EAI CLI</h3><p id="eai-cli-state">Checking</p></div></div>
-          <button data-action="eai-cli">Install or update</button>
-        </article>
-        <article class="step" data-step="login">
-          <div><span class="number">5</span><div><h3>Sign in</h3><p>Use your browser to authenticate with EAI.</p></div></div>
-          <button data-action="login">Show login command</button>
-        </article>
-      </section>
-
-      <section class="project" aria-labelledby="project-title">
-        <div>
-          <h2 id="project-title">Start an app</h2>
-          <p>Choose a kebab-case name and an existing or new folder. EAI init will fetch the supported Gofer assets and app template.</p>
+      <section class="progress-area" aria-label="Setup progress">
+        <div class="progress-copy">
+          <span id="progress-label">Step 1 of 6</span>
+          <span id="progress-name">Welcome</span>
         </div>
-        <label>Project name <input id="project-name" placeholder="my-eai-app" autocomplete="off" /></label>
-        <label>Folder <input id="project-directory" placeholder="Choose a folder in your file manager" autocomplete="off" /></label>
-        <button class="primary" data-action="init">Show init command</button>
+        <div class="progress-track" role="progressbar" aria-valuemin="1" aria-valuemax="6" aria-valuenow="1" aria-label="Setup progress">
+          <span id="progress-bar"></span>
+        </div>
+        <ol class="progress-steps">
+          <li data-progress="0" class="current">Welcome</li>
+          <li data-progress="1">Computer</li>
+          <li data-progress="2">Prerequisites</li>
+          <li data-progress="3">Sign in</li>
+          <li data-progress="4">App</li>
+          <li data-progress="5">Complete</li>
+        </ol>
       </section>
 
-      <output id="output" class="output" aria-live="polite">Ready to check this computer.</output>
+      <section class="wizard" aria-live="polite">
+        <section class="wizard-panel current" data-panel="0" aria-labelledby="welcome-title">
+          <div class="panel-icon" aria-hidden="true">EAI</div>
+          <p class="eyebrow">Welcome</p>
+          <h2 id="welcome-title">Set up this computer for EAI</h2>
+          <p class="lead">The setup wizard prepares the public developer tools, signs you in through your browser, and starts an EAI app in a folder you choose.</p>
+          <ul class="promise-list">
+            <li>Git, Node.js, npm, and the EAI CLI</li>
+            <li>Gofer and the app template through <code>eai init</code></li>
+            <li>No EAI password, token, or secret stored by this installer</li>
+          </ul>
+          <div class="panel-actions end">
+            <button class="primary" data-next="1">Continue</button>
+          </div>
+        </section>
+
+        <section class="wizard-panel" data-panel="1" aria-labelledby="computer-title" hidden>
+          <p class="eyebrow">Step 2</p>
+          <h2 id="computer-title">Check this computer</h2>
+          <p class="lead">We will inspect the operating system and required tools before changing anything.</p>
+          <div class="environment-summary" id="environment-summary">Checking this computer...</div>
+          <div class="panel-actions">
+            <button class="secondary" data-action="detect">Check again</button>
+            <span class="action-spacer"></span>
+            <button class="secondary" data-back="0">Back</button>
+            <button class="primary" data-next="2">Continue</button>
+          </div>
+        </section>
+
+        <section class="wizard-panel" data-panel="2" aria-labelledby="prerequisites-title" hidden>
+          <p class="eyebrow">Step 3</p>
+          <h2 id="prerequisites-title">Install the essentials</h2>
+          <p class="lead">Choose install once. The wizard uses only fixed, documented installers and will ask your computer for permission when needed.</p>
+          <ul class="tool-list" aria-label="Prerequisite status">
+            <li data-tool="homebrew"><span><strong>Homebrew</strong><small id="homebrew-state">Required on macOS when missing</small></span><span class="tool-status" id="homebrew-badge">Waiting</span></li>
+            <li data-tool="git"><span><strong>Git</strong><small id="git-state">Checking</small></span><span class="tool-status" id="git-badge">Waiting</span></li>
+            <li data-tool="node"><span><strong>Node.js and npm</strong><small id="node-state">Checking</small></span><span class="tool-status" id="node-badge">Waiting</span></li>
+            <li data-tool="eai-cli"><span><strong>EAI CLI</strong><small id="eai-cli-state">Checking</small></span><span class="tool-status" id="eai-cli-badge">Waiting</span></li>
+          </ul>
+          <p class="quiet" id="prerequisite-note">No changes have been made yet.</p>
+          <div class="panel-actions">
+            <button class="secondary" data-back="1">Back</button>
+            <span class="action-spacer"></span>
+            <button class="secondary" data-action="install-all">Install missing tools</button>
+            <button class="primary" data-next="3" disabled>Continue</button>
+          </div>
+        </section>
+
+        <section class="wizard-panel" data-panel="3" aria-labelledby="signin-title" hidden>
+          <p class="eyebrow">Step 4</p>
+          <h2 id="signin-title">Sign in to EAI</h2>
+          <p class="lead">Your browser handles sign-in. The installer never asks for or stores your password.</p>
+          <div class="callout">
+            <strong>What happens next</strong>
+            <p>Your browser opens for EAI authentication. Return here after sign-in, then continue to create or initialise your app.</p>
+          </div>
+          <div class="panel-actions">
+            <button class="secondary" data-back="2">Back</button>
+            <span class="action-spacer"></span>
+            <button class="secondary" data-action="login">Start browser sign-in</button>
+            <button class="primary" data-next="4">I am signed in</button>
+          </div>
+        </section>
+
+        <section class="wizard-panel" data-panel="4" aria-labelledby="app-title" hidden>
+          <p class="eyebrow">Step 5</p>
+          <h2 id="app-title">Start your EAI app</h2>
+          <p class="lead">Choose a kebab-case project name and the folder where the app should be created or initialised.</p>
+          <div class="form-grid">
+            <label for="project-name">Project name <input id="project-name" placeholder="my-eai-app" autocomplete="off" /></label>
+            <label for="project-directory">Folder <input id="project-directory" placeholder="/Users/you/Code/my-eai-app" autocomplete="off" /></label>
+          </div>
+          <p class="quiet">The supported <code>eai init</code> workflow fetches the Gofer assets and app template.</p>
+          <div class="panel-actions">
+            <button class="secondary" data-back="3">Back</button>
+            <span class="action-spacer"></span>
+            <button class="primary" data-action="init">Create and initialise app</button>
+          </div>
+        </section>
+
+        <section class="wizard-panel" data-panel="5" aria-labelledby="complete-title" hidden>
+          <div class="panel-icon success" aria-hidden="true">OK</div>
+          <p class="eyebrow">Complete</p>
+          <h2 id="complete-title">EAI is ready to use</h2>
+          <p class="lead" id="complete-message">Your app setup is complete. Continue in your chosen AI or editor host.</p>
+          <div class="completion-command"><code id="next-command">eai whoami</code></div>
+          <div class="panel-actions end">
+            <button class="secondary" data-back="4">Back</button>
+            <button class="primary" data-action="finish">Close setup</button>
+          </div>
+        </section>
+
+        <output id="output" class="output" aria-live="polite">Ready to begin.</output>
+      </section>
+
       <footer>Gofer and the app template are installed by the supported <code>eai init</code> workflow. EAI Setup never stores your password or API secrets.</footer>
     </main>
+    <script src="wizard-state.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

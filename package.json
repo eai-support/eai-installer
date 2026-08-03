@@ -8,7 +8,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "test": "node scripts/verify-manifest.mjs && node scripts/test-bootstrap.mjs",
+    "test": "node scripts/verify-manifest.mjs && node scripts/test-bootstrap.mjs && node scripts/test-wizard.mjs",
     "validate": "npm test"
   }
 }

@@ -45,8 +45,16 @@ fn executable(program: &str) -> String {
 }
 
 fn run_program(program: &str, args: &[&str]) -> Result<(String, String), String> {
-    let output = Command::new(executable(program))
-        .args(args)
+    run_program_in_directory(program, args, None)
+}
+
+fn run_program_in_directory(program: &str, args: &[&str], directory: Option<&Path>) -> Result<(String, String), String> {
+    let mut command = Command::new(executable(program));
+    command.args(args);
+    if let Some(directory) = directory {
+        command.current_dir(directory);
+    }
+    let output = command
         .output()
         .map_err(|error| format!("could not start {program}: {error}"))?;
     let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
@@ -178,18 +186,23 @@ fn run_bootstrap(step: String, project_name: Option<String>, directory: Option<S
             Ok((stdout, stderr)) => command_result("eai-cli", true, "The EAI CLI was installed or updated.", Some("npm install --global @enterpriseai/cli"), Some(format!("{stdout}\n{stderr}")), false),
             Err(error) => command_result("eai-cli", false, &error, Some("npm install --global @enterpriseai/cli"), None, true),
         },
-        "login" => command_result("login", true, "Complete browser sign-in, then return to EAI Setup.", Some("eai login"), None, true),
+        "login" => match run_program("eai", &["login"]) {
+            Ok((stdout, stderr)) => command_result("login", true, "Browser sign-in completed.", Some("eai login"), Some(format!("{stdout}\n{stderr}")), false),
+            Err(error) => command_result("login", false, &error, Some("eai login"), None, true),
+        },
         "init" => {
             let name = project_name.unwrap_or_default();
             if !name.chars().all(|character| character.is_ascii_lowercase() || character.is_ascii_digit() || character == '-') || name.is_empty() || name.starts_with('-') || name.ends_with('-') {
                 return command_result("init", false, "Project name must be non-empty kebab-case.", None, None, true);
             }
-            if let Some(path) = directory.as_deref() {
-                if !Path::new(path).is_dir() {
-                    return command_result("init", false, "The selected project directory does not exist.", None, None, true);
-                }
+            let directory = directory.map(std::path::PathBuf::from).unwrap_or_else(|| env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")));
+            if !directory.is_dir() {
+                return command_result("init", false, "The selected project directory does not exist.", None, None, true);
             }
-            command_result("init", true, "Run the command in the selected folder to fetch Gofer and the app template.", Some("eai init <project-name> --current-dir"), None, true)
+            match run_program_in_directory("eai", &["init", &name, "--current-dir"], Some(&directory)) {
+                Ok((stdout, stderr)) => command_result("init", true, "The app was initialised and the Gofer assets are ready.", Some("eai init <project-name> --current-dir"), Some(format!("{stdout}\n{stderr}")), false),
+                Err(error) => command_result("init", false, &error, Some("eai init <project-name> --current-dir"), None, true),
+            }
         }
         _ => command_result(&step, false, "Unsupported bootstrap step.", None, None, false),
     }

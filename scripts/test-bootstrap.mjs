@@ -31,8 +31,24 @@ for (const step of ["homebrew", "git", "node", "eai-cli", "login", "init"]) {
   if (!rust.includes(`\"${step}\"`)) throw new Error(`Tauri adapter is missing ${step}`);
 }
 if (!rust.includes("@enterpriseai/cli")) throw new Error("Tauri adapter uses the wrong CLI package");
+if (!rust.includes("run_program_in_directory(\"eai\"")) throw new Error("Tauri adapter does not run eai init in the selected directory");
+if (!rust.includes("run_program(\"eai\", &[\"login\"]")) throw new Error("Tauri adapter does not run eai login");
 if (rust.includes("Command::new(user") || rust.includes("shell = user")) {
   throw new Error("Tauri adapter appears to execute user-supplied commands");
 }
 
 console.log("bootstrap safety checks ok");
+
+const wizard = await readFile(new URL("../ui/index.html", import.meta.url), "utf8");
+for (const panel of ["0", "1", "2", "3", "4", "5"]) {
+  if (!wizard.includes(`data-panel="${panel}"`)) throw new Error(`wizard: missing panel ${panel}`);
+}
+for (const control of ["data-next=\"1\"", "data-next=\"2\"", "data-next=\"3\"", "data-next=\"4\"", "data-action=\"init\"", "data-action=\"finish\""]) {
+  if (!wizard.includes(control)) throw new Error(`wizard: missing control ${control}`);
+}
+const wizardState = await readFile(new URL("../ui/wizard-state.js", import.meta.url), "utf8");
+if (!wizardState.includes("prerequisitesReady") || !wizardState.includes("isKebabCase")) {
+  throw new Error("wizard: state validation contract is missing");
+}
+
+console.log("wizard structure checks ok");
