@@ -46,10 +46,34 @@ GitHub Actions artifacts for the current branch or pull request:
 - Ubuntu 22.04 `.deb`
 
 Each native runner builds its bundle and performs an installation/package smoke
-test. A final Ubuntu job downloads all three artifacts again, checks that each
-file is non-empty, and records SHA-256 hashes. These are test artifacts, not
-production releases; users will see the operating system's unsigned-download
-warning until release signing is configured.
+test. The macOS job also copies the app to a disposable staging directory,
+re-signs that copy ad hoc, removes its quarantine attribute, and launches the
+embedded executable. This proves that the unsigned development bundle runs;
+it is deliberately not a Gatekeeper trust test. A final Ubuntu job downloads
+all three artifacts again, checks that each file is non-empty, and records
+SHA-256 hashes. These are test artifacts, not production releases; users will
+see the operating system's unsigned-download warning until release signing is
+configured.
+
+The public macOS release gate is different: it must verify the actual
+Developer ID signature, notarization, and stapled ticket on the release app or
+DMG. An ad-hoc re-sign is never suitable for a customer download.
+
+To run the development check manually on a Mac after mounting a test DMG:
+
+```bash
+scripts/test-macos-dev.sh "/Volumes/EAI Setup/EAI Setup.app"
+```
+
+The script makes a disposable copy, so it does not alter the mounted image or
+the original app. It does not weaken Gatekeeper for normal applications.
+
+Development builds declare Tauri's `signingIdentity` as `-`, which creates a
+valid ad-hoc bundle signature. The release workflow overrides that identity
+with the organisation's Developer ID credentials and requires Apple
+notarization credentials before it can publish a macOS asset. It then runs
+`codesign`, `spctl`, and `xcrun stapler validate` against the exact release
+bundle.
 
 GitHub Actions artifacts are intentionally ZIP-wrapped by GitHub. They are
 useful for CI evidence, but are not the end-user download experience. To create

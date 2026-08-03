@@ -103,6 +103,8 @@ jobs:
           app="$(find "$mount" -maxdepth 1 -name '*.app' -print -quit)"
           test -n "$app"
           test -n "$(find "$app/Contents/MacOS" -type f -perm -111 -print -quit)"
+          chmod +x scripts/test-macos-dev.sh
+          scripts/test-macos-dev.sh "$app"
 
       - name: Smoke-test Ubuntu package
         if: runner.os == 'Linux'

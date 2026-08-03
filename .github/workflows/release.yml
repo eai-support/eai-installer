@@ -44,10 +44,34 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
         run: |
           test -n "$TAURI_SIGNING_PRIVATE_KEY"
           test -n "$WINDOWS_CERTIFICATE" || test "${{ matrix.os }}" != "windows-latest"
           test -n "$APPLE_CERTIFICATE" || test "${{ matrix.os }}" != "macos-latest"
+          if [ "${{ matrix.os }}" = "macos-latest" ]; then
+            test -n "$APPLE_SIGNING_IDENTITY"
+            test -n "$APPLE_ID" -a -n "$APPLE_PASSWORD" -a -n "$APPLE_TEAM_ID" \
+              || test -n "$APPLE_API_ISSUER" -a -n "$APPLE_API_KEY" -a -n "$APPLE_API_PRIVATE_KEY"
+          fi
+      - name: Prepare Apple notarization API key
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        env:
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -n "$APPLE_API_PRIVATE_KEY" ]; then
+            printf '%s\n' "$APPLE_API_PRIVATE_KEY" > "$RUNNER_TEMP/AuthKey_${APPLE_API_KEY}.p8"
+            echo "APPLE_API_KEY_PATH=$RUNNER_TEMP/AuthKey_${APPLE_API_KEY}.p8" >> "$GITHUB_ENV"
+          fi
       - name: Build signed bundle
         uses: tauri-apps/tauri-action@v0
         env:
@@ -58,6 +82,13 @@ jobs:
           WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_PATH: ${{ runner.temp }}/AuthKey_${{ secrets.APPLE_API_KEY }}.p8
         with:
           projectPath: src-tauri
           tagName: v__VERSION__
@@ -65,6 +96,18 @@ jobs:
           releaseBody: Signed cross-platform EAI Setup bundle.
           releaseDraft: true
           prerelease: false
+      - name: Verify Gatekeeper-ready macOS bundle
+        if: matrix.os == 'macos-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="$(find src-tauri/target/release/bundle -type d -name '*.app' -print -quit)"
+          dmg="$(find src-tauri/target/release/bundle/dmg -type f -name '*.dmg' -print -quit)"
+          test -n "$app"
+          test -s "$dmg"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          spctl --assess --type execute --verbose=4 "$app"
+          xcrun stapler validate "$dmg"
       - name: Add stable direct-download assets
         shell: bash
         env:

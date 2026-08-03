@@ -11,6 +11,10 @@ for (const file of files) {
   }
   if (/curl\s+[^\n|]*\|\s*(sh|bash)/i.test(text)) throw new Error(`${file}: unsafe curl pipe install found`);
 }
+const macDevSmoke = await readFile(new URL("../scripts/test-macos-dev.sh", import.meta.url), "utf8");
+for (const value of ["codesign --force --deep --sign -", "codesign --verify --deep --strict", "xattr -dr com.apple.quarantine", "Contents/MacOS/eai-setup"]) {
+  if (!macDevSmoke.includes(value)) throw new Error(`macOS development smoke test is missing: ${value}`);
+}
 
 const shell = await readFile(new URL("../scripts/bootstrap.sh", import.meta.url), "utf8");
 for (const value of ["--install-homebrew", "EAI_SETUP_INSTALL_HOMEBREW", "raw.githubusercontent.com/Homebrew/install/HEAD/install.sh", "--proto '=https'", "--tlsv1.2"]) {
@@ -87,6 +91,9 @@ const dmg = tauriConfig.bundle?.macOS?.dmg;
 if (!dmg?.background || dmg.windowSize?.width !== 660 || dmg.windowSize?.height !== 400) {
   throw new Error("Tauri DMG does not declare the guided installation window");
 }
+if (tauriConfig.bundle?.macOS?.signingIdentity !== "-") {
+  throw new Error("Tauri development builds must use an explicit ad-hoc macOS signing identity");
+}
 const dmgBackground = await readFile(new URL(`../src-tauri/${dmg.background.replace(/^icons\//, "icons/")}`, import.meta.url));
 if (dmgBackground.length < 64 || dmgBackground.readUInt32BE(0) !== 0x89504e47) {
   throw new Error("Tauri DMG background image is missing or invalid");
@@ -96,7 +103,7 @@ for (const value of ["workflow_dispatch", "gh release create", "gh release uploa
   if (!testRelease.includes(value)) throw new Error(`test-release workflow is missing: ${value}`);
 }
 const release = await readFile(new URL("../.github/workflows/release.yml", import.meta.url), "utf8");
-for (const value of ["Add stable direct-download assets", "eai-setup-macos-arm64.dmg", "eai-setup-windows-x64.exe", "eai-setup-ubuntu-amd64.deb"]) {
+for (const value of ["Add stable direct-download assets", "eai-setup-macos-arm64.dmg", "eai-setup-windows-x64.exe", "eai-setup-ubuntu-amd64.deb", "codesign --verify --deep --strict", "spctl --assess --type execute", "xcrun stapler validate"]) {
   if (!release.includes(value)) throw new Error(`release workflow is missing: ${value}`);
 }
 console.log("release and DMG checks ok");
