@@ -64,4 +64,7 @@ for (const value of ["Windows", "macOS", "Ubuntu", "bundle: nsis", "bundle: dmg"
 if (!bundles.includes("$null -ne $LASTEXITCODE")) {
   throw new Error("test-bundles workflow does not handle GUI installer exit codes safely");
 }
+if (!bundles.includes("Where-Object { $_.Extension -ieq '.exe' }")) {
+  throw new Error("test-bundles workflow does not inspect the installed Windows executable");
+}
 console.log("test-bundle workflow checks ok");

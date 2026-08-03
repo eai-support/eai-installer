@@ -69,7 +69,9 @@ jobs:
           New-Item -ItemType Directory -Force -Path $installDir | Out-Null
           & $installer.FullName /S "/D=$installDir"
           if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) { throw "Windows installer exited with code $LASTEXITCODE" }
-          if (-not (Get-ChildItem $installDir -Recurse -File -Include *.exe)) { throw "Windows installer did not create an executable" }
+          $installed = @(Get-ChildItem -LiteralPath $installDir -Recurse -File | Where-Object { $_.Extension -ieq '.exe' })
+          $installed | Select-Object FullName, Length
+          if ($installed.Count -eq 0) { throw "Windows installer did not create an executable under $installDir" }
 
       - name: Smoke-test macOS disk image
         if: runner.os == 'macOS'
