@@ -16,29 +16,12 @@
         <span id="platform" class="status">Detecting device</span>
       </header>
 
-      <section class="progress-area" aria-label="Setup progress">
-        <div class="progress-copy">
-          <span id="progress-label">Step 1 of 6</span>
-          <span id="progress-name">Welcome</span>
-        </div>
-        <div class="progress-track" role="progressbar" aria-valuemin="1" aria-valuemax="6" aria-valuenow="1" aria-label="Setup progress">
-          <span id="progress-bar"></span>
-        </div>
-        <ol class="progress-steps">
-          <li data-progress="0" class="current">Welcome</li>
-          <li data-progress="1">Computer</li>
-          <li data-progress="2">Prerequisites</li>
-          <li data-progress="3">Sign in</li>
-          <li data-progress="4">App</li>
-          <li data-progress="5">Complete</li>
-        </ol>
-      </section>
-
       <section class="wizard" aria-live="polite">
         <div class="activity" id="activity" hidden>
           <div class="activity-heading"><span class="activity-spinner" aria-hidden="true"></span><strong id="activity-title">Preparing setup</strong></div>
           <p id="activity-detail">The installer will show each action as it runs.</p>
           <div class="activity-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Installation progress"><span id="activity-bar"></span></div>
+          <div class="activity-actions"><button class="secondary" id="retry-install" data-action="install-all" hidden>Try again</button></div>
         </div>
         <section class="wizard-panel current" data-panel="0" aria-labelledby="welcome-title">
           <div class="panel-icon" aria-hidden="true">EAI</div>
@@ -55,53 +38,19 @@
           </div>
         </section>
 
-        <section class="wizard-panel" data-panel="1" aria-labelledby="computer-title" hidden>
-          <p class="eyebrow">Step 2</p>
-          <h2 id="computer-title">Check this computer</h2>
-          <p class="lead">Checking the computer now. Nothing is installed unless it is required and missing.</p>
-          <div class="environment-summary" id="environment-summary">Checking this computer...</div>
-          <div class="panel-actions">
-            <button class="secondary" data-action="detect">Check again</button>
-            <span class="action-spacer"></span>
-            <button class="secondary" data-back="0">Cancel</button>
-          </div>
-        </section>
-
-        <section class="wizard-panel" data-panel="2" aria-labelledby="prerequisites-title" hidden>
-          <p class="eyebrow">Step 3</p>
-          <h2 id="prerequisites-title">Install the essentials</h2>
-          <p class="lead">Only missing tools are installed. Your operating system may ask for permission when required.</p>
-          <ul class="tool-list" aria-label="Prerequisite status">
-            <li data-tool="homebrew"><span><strong>Homebrew</strong><small id="homebrew-state">Required on macOS when missing</small></span><span class="tool-status" id="homebrew-badge">Waiting</span></li>
-            <li data-tool="git"><span><strong>Git</strong><small id="git-state">Checking</small></span><span class="tool-status" id="git-badge">Waiting</span></li>
-            <li data-tool="node"><span><strong>Node.js and npm</strong><small id="node-state">Checking</small></span><span class="tool-status" id="node-badge">Waiting</span></li>
-            <li data-tool="eai-cli"><span><strong>EAI CLI</strong><small id="eai-cli-state">Checking</small></span><span class="tool-status" id="eai-cli-badge">Waiting</span></li>
-          </ul>
-          <p class="quiet" id="prerequisite-note">No changes have been made yet.</p>
-          <div class="panel-actions">
-            <button class="secondary" data-back="0">Cancel</button>
-            <span class="action-spacer"></span>
-            <button class="secondary" id="retry-install" data-action="install-all" hidden>Retry</button>
-          </div>
-        </section>
-
         <section class="wizard-panel" data-panel="3" aria-labelledby="signin-title" hidden>
-          <p class="eyebrow">Step 4</p>
           <h2 id="signin-title">Sign in to EAI</h2>
           <p class="lead">Your browser handles sign-in. The installer never asks for or stores your password.</p>
           <div class="callout">
             <strong>What happens next</strong>
-            <p>Your browser opens for EAI authentication. Return here after sign-in, then continue to create or initialise your app.</p>
+            <p>Your browser opens for EAI authentication. When it finishes, setup continues automatically.</p>
           </div>
-          <div class="panel-actions">
-            <button class="secondary" data-back="2">Back</button>
-            <span class="action-spacer"></span>
+          <div class="panel-actions end">
             <button class="primary" data-action="login">Sign in with browser</button>
           </div>
         </section>
 
         <section class="wizard-panel" data-panel="4" aria-labelledby="app-title" hidden>
-          <p class="eyebrow">Step 5</p>
           <h2 id="app-title">Start your EAI app</h2>
           <p class="lead">Choose a kebab-case project name and the folder where the app should be created or initialised.</p>
           <div class="form-grid">
@@ -109,26 +58,22 @@
             <label for="project-directory">Folder <input id="project-directory" placeholder="/Users/you/Code/my-eai-app" autocomplete="off" /></label>
           </div>
           <p class="quiet">The supported <code>eai init</code> workflow fetches the Gofer assets and app template.</p>
-          <div class="panel-actions">
-            <button class="secondary" data-back="3">Back</button>
-            <span class="action-spacer"></span>
+          <div class="panel-actions end">
             <button class="primary" data-action="init">Create and initialise app</button>
           </div>
         </section>
 
         <section class="wizard-panel" data-panel="5" aria-labelledby="complete-title" hidden>
           <div class="panel-icon success" aria-hidden="true">OK</div>
-          <p class="eyebrow">Complete</p>
           <h2 id="complete-title">EAI is ready to use</h2>
           <p class="lead" id="complete-message">Your app setup is complete. Continue in your chosen AI or editor host.</p>
           <div class="completion-command"><code id="next-command">eai whoami</code></div>
           <div class="panel-actions end">
-            <button class="secondary" data-back="4">Back</button>
             <button class="primary" data-action="finish">Close setup</button>
           </div>
         </section>
 
-        <output id="output" class="output" aria-live="polite">Ready to begin.</output>
+        <output id="output" class="output" aria-live="polite" hidden></output>
       </section>
 
       <footer>Gofer and the app template are installed by the supported <code>eai init</code> workflow. EAI Setup never stores your password or API secrets.</footer>

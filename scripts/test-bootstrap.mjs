@@ -49,13 +49,15 @@ if (rust.includes("Command::new(user") || rust.includes("shell = user")) {
 console.log("bootstrap safety checks ok");
 
 const wizard = await readFile(new URL("../ui/index.html", import.meta.url), "utf8");
-for (const panel of ["0", "1", "2", "3", "4", "5"]) {
+for (const panel of ["0", "3", "4", "5"]) {
   if (!wizard.includes(`data-panel="${panel}"`)) throw new Error(`wizard: missing panel ${panel}`);
 }
 for (const control of ["data-action=\"start\"", "data-action=\"login\"", "data-action=\"init\"", "data-action=\"finish\""]) {
   if (!wizard.includes(control)) throw new Error(`wizard: missing control ${control}`);
 }
-if (wizard.includes("I am signed in")) throw new Error("wizard: sign-in still has an unnecessary confirmation step");
+for (const obsolete of ["progress-area", "Step 3 of 6", "Step ${index + 1} of ${steps.length}", "Install missing tools", "I am signed in"]) {
+  if (wizard.includes(obsolete)) throw new Error(`wizard: unnecessary user step remains: ${obsolete}`);
+}
 if (!wizard.includes('id="retry-install"')) throw new Error("wizard: failed installation has no retry control");
 for (const control of ["id=\"activity\"", "id=\"activity-title\"", "id=\"activity-detail\""]) {
   if (!wizard.includes(control)) throw new Error(`wizard: missing activity status: ${control}`);
