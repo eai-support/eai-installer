@@ -23,6 +23,21 @@ hands control to the normal EAI CLI flow.
 8. Verifies the project and shows the next action for the user's selected AI
    or editor host.
 
+## Download the installer
+
+The public release channel serves native installers directly from GitHub
+Releases. The links download the file itself, not a GitHub Actions artifact
+ZIP:
+
+- [macOS Apple Silicon DMG](https://github.com/eai-tools/eai-installer/releases/latest/download/eai-setup-macos-arm64.dmg)
+- [Windows x64 installer](https://github.com/eai-tools/eai-installer/releases/latest/download/eai-setup-windows-x64.exe)
+- [Ubuntu/Debian x64 package](https://github.com/eai-tools/eai-installer/releases/latest/download/eai-setup-ubuntu-amd64.deb)
+
+On macOS, open the downloaded DMG and drag **EAI Setup** to **Applications**.
+The first launch may show the normal macOS security confirmation. Production
+release assets are signed and notarized when the release signing environment is
+configured.
+
 The installer does not copy private platform code, embed a tenant secret, or
 silently install a commercial AI product. A public download is intentional;
 EAI access remains controlled by browser authentication, tenant membership,
@@ -74,7 +89,8 @@ Test installers are built by the `Test installer bundles` GitHub Actions
 workflow. It publishes temporary Windows `.exe`, macOS `.dmg`, and Ubuntu
 `.deb` artifacts and smoke-tests each native package before checking the
 downloaded files together. These artifacts are unsigned test files, not the
-public release channel.
+public release channel. Maintainers can use the manual `Publish test installer
+release` workflow when a direct, native test download is needed.
 
 ## Design documents
 

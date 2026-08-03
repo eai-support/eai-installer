@@ -50,3 +50,17 @@ test. A final Ubuntu job downloads all three artifacts again, checks that each
 file is non-empty, and records SHA-256 hashes. These are test artifacts, not
 production releases; users will see the operating system's unsigned-download
 warning until release signing is configured.
+
+GitHub Actions artifacts are intentionally ZIP-wrapped by GitHub. They are
+useful for CI evidence, but are not the end-user download experience. To create
+direct native test downloads, run the manual `Publish test installer release`
+workflow with a unique version such as `0.1.0-pr9`. It publishes a prerelease
+with these stable asset names:
+
+- `eai-setup-macos-arm64.dmg`
+- `eai-setup-windows-x64.exe`
+- `eai-setup-ubuntu-amd64.deb`
+
+Production releases use the same stable asset names, so public documentation
+can use GitHub's `/releases/latest/download/<asset-name>` links without
+exposing a temporary Actions artifact URL.

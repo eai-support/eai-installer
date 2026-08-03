@@ -1,0 +1,165 @@
+name: Publish test installer release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Unique test version, for example 0.1.0-pr9"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.label }} test release asset
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: Windows
+            os: windows-latest
+            bundle: nsis
+            artifact: eai-test-windows
+            source: src-tauri/target/release/bundle/nsis/*.exe
+            output: eai-setup-windows-x64.exe
+          - label: macOS
+            os: macos-latest
+            bundle: dmg
+            artifact: eai-test-macos
+            source: src-tauri/target/release/bundle/dmg/*.dmg
+            output: eai-setup-macos-arm64.dmg
+          - label: Ubuntu
+            os: ubuntu-22.04
+            bundle: deb
+            artifact: eai-test-ubuntu
+            source: src-tauri/target/release/bundle/deb/*.deb
+            output: eai-setup-ubuntu-amd64.deb
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Ubuntu Tauri dependencies
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          if apt-cache show libwebkit2gtk-4.1-dev >/dev/null 2>&1; then
+            WEBKIT=libwebkit2gtk-4.1-dev
+          else
+            WEBKIT=libwebkit2gtk-4.0-dev
+          fi
+          sudo apt-get install -y "$WEBKIT" libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev patchelf build-essential
+
+      - name: Validate source
+        run: npm test
+
+      - name: Build unsigned test bundle
+        uses: tauri-apps/tauri-action@v0
+        with:
+          projectPath: src-tauri
+          args: --ci --bundles ${{ matrix.bundle }}
+
+      - name: Smoke-test Windows installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem "src-tauri/target/release/bundle/nsis" -Filter *.exe | Select-Object -First 1
+          if (-not $installer) { throw "Windows installer was not produced" }
+          $installDir = Join-Path $env:RUNNER_TEMP "eai-setup-installed"
+          New-Item -ItemType Directory -Force -Path $installDir | Out-Null
+          & $installer.FullName /S "/D=$installDir"
+          if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) { throw "Windows installer exited with code $LASTEXITCODE" }
+          $roots = @($installDir, (Join-Path $env:LOCALAPPDATA 'EAI Setup'), (Join-Path $env:LOCALAPPDATA 'Programs\EAI Setup'), (Join-Path $env:ProgramFiles 'EAI Setup')) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -Unique
+          $installed = @()
+          for ($attempt = 0; $attempt -lt 10 -and $installed.Count -eq 0; $attempt++) {
+            $installed = @($roots | ForEach-Object { Get-ChildItem -LiteralPath $_ -Recurse -File | Where-Object { $_.Extension -ieq '.exe' } })
+            if ($installed.Count -eq 0) { Start-Sleep -Seconds 1 }
+          }
+          if ($installed.Count -eq 0) { throw "Windows installer did not create an executable" }
+
+      - name: Smoke-test macOS disk image
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          dmg="$(find src-tauri/target/release/bundle/dmg -type f -name '*.dmg' -print -quit)"
+          test -s "$dmg"
+          mount="$RUNNER_TEMP/eai-setup-mount"
+          mkdir -p "$mount"
+          hdiutil attach "$dmg" -nobrowse -readonly -mountpoint "$mount"
+          trap 'hdiutil detach "$mount" -quiet || true' EXIT
+          app="$(find "$mount" -maxdepth 1 -name '*.app' -print -quit)"
+          test -n "$app"
+          test -n "$(find "$app/Contents/MacOS" -type f -perm -111 -print -quit)"
+
+      - name: Smoke-test Ubuntu package
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          deb="$(find src-tauri/target/release/bundle/deb -type f -name '*.deb' -print -quit)"
+          test -s "$deb"
+          deb="$(realpath "$deb")"
+          package="$(dpkg-deb -f "$deb" Package)"
+          sudo apt-get install -y "$deb"
+          test "$(dpkg-query -W -f='${Status}' "$package")" = "install ok installed"
+          sudo apt-get remove -y "$package"
+
+      - name: Normalize release asset name
+        shell: bash
+        env:
+          SOURCE_GLOB: ${{ matrix.source }}
+          OUTPUT_NAME: ${{ matrix.output }}
+        run: |
+          set -euo pipefail
+          mkdir -p release-asset
+          source="$(find ${SOURCE_GLOB%/*} -type f -name "${SOURCE_GLOB##*/}" -print -quit)"
+          test -s "$source"
+          cp "$source" "release-asset/$OUTPUT_NAME"
+
+      - name: Upload normalized release asset
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: release-asset/*
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish direct-download test assets
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download normalized assets
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Publish prerelease
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          tag="eai-setup-test-v${VERSION}"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$tag" release-assets/* --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$tag" release-assets/* \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "EAI Setup test ${VERSION}" \
+              --notes "Unsigned test installers. Use only for controlled validation; this is not a production release." \
+              --prerelease
+          fi

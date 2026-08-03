@@ -35,38 +35,42 @@
       </section>
 
       <section class="wizard" aria-live="polite">
+        <div class="activity" id="activity" hidden>
+          <div class="activity-heading"><span class="activity-spinner" aria-hidden="true"></span><strong id="activity-title">Preparing setup</strong></div>
+          <p id="activity-detail">The installer will show each action as it runs.</p>
+          <div class="activity-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Installation progress"><span id="activity-bar"></span></div>
+        </div>
         <section class="wizard-panel current" data-panel="0" aria-labelledby="welcome-title">
           <div class="panel-icon" aria-hidden="true">EAI</div>
           <p class="eyebrow">Welcome</p>
           <h2 id="welcome-title">Set up this computer for EAI</h2>
-          <p class="lead">The setup wizard prepares the public developer tools, signs you in through your browser, and starts an EAI app in a folder you choose.</p>
+          <p class="lead">EAI Setup checks this computer, installs only what is missing, and then guides you through sign-in and app creation.</p>
           <ul class="promise-list">
             <li>Git, Node.js, npm, and the EAI CLI</li>
             <li>Gofer and the app template through <code>eai init</code></li>
             <li>No EAI password, token, or secret stored by this installer</li>
           </ul>
           <div class="panel-actions end">
-            <button class="primary" data-next="1">Continue</button>
+            <button class="primary" data-action="start">Start setup</button>
           </div>
         </section>
 
         <section class="wizard-panel" data-panel="1" aria-labelledby="computer-title" hidden>
           <p class="eyebrow">Step 2</p>
           <h2 id="computer-title">Check this computer</h2>
-          <p class="lead">We will inspect the operating system and required tools before changing anything.</p>
+          <p class="lead">Checking the computer now. Nothing is installed unless it is required and missing.</p>
           <div class="environment-summary" id="environment-summary">Checking this computer...</div>
           <div class="panel-actions">
             <button class="secondary" data-action="detect">Check again</button>
             <span class="action-spacer"></span>
-            <button class="secondary" data-back="0">Back</button>
-            <button class="primary" data-next="2">Continue</button>
+            <button class="secondary" data-back="0">Cancel</button>
           </div>
         </section>
 
         <section class="wizard-panel" data-panel="2" aria-labelledby="prerequisites-title" hidden>
           <p class="eyebrow">Step 3</p>
           <h2 id="prerequisites-title">Install the essentials</h2>
-          <p class="lead">Choose install once. The wizard uses only fixed, documented installers and will ask your computer for permission when needed.</p>
+          <p class="lead">Only missing tools are installed. Your operating system may ask for permission when required.</p>
           <ul class="tool-list" aria-label="Prerequisite status">
             <li data-tool="homebrew"><span><strong>Homebrew</strong><small id="homebrew-state">Required on macOS when missing</small></span><span class="tool-status" id="homebrew-badge">Waiting</span></li>
             <li data-tool="git"><span><strong>Git</strong><small id="git-state">Checking</small></span><span class="tool-status" id="git-badge">Waiting</span></li>
@@ -75,7 +79,7 @@
           </ul>
           <p class="quiet" id="prerequisite-note">No changes have been made yet.</p>
           <div class="panel-actions">
-            <button class="secondary" data-back="1">Back</button>
+            <button class="secondary" data-back="0">Cancel</button>
             <span class="action-spacer"></span>
             <button class="secondary" data-action="install-all">Install missing tools</button>
             <button class="primary" data-next="3" disabled>Continue</button>

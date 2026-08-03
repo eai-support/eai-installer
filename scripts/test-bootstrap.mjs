@@ -47,8 +47,15 @@ const wizard = await readFile(new URL("../ui/index.html", import.meta.url), "utf
 for (const panel of ["0", "1", "2", "3", "4", "5"]) {
   if (!wizard.includes(`data-panel="${panel}"`)) throw new Error(`wizard: missing panel ${panel}`);
 }
-for (const control of ["data-next=\"1\"", "data-next=\"2\"", "data-next=\"3\"", "data-next=\"4\"", "data-action=\"init\"", "data-action=\"finish\""]) {
+for (const control of ["data-action=\"start\"", "data-next=\"3\"", "data-next=\"4\"", "data-action=\"init\"", "data-action=\"finish\""]) {
   if (!wizard.includes(control)) throw new Error(`wizard: missing control ${control}`);
+}
+for (const control of ["id=\"activity\"", "id=\"activity-title\"", "id=\"activity-detail\""]) {
+  if (!wizard.includes(control)) throw new Error(`wizard: missing activity status: ${control}`);
+}
+const app = await readFile(new URL("../ui/app.js", import.meta.url), "utf8");
+if (!app.includes("setActivity") || !app.includes("Installation complete") || !app.includes("async function startSetup")) {
+  throw new Error("wizard: live activity status updates are missing");
 }
 const wizardState = await readFile(new URL("../ui/wizard-state.js", import.meta.url), "utf8");
 if (!wizardState.includes("prerequisitesReady") || !wizardState.includes("isKebabCase")) {
@@ -71,3 +78,22 @@ if (!bundles.includes("Start-Sleep -Seconds 1")) {
   throw new Error("test-bundles workflow does not wait for the Windows installer handoff");
 }
 console.log("test-bundle workflow checks ok");
+
+const tauriConfig = JSON.parse(await readFile(new URL("../src-tauri/tauri.conf.json", import.meta.url), "utf8"));
+const dmg = tauriConfig.bundle?.macOS?.dmg;
+if (!dmg?.background || dmg.windowSize?.width !== 660 || dmg.windowSize?.height !== 400) {
+  throw new Error("Tauri DMG does not declare the guided installation window");
+}
+const dmgBackground = await readFile(new URL(`../src-tauri/${dmg.background.replace(/^icons\//, "icons/")}`, import.meta.url));
+if (dmgBackground.length < 64 || dmgBackground.readUInt32BE(0) !== 0x89504e47) {
+  throw new Error("Tauri DMG background image is missing or invalid");
+}
+const testRelease = await readFile(new URL("../.github/workflows/test-release.yml", import.meta.url), "utf8");
+for (const value of ["workflow_dispatch", "gh release create", "gh release upload", "eai-setup-macos-arm64.dmg", "eai-setup-windows-x64.exe", "eai-setup-ubuntu-amd64.deb"]) {
+  if (!testRelease.includes(value)) throw new Error(`test-release workflow is missing: ${value}`);
+}
+const release = await readFile(new URL("../.github/workflows/release.yml", import.meta.url), "utf8");
+for (const value of ["Add stable direct-download assets", "eai-setup-macos-arm64.dmg", "eai-setup-windows-x64.exe", "eai-setup-ubuntu-amd64.deb"]) {
+  if (!release.includes(value)) throw new Error(`release workflow is missing: ${value}`);
+}
+console.log("release and DMG checks ok");
