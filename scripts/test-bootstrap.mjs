@@ -67,4 +67,7 @@ if (!bundles.includes("$null -ne $LASTEXITCODE")) {
 if (!bundles.includes("expected install roots") || !bundles.includes("Where-Object { $_.Extension -ieq '.exe' }")) {
   throw new Error("test-bundles workflow does not inspect the installed Windows executable");
 }
+if (!bundles.includes("Start-Sleep -Seconds 1")) {
+  throw new Error("test-bundles workflow does not wait for the Windows installer handoff");
+}
 console.log("test-bundle workflow checks ok");

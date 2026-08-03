@@ -75,7 +75,17 @@ jobs:
             (Join-Path $env:LOCALAPPDATA 'Programs\EAI Setup'),
             (Join-Path $env:ProgramFiles 'EAI Setup')
           ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -Unique
-          $installed = @($roots | ForEach-Object { Get-ChildItem -LiteralPath $_ -Recurse -File | Where-Object { $_.Extension -ieq '.exe' } })
+          $installed = @()
+          for ($attempt = 0; $attempt -lt 10 -and $installed.Count -eq 0; $attempt++) {
+            $roots = @(
+              $installDir,
+              (Join-Path $env:LOCALAPPDATA 'EAI Setup'),
+              (Join-Path $env:LOCALAPPDATA 'Programs\EAI Setup'),
+              (Join-Path $env:ProgramFiles 'EAI Setup')
+            ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -Unique
+            $installed = @($roots | ForEach-Object { Get-ChildItem -LiteralPath $_ -Recurse -File | Where-Object { $_.Extension -ieq '.exe' } })
+            if ($installed.Count -eq 0) { Start-Sleep -Seconds 1 }
+          }
           $installed | Select-Object FullName, Length
           if ($installed.Count -eq 0) { throw "Windows installer did not create an executable in the expected install roots" }
 
