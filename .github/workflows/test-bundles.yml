@@ -1,0 +1,132 @@
+name: Test installer bundles
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-smoke:
+    name: ${{ matrix.label }} installer
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: Windows
+            os: windows-latest
+            bundle: nsis
+            artifact: eai-setup-windows
+          - label: macOS
+            os: macos-latest
+            bundle: dmg
+            artifact: eai-setup-macos
+          - label: Ubuntu
+            os: ubuntu-22.04
+            bundle: deb
+            artifact: eai-setup-ubuntu
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Ubuntu Tauri dependencies
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          if apt-cache show libwebkit2gtk-4.1-dev >/dev/null 2>&1; then
+            WEBKIT=libwebkit2gtk-4.1-dev
+          else
+            WEBKIT=libwebkit2gtk-4.0-dev
+          fi
+          sudo apt-get install -y "$WEBKIT" libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev patchelf build-essential
+
+      - name: Validate source
+        run: npm test
+
+      - name: Build unsigned test bundle
+        uses: tauri-apps/tauri-action@v0
+        with:
+          projectPath: src-tauri
+          args: --ci --bundles ${{ matrix.bundle }}
+
+      - name: Smoke-test Windows installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem "src-tauri/target/release/bundle/nsis" -Filter *.exe | Select-Object -First 1
+          if (-not $installer) { throw "Windows installer was not produced" }
+          Get-FileHash $installer.FullName -Algorithm SHA256
+          $installDir = Join-Path $env:RUNNER_TEMP "eai-setup-installed"
+          New-Item -ItemType Directory -Force -Path $installDir | Out-Null
+          & $installer.FullName /S "/D=$installDir"
+          if ($LASTEXITCODE -ne 0) { throw "Windows installer exited with code $LASTEXITCODE" }
+          if (-not (Get-ChildItem $installDir -Recurse -File -Include *.exe)) { throw "Windows installer did not create an executable" }
+
+      - name: Smoke-test macOS disk image
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          dmg="$(find src-tauri/target/release/bundle/dmg -type f -name '*.dmg' -print -quit)"
+          test -s "$dmg"
+          mount="$RUNNER_TEMP/eai-setup-mount"
+          mkdir -p "$mount"
+          hdiutil attach "$dmg" -nobrowse -readonly -mountpoint "$mount"
+          trap 'hdiutil detach "$mount" -quiet || true' EXIT
+          app="$(find "$mount" -maxdepth 1 -name '*.app' -print -quit)"
+          test -n "$app"
+          test -n "$(find "$app/Contents/MacOS" -type f -perm -111 -print -quit)"
+
+      - name: Smoke-test Ubuntu package
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          deb="$(find src-tauri/target/release/bundle/deb -type f -name '*.deb' -print -quit)"
+          test -s "$deb"
+          package="$(dpkg-deb -f "$deb" Package)"
+          sudo apt-get install -y "$deb"
+          test "$(dpkg-query -W -f='${Status}' "$package")" = "install ok installed"
+          sudo apt-get remove -y "$package"
+
+      - name: Upload test installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/dmg/*.dmg
+            src-tauri/target/release/bundle/deb/*.deb
+          if-no-files-found: error
+          retention-days: 14
+
+  verify-downloads:
+    name: Verify downloaded test installers
+    needs: build-and-smoke
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all platform installers
+        uses: actions/download-artifact@v4
+        with:
+          path: downloaded
+
+      - name: Check downloaded files
+        shell: bash
+        run: |
+          set -euo pipefail
+          windows="$(find downloaded -type f -name '*.exe' -print -quit)"
+          macos="$(find downloaded -type f -name '*.dmg' -print -quit)"
+          ubuntu="$(find downloaded -type f -name '*.deb' -print -quit)"
+          test -s "$windows"
+          test -s "$macos"
+          test -s "$ubuntu"
+          sha256sum "$windows" "$macos" "$ubuntu"

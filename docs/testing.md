@@ -35,3 +35,18 @@ A release is incomplete until all of the following are true:
 
 The clean-machine test belongs in a controlled release environment. It should
 use a test tenant and test user, not production credentials.
+
+## Test installer downloads
+
+The `Test installer bundles` workflow produces three unsigned, short-lived
+GitHub Actions artifacts for the current branch or pull request:
+
+- Windows NSIS `.exe`
+- macOS `.dmg`
+- Ubuntu 22.04 `.deb`
+
+Each native runner builds its bundle and performs an installation/package smoke
+test. A final Ubuntu job downloads all three artifacts again, checks that each
+file is non-empty, and records SHA-256 hashes. These are test artifacts, not
+production releases; users will see the operating system's unsigned-download
+warning until release signing is configured.

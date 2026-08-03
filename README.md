@@ -70,6 +70,12 @@ Set-ExecutionPolicy -Scope Process Bypass
 The GUI never accepts arbitrary shell commands. It invokes only the fixed
 commands represented by `BootstrapStep` in `src-tauri/src/main.rs`.
 
+Test installers are built by the `Test installer bundles` GitHub Actions
+workflow. It publishes temporary Windows `.exe`, macOS `.dmg`, and Ubuntu
+`.deb` artifacts and smoke-tests each native package before checking the
+downloaded files together. These artifacts are unsigned test files, not the
+public release channel.
+
 ## Design documents
 
 - [Architecture and product boundary](docs/architecture.md)

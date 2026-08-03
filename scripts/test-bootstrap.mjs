@@ -52,3 +52,9 @@ if (!wizardState.includes("prerequisitesReady") || !wizardState.includes("isKeba
 }
 
 console.log("wizard structure checks ok");
+
+const bundles = await readFile(new URL("../.github/workflows/test-bundles.yml", import.meta.url), "utf8");
+for (const value of ["Windows", "macOS", "Ubuntu", "bundle: nsis", "bundle: dmg", "bundle: deb", "actions/upload-artifact@v4", "actions/download-artifact@v4", "Smoke-test Windows installer", "Smoke-test macOS disk image", "Smoke-test Ubuntu package"]) {
+  if (!bundles.includes(value)) throw new Error(`test-bundles workflow is missing: ${value}`);
+}
+console.log("test-bundle workflow checks ok");
