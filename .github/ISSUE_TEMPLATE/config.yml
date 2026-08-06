@@ -1,5 +1,5 @@
 blank_issues_enabled: false
 contact_links:
   - name: Security vulnerability
-    url: https://github.com/eai-tools/eai-installer/security/advisories/new
+    url: https://github.com/eai-support/eai-installer/security/advisories/new
     about: Report security issues privately. Do not attach archives, installers, or credentials to a public issue.
