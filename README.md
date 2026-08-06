@@ -11,7 +11,7 @@ hands control to the normal EAI CLI flow.
    clear, user-approved fallback.
 3. Installs or updates the canonical `@enterpriseai/cli` npm package, whose
    command is `eai` and whose source repository is public at
-   `eai-tools/eai-cli`.
+   `eai-support/eai-cli`.
 4. Opens the normal browser sign-in flow with `eai login`.
 5. Lets the user confirm their tenant and choose an existing folder or a new
    project folder.

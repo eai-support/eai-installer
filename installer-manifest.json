@@ -10,9 +10,9 @@
   "sources": {
     "cliPackage": "@enterpriseai/cli",
     "cliCommand": "eai",
-    "cliRepository": "https://github.com/eai-tools/eai-cli.git",
-    "goferRepository": "https://github.com/eai-tools/gofer.git",
-    "appTemplateRepository": "https://github.com/eai-tools/eai-app-template.git",
+    "cliRepository": "https://github.com/eai-support/eai-cli.git",
+    "goferRepository": "https://github.com/eai-support/gofer.git",
+    "appTemplateRepository": "https://github.com/eai-support/eai-app-template.git",
     "initializationCommand": "eai init"
   },
   "prerequisites": [
