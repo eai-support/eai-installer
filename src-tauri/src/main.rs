@@ -30,6 +30,13 @@ struct BootstrapResult {
 }
 
 fn executable(program: &str) -> String {
+    if cfg!(target_os = "macos") && program == "brew" {
+        for candidate in ["/opt/homebrew/bin/brew", "/usr/local/bin/brew"] {
+            if Path::new(candidate).exists() {
+                return candidate.to_string();
+            }
+        }
+    }
     if cfg!(target_os = "windows") && matches!(program, "npm" | "eai") {
         format!("{program}.cmd")
     } else {
@@ -38,8 +45,16 @@ fn executable(program: &str) -> String {
 }
 
 fn run_program(program: &str, args: &[&str]) -> Result<(String, String), String> {
-    let output = Command::new(executable(program))
-        .args(args)
+    run_program_in_directory(program, args, None)
+}
+
+fn run_program_in_directory(program: &str, args: &[&str], directory: Option<&Path>) -> Result<(String, String), String> {
+    let mut command = Command::new(executable(program));
+    command.args(args);
+    if let Some(directory) = directory {
+        command.current_dir(directory);
+    }
+    let output = command
         .output()
         .map_err(|error| format!("could not start {program}: {error}"))?;
     let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
@@ -125,37 +140,93 @@ fn package_install_step(step: &str, package: &str, message: &str) -> BootstrapRe
         };
     }
 
-    let command = if version("apt-get", &["--version"]).is_some() {
-        if package == "git" { "sudo apt-get install -y git" } else { "sudo apt-get install -y nodejs npm" }
-    } else if version("dnf", &["--version"]).is_some() {
-        if package == "git" { "sudo dnf install -y git" } else { "sudo dnf install -y nodejs npm" }
-    } else {
-        "Install this prerequisite using your distribution's signed package manager."
+    if version("pkexec", &["--version"]).is_none() {
+        let command = if version("apt-get", &["--version"]).is_some() {
+            if package == "git" { "sudo apt-get install -y git" } else { "sudo apt-get install -y nodejs npm" }
+        } else if version("dnf", &["--version"]).is_some() {
+            if package == "git" { "sudo dnf install -y git" } else { "sudo dnf install -y nodejs npm" }
+        } else {
+            "Install this prerequisite using your distribution's signed package manager."
+        };
+        return command_result(step, false, "Linux needs a graphical permission helper to install packages automatically.", Some(command), None, true);
+    }
+
+    if version("apt-get", &["--version"]).is_some() {
+        let packages = if package == "git" { &["git"][..] } else { &["nodejs", "npm"][..] };
+        if let Err(error) = run_program("pkexec", &["apt-get", "update"]) {
+            return command_result(step, false, &error, Some("pkexec apt-get update"), None, true);
+        }
+        return match run_program("pkexec", [&["apt-get", "install", "-y"][..], packages].concat().as_slice()) {
+            Ok((stdout, stderr)) => command_result(step, true, message, Some("pkexec apt-get install"), Some(format!("{stdout}\n{stderr}")), false),
+            Err(error) => command_result(step, false, &error, Some("pkexec apt-get install"), None, true),
+        };
+    }
+
+    if version("dnf", &["--version"]).is_some() {
+        let packages = if package == "git" { &["git"][..] } else { &["nodejs", "npm"][..] };
+        return match run_program("pkexec", [&["dnf", "install", "-y"][..], packages].concat().as_slice()) {
+            Ok((stdout, stderr)) => command_result(step, true, message, Some("pkexec dnf install"), Some(format!("{stdout}\n{stderr}")), false),
+            Err(error) => command_result(step, false, &error, Some("pkexec dnf install"), None, true),
+        };
+    }
+
+    command_result(step, false, "No supported Linux package manager was found.", Some("Use your distribution's signed package manager, then retry."), None, true)
+}
+
+// Homebrew is the macOS package-manager prerequisite. The desktop flow invokes
+// this fixed step only when brew is missing, and the downloaded official script
+// is never built from user input.
+fn homebrew_install_step() -> BootstrapResult {
+    if !cfg!(target_os = "macos") {
+        return command_result("homebrew", false, "Homebrew is only a macOS prerequisite.", None, None, false);
+    }
+    if version("brew", &["--version"]).is_some() {
+        return command_result("homebrew", true, "Homebrew is already installed.", Some("brew --version"), None, false);
+    }
+    let curl = if version("curl", &["--version"]).is_some() { "curl" } else {
+        return command_result("homebrew", false, "curl is required to fetch the official Homebrew installer.", Some("Install curl, then rerun EAI Setup."), None, true);
     };
-    command_result(step, false, "Linux package installation needs an elevated user action.", Some(command), None, true)
+    let path = env::temp_dir().join(format!("eai-homebrew-{}.sh", Uuid::new_v4()));
+    let path_string = path.to_string_lossy().to_string();
+    let url = "https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh";
+    if let Err(error) = run_program(curl, &["--fail", "--location", "--proto", "=https", "--tlsv1.2", "--output", &path_string, url]) {
+        return command_result("homebrew", false, &error, Some("Download the official Homebrew installer over HTTPS"), None, true);
+    }
+    let result = run_program("bash", &[&path_string]);
+    let _ = fs::remove_file(&path);
+    match result {
+        Ok((stdout, stderr)) => command_result("homebrew", true, "Homebrew installation completed. Restart the app if brew is not yet on PATH.", Some("official Homebrew installer"), Some(format!("{stdout}\n{stderr}")), false),
+        Err(error) => command_result("homebrew", false, &error, Some("official Homebrew installer"), None, true),
+    }
 }
 
 #[tauri::command]
 fn run_bootstrap(step: String, project_name: Option<String>, directory: Option<String>) -> BootstrapResult {
     match step.as_str() {
+        "homebrew" => homebrew_install_step(),
         "git" => package_install_step("git", "git", "Git installation completed."),
         "node" => package_install_step("node", "node", "Node.js installation completed."),
         "eai-cli" => match run_program("npm", &["install", "--global", "@enterpriseai/cli"]) {
             Ok((stdout, stderr)) => command_result("eai-cli", true, "The EAI CLI was installed or updated.", Some("npm install --global @enterpriseai/cli"), Some(format!("{stdout}\n{stderr}")), false),
             Err(error) => command_result("eai-cli", false, &error, Some("npm install --global @enterpriseai/cli"), None, true),
         },
-        "login" => command_result("login", true, "Complete browser sign-in, then return to EAI Setup.", Some("eai login"), None, true),
+        "login" => match run_program("eai", &["login"]) {
+            Ok((stdout, stderr)) => command_result("login", true, "Browser sign-in completed.", Some("eai login"), Some(format!("{stdout}\n{stderr}")), false),
+            Err(error) => command_result("login", false, &error, Some("eai login"), None, true),
+        },
         "init" => {
             let name = project_name.unwrap_or_default();
             if !name.chars().all(|character| character.is_ascii_lowercase() || character.is_ascii_digit() || character == '-') || name.is_empty() || name.starts_with('-') || name.ends_with('-') {
                 return command_result("init", false, "Project name must be non-empty kebab-case.", None, None, true);
             }
-            if let Some(path) = directory.as_deref() {
-                if !Path::new(path).is_dir() {
-                    return command_result("init", false, "The selected project directory does not exist.", None, None, true);
-                }
+            let directory = directory.map(std::path::PathBuf::from).unwrap_or_else(|| env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")));
+            if !directory.is_dir() {
+                return command_result("init", false, "The selected project directory does not exist.", None, None, true);
             }
-            command_result("init", true, "Run the command in the selected folder to fetch Gofer and the app template.", Some("eai init <project-name> --current-dir"), None, true)
+            match run_program_in_directory("eai", &["init", &name, "--current-dir"], Some(&directory)) {
+                Ok((stdout, stderr)) => command_result("init", true, "The app was initialised and the Gofer assets are ready.", Some("eai init <project-name> --current-dir"), Some(format!("{stdout}\n{stderr}")), false),
+                Err(error) => command_result("init", false, &error, Some("eai init <project-name> --current-dir"), None, true),
+            }
         }
         _ => command_result(&step, false, "Unsupported bootstrap step.", None, None, false),
     }

@@ -20,11 +20,13 @@ function Require-AutoInstall([string]$Name) {
 
 if (-not (Has-Command "git")) {
   Require-AutoInstall "Git"
+  if (-not (Has-Command "winget")) { throw "WinGet is unavailable. Install or enable Microsoft's App Installer, then rerun EAI Setup." }
   winget install --id Git.Git -e --source winget --accept-source-agreements --accept-package-agreements
 }
 
 if (-not (Has-Command "node") -or -not (Has-Command "npm")) {
   Require-AutoInstall "Node.js"
+  if (-not (Has-Command "winget")) { throw "WinGet is unavailable. Install or enable Microsoft's App Installer, then rerun EAI Setup." }
   winget install --id OpenJS.NodeJS.LTS -e --source winget --accept-source-agreements --accept-package-agreements
 }
 

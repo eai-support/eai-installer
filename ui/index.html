@@ -16,44 +16,69 @@
         <span id="platform" class="status">Detecting device</span>
       </header>
 
-      <section class="intro" aria-labelledby="intro-title">
-        <h2 id="intro-title">Prepare this computer for EAI</h2>
-        <p>Install the public developer prerequisites, sign in, and initialise an EAI app in a folder you choose.</p>
-        <p class="quiet">Anyone can download this installer. Your EAI tenant access still comes from your browser sign-in and platform permissions.</p>
-      </section>
-
-      <section class="steps" aria-label="Setup steps">
-        <article class="step" data-step="git">
-          <div><span class="number">1</span><div><h3>Git</h3><p id="git-state">Checking</p></div></div>
-          <button data-action="git">Install Git</button>
-        </article>
-        <article class="step" data-step="node">
-          <div><span class="number">2</span><div><h3>Node.js and npm</h3><p id="node-state">Checking</p></div></div>
-          <button data-action="node">Install Node.js</button>
-        </article>
-        <article class="step" data-step="eai-cli">
-          <div><span class="number">3</span><div><h3>EAI CLI</h3><p id="eai-cli-state">Checking</p></div></div>
-          <button data-action="eai-cli">Install or update</button>
-        </article>
-        <article class="step" data-step="login">
-          <div><span class="number">4</span><div><h3>Sign in</h3><p>Use your browser to authenticate with EAI.</p></div></div>
-          <button data-action="login">Show login command</button>
-        </article>
-      </section>
-
-      <section class="project" aria-labelledby="project-title">
-        <div>
-          <h2 id="project-title">Start an app</h2>
-          <p>Choose a kebab-case name and an existing or new folder. EAI init will fetch the supported Gofer assets and app template.</p>
+      <section class="wizard" aria-live="polite">
+        <div class="activity" id="activity" hidden>
+          <div class="activity-heading"><span class="activity-spinner" aria-hidden="true"></span><strong id="activity-title">Preparing setup</strong></div>
+          <p id="activity-detail">The installer will show each action as it runs.</p>
+          <div class="activity-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Installation progress"><span id="activity-bar"></span></div>
+          <div class="activity-actions"><button class="secondary" id="retry-install" data-action="install-all" hidden>Try again</button></div>
         </div>
-        <label>Project name <input id="project-name" placeholder="my-eai-app" autocomplete="off" /></label>
-        <label>Folder <input id="project-directory" placeholder="Choose a folder in your file manager" autocomplete="off" /></label>
-        <button class="primary" data-action="init">Show init command</button>
+        <section class="wizard-panel current" data-panel="0" aria-labelledby="welcome-title">
+          <div class="panel-icon" aria-hidden="true">EAI</div>
+          <p class="eyebrow">Welcome</p>
+          <h2 id="welcome-title">Set up this computer for EAI</h2>
+          <p class="lead">EAI Setup checks this computer, installs only what is missing, and then guides you through sign-in and app creation.</p>
+          <ul class="promise-list">
+            <li>Only the required Git, Node.js, npm, and EAI CLI components</li>
+            <li>Gofer and the app template through <code>eai init</code></li>
+            <li>No EAI password, token, or secret stored by this installer</li>
+          </ul>
+          <div class="panel-actions end">
+            <button class="primary" data-action="start">Start setup</button>
+          </div>
+        </section>
+
+        <section class="wizard-panel" data-panel="3" aria-labelledby="signin-title" hidden>
+          <h2 id="signin-title">Sign in to EAI</h2>
+          <p class="lead">Your browser handles sign-in. The installer never asks for or stores your password.</p>
+          <div class="callout">
+            <strong>What happens next</strong>
+            <p>Your browser opens for EAI authentication. When it finishes, setup continues automatically.</p>
+          </div>
+          <div class="panel-actions end">
+            <button class="primary" data-action="login">Sign in with browser</button>
+          </div>
+        </section>
+
+        <section class="wizard-panel" data-panel="4" aria-labelledby="app-title" hidden>
+          <h2 id="app-title">Start your EAI app</h2>
+          <p class="lead">Choose a kebab-case project name and the folder where the app should be created or initialised.</p>
+          <div class="form-grid">
+            <label for="project-name">Project name <input id="project-name" placeholder="my-eai-app" autocomplete="off" /></label>
+            <label for="project-directory">Folder <input id="project-directory" placeholder="/Users/you/Code/my-eai-app" autocomplete="off" /></label>
+          </div>
+          <p class="quiet">The supported <code>eai init</code> workflow fetches the Gofer assets and app template.</p>
+          <div class="panel-actions end">
+            <button class="primary" data-action="init">Create and initialise app</button>
+          </div>
+        </section>
+
+        <section class="wizard-panel" data-panel="5" aria-labelledby="complete-title" hidden>
+          <div class="panel-icon success" aria-hidden="true">OK</div>
+          <h2 id="complete-title">EAI is ready to use</h2>
+          <p class="lead" id="complete-message">Your app setup is complete. Continue in your chosen AI or editor host.</p>
+          <div class="completion-command"><code id="next-command">eai whoami</code></div>
+          <div class="panel-actions end">
+            <button class="primary" data-action="finish">Close setup</button>
+          </div>
+        </section>
+
+        <output id="output" class="output" aria-live="polite" hidden></output>
       </section>
 
-      <output id="output" class="output" aria-live="polite">Ready to check this computer.</output>
       <footer>Gofer and the app template are installed by the supported <code>eai init</code> workflow. EAI Setup never stores your password or API secrets.</footer>
     </main>
+    <script src="wizard-state.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

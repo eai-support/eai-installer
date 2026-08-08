@@ -7,18 +7,36 @@ hands control to the normal EAI CLI flow.
 ## What one download does
 
 1. Detects the operating system, CPU architecture, and installed tools.
-2. Installs missing Git and Node.js using the platform's package manager or a
-   clear, user-approved fallback.
-3. Installs or updates the canonical `@enterpriseai/cli` npm package, whose
+2. Installs Homebrew on macOS only when it is missing. macOS may show its normal
+   administrator permission prompt.
+3. Installs missing Git and Node.js using the platform's signed package manager.
+   Windows, macOS, and Linux may show their normal permission prompt.
+4. Installs or updates the canonical `@enterpriseai/cli` npm package, whose
    command is `eai` and whose source repository is public at
    `eai-support/eai-cli`.
-4. Opens the normal browser sign-in flow with `eai login`.
-5. Lets the user confirm their tenant and choose an existing folder or a new
-   project folder.
-6. Runs `eai init`, which fetches the supported Gofer assets and EAI app
+5. Opens the normal browser sign-in flow with `eai login`.
+6. Lets the user choose an existing folder or a new project folder. Tenant
+   selection remains part of the normal EAI CLI prompts, where the platform can
+   show only tenants the signed-in user may access.
+7. Runs `eai init`, which fetches the supported Gofer assets and EAI app
    template through the existing CLI contract.
-7. Verifies the project and shows the next action for the user's selected AI
+8. Verifies the project and shows the next action for the user's selected AI
    or editor host.
+
+## Download the installer
+
+The public release channel serves native installers directly from GitHub
+Releases. The links download the file itself, not a GitHub Actions artifact
+ZIP:
+
+- [macOS Apple Silicon DMG](https://github.com/eai-tools/eai-installer/releases/latest/download/eai-setup-macos-arm64.dmg)
+- [Windows x64 installer](https://github.com/eai-tools/eai-installer/releases/latest/download/eai-setup-windows-x64.exe)
+- [Ubuntu/Debian x64 package](https://github.com/eai-tools/eai-installer/releases/latest/download/eai-setup-ubuntu-amd64.deb)
+
+On macOS, open the downloaded DMG and drag **EAI Setup** to **Applications**.
+The first launch may show the normal macOS security confirmation. Production
+release assets are signed and notarized when the release signing environment is
+configured.
 
 The installer does not copy private platform code, embed a tenant secret, or
 silently install a commercial AI product. A public download is intentional;
@@ -53,7 +71,7 @@ node scripts/verify-manifest.mjs
 For the shell fallback:
 
 ```bash
-EAI_SETUP_AUTO_INSTALL=1 ./scripts/bootstrap.sh
+EAI_SETUP_AUTO_INSTALL=1 ./scripts/bootstrap.sh --install-homebrew
 ./scripts/bootstrap.sh --project my-app --directory "$HOME/Code/my-app"
 ```
 
@@ -66,6 +84,13 @@ Set-ExecutionPolicy -Scope Process Bypass
 
 The GUI never accepts arbitrary shell commands. It invokes only the fixed
 commands represented by `BootstrapStep` in `src-tauri/src/main.rs`.
+
+Test installers are built by the `Test installer bundles` GitHub Actions
+workflow. It publishes temporary Windows `.exe`, macOS `.dmg`, and Ubuntu
+`.deb` artifacts and smoke-tests each native package before checking the
+downloaded files together. These artifacts are unsigned test files, not the
+public release channel. Maintainers can use the manual `Publish test installer
+release` workflow when a direct, native test download is needed.
 
 ## Design documents
 
