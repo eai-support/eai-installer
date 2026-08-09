@@ -34,9 +34,15 @@ jobs:
           - label: Ubuntu
             os: ubuntu-22.04
             bundle: deb
-            artifact: eai-test-ubuntu
+            artifact: eai-test-ubuntu-amd64
             source: src-tauri/target/release/bundle/deb/*.deb
             output: eai-setup-ubuntu-amd64.deb
+          - label: Ubuntu ARM64
+            os: ubuntu-24.04-arm
+            bundle: deb
+            artifact: eai-test-ubuntu-arm64
+            source: src-tauri/target/release/bundle/deb/*.deb
+            output: eai-setup-ubuntu-arm64.deb
 
     steps:
       - uses: actions/checkout@v4
