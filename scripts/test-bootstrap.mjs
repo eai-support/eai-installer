@@ -42,6 +42,12 @@ if (!rust.includes("@enterpriseai/cli")) throw new Error("Tauri adapter uses the
 if (!rust.includes("run_program_in_directory(\"eai\"")) throw new Error("Tauri adapter does not run eai init in the selected directory");
 if (!rust.includes("run_program(\"eai\", &[\"login\"]")) throw new Error("Tauri adapter does not run eai login");
 if (!rust.includes("pkexec")) throw new Error("Tauri adapter does not provide automatic Linux package installation");
+if (!rust.includes("/usr/bin/osascript") || !rust.includes("Terminal") || !rust.includes("official Homebrew installer in Terminal")) {
+  throw new Error("Tauri adapter does not provide an interactive macOS Homebrew handoff");
+}
+if (rust.includes('run_program("bash", &[&path_string])')) {
+  throw new Error("Tauri adapter still runs Homebrew without a user-visible TTY");
+}
 if (rust.includes("Command::new(user") || rust.includes("shell = user")) {
   throw new Error("Tauri adapter appears to execute user-supplied commands");
 }
@@ -101,11 +107,11 @@ if (dmgBackground.length < 64 || dmgBackground.readUInt32BE(0) !== 0x89504e47) {
   throw new Error("Tauri DMG background image is missing or invalid");
 }
 const testRelease = await readFile(new URL("../.github/workflows/test-release.yml", import.meta.url), "utf8");
-for (const value of ["workflow_dispatch", "gh release create", "gh release upload", "eai-setup-macos-arm64.dmg", "eai-setup-windows-x64.exe", "eai-setup-ubuntu-amd64.deb"]) {
+for (const value of ["workflow_dispatch", "gh release create", "gh release upload", "eai-setup-macos-arm64.dmg", "eai-setup-windows-x64.exe", "eai-setup-ubuntu-amd64.deb", "eai-setup-ubuntu-arm64.deb", "ubuntu-24.04-arm"]) {
   if (!testRelease.includes(value)) throw new Error(`test-release workflow is missing: ${value}`);
 }
 const release = await readFile(new URL("../.github/workflows/release.yml", import.meta.url), "utf8");
-for (const value of ["Add stable direct-download assets", "eai-setup-macos-arm64.dmg", "eai-setup-windows-x64.exe", "eai-setup-ubuntu-amd64.deb", "codesign --verify --deep --strict", "spctl --assess --type execute", "xcrun stapler validate"]) {
+for (const value of ["Add stable direct-download assets", "eai-setup-macos-arm64.dmg", "eai-setup-windows-x64.exe", "eai-setup-ubuntu-amd64.deb", "eai-setup-ubuntu-arm64.deb", "ubuntu-24.04-arm", "codesign --verify --deep --strict", "spctl --assess --type execute", "xcrun stapler validate"]) {
   if (!release.includes(value)) throw new Error(`release workflow is missing: ${value}`);
 }
 console.log("release and DMG checks ok");

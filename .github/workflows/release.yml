@@ -26,6 +26,8 @@ jobs:
             target: aarch64-apple-darwin
           - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
     runs-on: ${{ matrix.os }}
     environment: release
     steps:
@@ -120,5 +122,6 @@ jobs:
             windows-latest) cp src-tauri/target/release/bundle/nsis/*.exe release-assets/eai-setup-windows-x64.exe ;;
             macos-latest) cp src-tauri/target/release/bundle/dmg/*.dmg release-assets/eai-setup-macos-arm64.dmg ;;
             ubuntu-22.04) cp src-tauri/target/release/bundle/deb/*.deb release-assets/eai-setup-ubuntu-amd64.deb ;;
+            ubuntu-24.04-arm) cp src-tauri/target/release/bundle/deb/*.deb release-assets/eai-setup-ubuntu-arm64.deb ;;
           esac
           gh release upload "v${version}" release-assets/* --clobber

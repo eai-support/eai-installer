@@ -32,6 +32,11 @@ ZIP:
 - [macOS Apple Silicon DMG](https://github.com/eai-tools/eai-installer/releases/latest/download/eai-setup-macos-arm64.dmg)
 - [Windows x64 installer](https://github.com/eai-tools/eai-installer/releases/latest/download/eai-setup-windows-x64.exe)
 - [Ubuntu/Debian x64 package](https://github.com/eai-tools/eai-installer/releases/latest/download/eai-setup-ubuntu-amd64.deb)
+- [Ubuntu/Debian ARM64 package](https://github.com/eai-tools/eai-installer/releases/latest/download/eai-setup-ubuntu-arm64.deb)
+
+Choose the Ubuntu/Debian package that matches the computer's architecture. The
+ARM64 package is intended for ARM64 Linux machines such as Apple Silicon VMs;
+the x64 package is for Intel/AMD Linux machines.
 
 On macOS, open the downloaded DMG and drag **EAI Setup** to **Applications**.
 The first launch may show the normal macOS security confirmation. Production

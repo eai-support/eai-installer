@@ -3,6 +3,8 @@ use std::env;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
+use std::thread;
+use std::time::Duration;
 use uuid::Uuid;
 
 #[derive(Serialize)]
@@ -64,6 +66,20 @@ fn run_program_in_directory(program: &str, args: &[&str], directory: Option<&Pat
     } else {
         Err(if stderr.is_empty() { stdout } else { stderr })
     }
+}
+
+fn shell_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\"'\"'"))
+}
+
+fn applescript_quote(value: &str) -> String {
+    format!(
+        "\"{}\"",
+        value
+            .replace('\\', "\\\\")
+            .replace('"', "\\\"")
+            .replace('\n', "\\n")
+    )
 }
 
 fn version(program: &str, args: &[&str]) -> Option<String> {
@@ -192,12 +208,33 @@ fn homebrew_install_step() -> BootstrapResult {
     if let Err(error) = run_program(curl, &["--fail", "--location", "--proto", "=https", "--tlsv1.2", "--output", &path_string, url]) {
         return command_result("homebrew", false, &error, Some("Download the official Homebrew installer over HTTPS"), None, true);
     }
-    let result = run_program("bash", &[&path_string]);
-    let _ = fs::remove_file(&path);
-    match result {
-        Ok((stdout, stderr)) => command_result("homebrew", true, "Homebrew installation completed. Restart the app if brew is not yet on PATH.", Some("official Homebrew installer"), Some(format!("{stdout}\n{stderr}")), false),
-        Err(error) => command_result("homebrew", false, &error, Some("official Homebrew installer"), None, true),
+    // Finder-launched desktop apps do not have a TTY. Running the Homebrew
+    // script through Command::output() therefore makes its sudo step fail in
+    // non-interactive mode. Use the user's real Terminal session so the
+    // standard macOS administrator prompt and Homebrew output remain visible.
+    let command = format!(
+        "echo 'EAI Setup: approve the standard macOS administrator prompt to install Homebrew.'; /bin/bash {}",
+        shell_quote(&path_string)
+    );
+    let apple_script = format!(
+        "tell application \"Terminal\" to activate\ntell application \"Terminal\" to do script {}",
+        applescript_quote(&command)
+    );
+    if let Err(error) = run_program("/usr/bin/osascript", &["-e", &apple_script]) {
+        let _ = fs::remove_file(&path);
+        return command_result("homebrew", false, &error, Some("Open Terminal for the official Homebrew installer"), None, true);
     }
+
+    for _ in 0..900 {
+        if version("brew", &["--version"]).is_some() {
+            let _ = fs::remove_file(&path);
+            return command_result("homebrew", true, "Homebrew installation completed.", Some("official Homebrew installer in Terminal"), None, false);
+        }
+        thread::sleep(Duration::from_secs(1));
+    }
+
+    let _ = fs::remove_file(&path);
+    command_result("homebrew", false, "Homebrew did not become available after the administrator setup window.", Some("Finish the official Homebrew installer in Terminal, then retry EAI Setup"), None, true)
 }
 
 #[tauri::command]
