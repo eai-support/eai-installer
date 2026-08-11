@@ -545,7 +545,7 @@ fn latest_node_artifact() -> Result<(String, String), String> {
     Err("no supported Node.js LTS macOS package was found".to_string())
 }
 
-fn node_tar_install_step(app: &AppHandle, version: &str, filename: &str, url: &str) -> BootstrapResult {
+fn node_tar_install_step(app: &AppHandle, node_version: &str, filename: &str, url: &str) -> BootstrapResult {
     let archive = env::temp_dir().join(format!("eai-node-{}.tar.gz", Uuid::new_v4()));
     let checksum_file = env::temp_dir().join(format!("eai-node-{}-SHASUMS256.txt", Uuid::new_v4()));
     let archive_string = archive.to_string_lossy().to_string();
@@ -554,7 +554,7 @@ fn node_tar_install_step(app: &AppHandle, version: &str, filename: &str, url: &s
     if let Err(error) = run_program("curl", &["--fail", "--location", "--proto", "=https", "--tlsv1.2", "--output", &archive_string, url]) {
         return command_result("node", false, &error, Some("Download the official Node.js LTS archive over HTTPS"), None, true);
     }
-    let checksum_url = format!("https://nodejs.org/dist/{version}/SHASUMS256.txt");
+    let checksum_url = format!("https://nodejs.org/dist/{node_version}/SHASUMS256.txt");
     emit_progress(app, "node", "Checking Node.js installer", "Verifying the archive checksum before installation.", Some(35), Some(75));
     if let Err(error) = run_program("curl", &["--fail", "--location", "--proto", "=https", "--tlsv1.2", "--output", &checksum_string, &checksum_url]) {
         let _ = fs::remove_file(&archive);
