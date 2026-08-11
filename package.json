@@ -1,6 +1,6 @@
 {
   "name": "@enterpriseai/setup",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Cross-platform EAI Setup validation and bootstrap tooling",
   "type": "module",
@@ -8,7 +8,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "test": "node scripts/verify-manifest.mjs && node scripts/test-bootstrap.mjs && node scripts/test-wizard.mjs",
+    "test": "node scripts/verify-version.mjs && node scripts/verify-manifest.mjs && node scripts/test-bootstrap.mjs && node scripts/test-wizard.mjs",
     "validate": "npm test"
   }
 }

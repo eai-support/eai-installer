@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version, for example 0.1.0"
+        description: "Semantic release version, for example 0.1.1"
         required: true
         type: string
   push:
@@ -55,6 +55,21 @@ jobs:
         with:
           node-version: 20
       - run: npm test
+      - name: Validate semantic release version
+        shell: bash
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          package_version="$(node -p "require('./package.json').version")"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            [[ "$REQUESTED_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+            test "$REQUESTED_VERSION" = "$package_version"
+          else
+            tag_version="${GITHUB_REF_NAME#v}"
+            [[ "$tag_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+            test "$tag_version" = "$package_version"
+          fi
       - run: cargo check --manifest-path src-tauri/Cargo.toml --target ${{ matrix.target }}
       - name: Require release signing configuration
         shell: bash
