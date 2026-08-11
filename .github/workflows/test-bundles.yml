@@ -54,6 +54,8 @@ jobs:
           node-version: 20
 
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
 
       - name: Install Ubuntu Tauri dependencies
         if: runner.os == 'Linux'

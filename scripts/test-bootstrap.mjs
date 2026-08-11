@@ -38,7 +38,17 @@ if (!git?.installers?.macos?.includes("Command Line Tools") || git.installers.ma
   throw new Error("manifest: macOS Git path must use Command Line Tools without requiring full Xcode");
 }
 const node = manifest.prerequisites.find((item) => item.id === "node");
-if (!node?.installers?.macos?.includes("nodejs.org") || !node.installers.macos.includes("checksum verification") || !node.installers.macos.includes("user-local")) {
+const nodeMacInstaller = node?.installers?.macos ?? "";
+const nodeMacUrls = nodeMacInstaller.match(/https:\/\/[^\s]+/g) ?? [];
+const hasOfficialNodeUrl = nodeMacUrls.some((value) => {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && url.hostname === "nodejs.org";
+  } catch {
+    return false;
+  }
+});
+if (!hasOfficialNodeUrl || !nodeMacInstaller.includes("checksum verification") || !nodeMacInstaller.includes("user-local")) {
   throw new Error("manifest: macOS Node.js path must use the official checksum-verified user-local archive");
 }
 
