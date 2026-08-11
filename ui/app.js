@@ -112,12 +112,12 @@ function setActivity(title, detail, progress = null, active = true, eta = "", ph
 }
 
 const waitingDetails = {
-  detect: "Checking the installed tools. If macOS shows a permission window, complete it there.",
+  detect: "Checking the required tools.",
   git: "Checking Apple Software Update for the minimal Command Line Tools package. No Terminal window is needed.",
   node: "Downloading or validating the official Node.js package.",
   "eai-cli": "Downloading the EAI CLI package from npm.",
-  login: "Waiting for browser sign-in to finish.",
-  init: "Waiting for the EAI app to finish initialising.",
+  login: "Waiting for browser sign-in.",
+  init: "Waiting for app setup to finish.",
 };
 
 function refreshActivityHeartbeat() {
@@ -295,7 +295,7 @@ function showPreviewState() {
 async function detect() {
   renderInstallItems(prerequisiteSteps);
   for (const step of prerequisiteSteps) setInstallItemState(step, "active", "Checking");
-  setActivity("Checking this computer", "Checking Git, Node.js/npm, and the EAI CLI.", null, true, "", "Checking");
+  setActivity("Checking this computer", "Checking the required tools.", null, true, "", "Checking");
   startActivityHeartbeat("detect");
   try {
     const report = await invoke("detect_environment");
@@ -443,8 +443,13 @@ async function runInit() {
   const name = document.querySelector("#project-name").value.trim();
   const directory = document.querySelector("#project-directory").value.trim();
   if (!EAIWizard.isKebabCase(name)) {
-    showOutput("Use a kebab-case project name, for example my-eai-app.");
+    showOutput("Use lowercase words separated by hyphens, for example customer-portal.");
     document.querySelector("#project-name").focus();
+    return;
+  }
+  if (!directory) {
+    showOutput("Choose a folder for the app.", "Use Choose folder or enter a folder path.");
+    document.querySelector("#project-directory").focus();
     return;
   }
   setActivity("Creating your EAI app", `Initialising ${name} and fetching the supported Gofer assets.`, null);
@@ -481,6 +486,25 @@ async function runAction(action) {
   if (action === "install-all") return installPrerequisites();
   if (action === "login") return runLogin();
   if (action === "signup") return runSignup();
+  if (action === "choose-folder") {
+    const dialog = window.__TAURI__?.dialog;
+    if (!dialog?.open) {
+      showOutput("Folder selection is available in the desktop installer.");
+      return;
+    }
+    try {
+      const selected = await dialog.open({ directory: true, multiple: false, title: "Choose the app folder" });
+      if (typeof selected === "string" && selected) {
+        document.querySelector("#project-directory").value = selected;
+        setActivity("Folder selected", "Your app will be created in this folder.", 100, false, "", "Ready");
+        showOutput("Folder selected.");
+      }
+    } catch (error) {
+      showOutput("The folder could not be selected.", String(error));
+      setActivity("Folder selection failed", "Choose a folder or enter its path, then try again.", 0, false, "", "Error");
+    }
+    return;
+  }
   if (action === "init") return runInit();
   if (action === "finish") showOutput("You can close this window.");
 }

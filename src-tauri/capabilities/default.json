@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "EAI Setup desktop permissions",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": ["core:default", "dialog:default"]
 }

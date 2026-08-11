@@ -903,6 +903,7 @@ fn local_device_id() -> Result<String, String> {
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![detect_environment, run_bootstrap, open_signup, local_device_id])
         .run(tauri::generate_context!())
         .expect("error while running EAI Setup");

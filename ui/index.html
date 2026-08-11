@@ -41,12 +41,12 @@
           <img class="panel-logo" src="assets/eai-square-man-logo.png" alt="Enterprise AI" />
           <p class="eyebrow">Welcome</p>
           <h2 id="welcome-title">Set up this computer for EAI</h2>
-          <p class="lead">Go from a new computer to your first EAI app with one guided setup. Enterprise AI Setup prepares the essentials, connects your account, and gets you ready to build.</p>
+          <p class="lead">Prepare this computer, sign in securely, and create your first EAI app.</p>
           <ul class="promise-list">
-            <li>Ready to build: the tools your EAI project needs are prepared for you</li>
-            <li>Secure access: sign in through your browser and keep credentials out of the installer</li>
-            <li>One guided flow: create your project and continue in your AI or editor workflow</li>
-            <li>No guesswork: your computer is checked first and only missing components are added</li>
+            <li>Required developer tools ready</li>
+            <li>Secure browser sign-in</li>
+            <li>App folder and project created</li>
+            <li>Only missing tools installed</li>
           </ul>
           <div class="panel-actions end">
             <button class="primary" data-action="start">Start setup</button>
@@ -55,26 +55,32 @@
 
         <section class="wizard-panel" data-panel="3" aria-labelledby="signin-title" hidden>
           <h2 id="signin-title">Sign in to EAI</h2>
-          <p class="lead">Your browser handles sign-in. The installer never asks for or stores your password.</p>
+          <p class="lead">Sign in securely in your browser. Your password stays there.</p>
           <div class="callout">
-            <strong>What happens next</strong>
-            <p>Your browser opens for EAI authentication. When it finishes, setup continues automatically.</p>
+            <strong>Next</strong>
+            <p>Your browser will open. After sign-in, setup continues automatically.</p>
           </div>
           <div class="panel-actions end">
             <button class="primary" data-action="login">Sign in with browser</button>
             <button class="secondary" data-action="signup">Create an EAI account</button>
           </div>
-          <p class="quiet">New to Enterprise AI? Create your account on the website, then return here and choose Sign in with browser.</p>
+          <p class="quiet">New to EAI? Create an account first, then return here to sign in.</p>
         </section>
 
         <section class="wizard-panel" data-panel="4" aria-labelledby="app-title" hidden>
           <h2 id="app-title">Start your EAI app</h2>
-          <p class="lead">Choose a kebab-case project name and the folder where the app should be created or initialised.</p>
+          <p class="lead">Name your app and choose where to create it.</p>
           <div class="form-grid">
-            <label for="project-name">Project name <input id="project-name" placeholder="my-eai-app" autocomplete="off" /></label>
-            <label for="project-directory">Folder <input id="project-directory" placeholder="/Users/you/Code/my-eai-app" autocomplete="off" /></label>
+            <label for="project-name">Project name <input id="project-name" placeholder="customer-portal" autocomplete="off" aria-describedby="project-name-help" /></label>
+            <p class="field-help" id="project-name-help">Use lowercase words separated by hyphens. Example: <code>customer-portal</code>.</p>
+            <label for="project-directory">Folder
+              <span class="folder-picker">
+                <input id="project-directory" placeholder="Choose a folder" autocomplete="off" aria-describedby="project-directory-help" />
+                <button class="secondary" id="choose-folder" data-action="choose-folder" type="button">Choose folder</button>
+              </span>
+            </label>
           </div>
-          <p class="quiet">The supported <code>eai init</code> workflow fetches the Gofer assets and app template.</p>
+          <p class="field-help" id="project-directory-help">The app will be created in this folder. Use Choose folder to open Finder or File Explorer.</p>
           <div class="panel-actions end">
             <button class="primary" data-action="init">Create and initialise app</button>
           </div>
@@ -93,7 +99,7 @@
         <output id="output" class="output" aria-live="polite" hidden></output>
       </section>
 
-      <footer>Gofer and the app template are installed by the supported <code>eai init</code> workflow. Enterprise AI Setup never stores your password or API secrets.</footer>
+      <footer>EAI Setup never stores your password or API secrets.</footer>
     </main>
     <script src="wizard-state.js"></script>
     <script src="app.js"></script>
