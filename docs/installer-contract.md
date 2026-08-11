@@ -17,10 +17,12 @@ commands.
   installer. Full Xcode is not required. If Apple's Software Update catalog has
   not advertised the package yet, EAI Setup asks macOS to refresh that catalog,
   continues checking, and explains any native Install dialog that needs approval.
-- If Node.js is missing on macOS, EAI Setup downloads the official Node.js LTS
-  archive over HTTPS, verifies its checksum, and installs it for the current
-  user without a second administrator prompt. A signed package is the fallback
-  when the official archive is unavailable.
+- If Node.js is missing on macOS, EAI Setup first discovers valid user-managed
+  installations such as NVM, including when the app was opened from Finder. If
+  no usable runtime is found, it downloads the official Node.js LTS archive
+  over HTTPS, verifies its checksum, and installs it for the current user
+  without a second administrator prompt. A signed package is the fallback when
+  the official archive is unavailable.
 - Installation progress is reported in the EAI Setup window, including the
   current item, phase, and an honest approximate remaining time. Estimates are
   guidance, not a guarantee about network speed or provider availability.

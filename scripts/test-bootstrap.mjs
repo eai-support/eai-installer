@@ -75,7 +75,7 @@ if (!rust.includes("pkexec")) throw new Error("Tauri adapter does not provide au
 for (const value of ["Homebrew.pkg", "/usr/sbin/pkgutil", "--check-signature", "with administrator privileges", "--stdinpass", "No Terminal window will open"]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing native macOS installation control: ${value}`);
 }
-for (const value of ["xcode-select", "full Xcode is not required", "softwareupdate", "latest_command_line_tools_label", "refresh_macos_command_line_tools_catalog", "Refreshing Apple Software Update", "with administrator privileges", "secure administrator dialog", "native administrator install", "latest_node_artifact", "nodejs.org/dist/index.json", "osx-arm64-pkg", "osx-x64-pkg", "osx-arm64-tar", "osx-x64-tar", "SHASUMS256.txt", "shasum", "uname", "--prefix", "expose_user_npm_bin"]) {
+for (const value of ["xcode-select", "full Xcode is not required", "softwareupdate", "latest_command_line_tools_label", "refresh_macos_command_line_tools_catalog", "Refreshing Apple Software Update", "with administrator privileges", "secure administrator dialog", "native administrator install", "latest_node_artifact", "nodejs.org/dist/index.json", "osx-arm64-pkg", "osx-x64-pkg", "osx-arm64-tar", "osx-x64-tar", "SHASUMS256.txt", "shasum", "uname", "--prefix", "expose_user_npm_bin", "NVM_DIR", "versions/node", "NVM_BIN", "nvm_node_bin_dirs", "macos_package_bin_dirs"]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing minimal macOS setup support: ${value}`);
 }
 if (!rust.includes("fn macos_git_ready()") || !rust.includes("/usr/bin/xcode-select") || !rust.includes("usr/bin/git")) {
@@ -99,8 +99,11 @@ if (!rust.includes("/usr/bin/osascript") || rust.includes('tell application "Ter
 if (!rust.includes("Prefer the user-local archive") || !rust.includes("password was supplied once and is not saved")) {
   throw new Error("Tauri adapter does not explain the no-second-prompt macOS path");
 }
-if (!rust.includes('command.env("PATH", path)') || !rust.includes(".eai-setup/node/bin")) {
-  throw new Error("Tauri adapter does not expose its user-managed Node.js path to npm child processes");
+if (!rust.includes('command.env("PATH", path)') || !rust.includes(".eai-setup/node/bin") || !rust.includes("versions/node")) {
+  throw new Error("Tauri adapter does not expose user-managed Node.js paths to npm child processes");
+}
+if (!rust.includes("Node.js files were downloaded, but the desktop app could not run node and npm")) {
+  throw new Error("Tauri adapter reports Node.js ready before verifying the installed executables");
 }
 if (!rust.includes("async fn run_bootstrap") || !rust.includes("spawn_blocking")) {
   throw new Error("Tauri adapter blocks the UI while running a bootstrap task");
