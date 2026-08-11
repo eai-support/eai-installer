@@ -23,6 +23,10 @@ commands.
   over HTTPS, verifies its checksum, and installs it for the current user
   without a second administrator prompt. A signed package is the fallback when
   the official archive is unavailable.
+- On Windows, prerequisite detection runs the real `git`, `node`, `npm`, and
+  `eai` version commands. It searches the normal system and user npm locations,
+  installs the CLI into a user-writable prefix when needed, verifies the command
+  after npm finishes, and hides package-manager consoles behind the setup window.
 - Installation progress is reported in the EAI Setup window, including the
   current item, phase, and an honest approximate remaining time. Estimates are
   guidance, not a guarantee about network speed or provider availability.
