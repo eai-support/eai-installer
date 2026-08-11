@@ -81,6 +81,19 @@ npm test
 node scripts/verify-manifest.mjs
 ```
 
+## Versioning and releases
+
+EAI Setup uses semantic versions in `MAJOR.MINOR.PATCH` form:
+
+- **Major**: breaking installer or user workflow changes.
+- **Minor**: backwards-compatible features.
+- **Patch**: backwards-compatible fixes.
+
+The version must match in `package.json`, `src-tauri/Cargo.toml`, and
+`src-tauri/tauri.conf.json`. Production releases use the matching Git tag
+`vMAJOR.MINOR.PATCH`; test releases use `eai-setup-test-vMAJOR.MINOR.PATCH`.
+Release checks reject other formats or mismatched version sources.
+
 For the shell fallback:
 
 ```bash
@@ -110,4 +123,5 @@ release` workflow when a direct, native test download is needed.
 - [Architecture and product boundary](docs/architecture.md)
 - [Installer contract](docs/installer-contract.md)
 - [Testing and release gates](docs/testing.md)
+- [Releasing and semantic versioning](docs/releasing.md)
 - [Security policy](SECURITY.md)
