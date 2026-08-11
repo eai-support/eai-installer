@@ -8,8 +8,9 @@ hands control to the normal EAI CLI flow.
 
 1. Detects the operating system, CPU architecture, and installed tools.
 2. Installs only the minimal missing developer tools. On macOS, Git uses
-   Apple's Command Line Tools (not full Xcode), and Node.js uses the official
-   checksum-verified Node.js LTS archive in a user-local directory. Homebrew is optional rather than an EAI
+   Apple's Command Line Tools (not full Xcode), and Node.js uses an existing
+   NVM/Homebrew installation when available or the official checksum-verified
+   Node.js LTS archive in a user-local directory. Homebrew is optional rather than an EAI
    prerequisite, so an old Homebrew installation cannot block setup.
 3. Uses native permission prompts where required. Windows, macOS, and Linux
    keep the progress status in the EAI Setup window rather than exposing a

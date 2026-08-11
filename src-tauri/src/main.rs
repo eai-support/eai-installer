@@ -1,4 +1,5 @@
 use serde::Serialize;
+use std::cmp::Reverse;
 use std::env;
 use std::fs;
 use std::fs::OpenOptions;
@@ -66,24 +67,65 @@ fn emit_progress(
     );
 }
 
+fn nvm_version_key(path: &Path) -> (u64, u64, u64) {
+    let version = path.file_name().and_then(|value| value.to_str()).unwrap_or_default();
+    let mut parts = version.trim_start_matches('v').split('.').map(|part| part.parse::<u64>().unwrap_or(0));
+    (parts.next().unwrap_or(0), parts.next().unwrap_or(0), parts.next().unwrap_or(0))
+}
+
+fn nvm_node_bin_dirs() -> Vec<PathBuf> {
+    let Some(home) = env::var_os("HOME") else { return Vec::new(); };
+    let nvm_root = env::var_os("NVM_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| Path::new(&home).join(".nvm"));
+    let versions_root = nvm_root.join("versions/node");
+    let mut versions = fs::read_dir(versions_root)
+        .ok()
+        .into_iter()
+        .flat_map(|entries| entries.filter_map(Result::ok))
+        .map(|entry| entry.path())
+        .filter(|path| path.is_dir() && path.join("bin/node").is_file())
+        .collect::<Vec<_>>();
+    versions.sort_by_key(|path| Reverse(nvm_version_key(path)));
+
+    let mut bins = Vec::new();
+    if let Some(nvm_bin) = env::var_os("NVM_BIN") {
+        let path = PathBuf::from(nvm_bin);
+        if path.join("node").is_file() { bins.push(path); }
+    }
+    bins.extend(versions.into_iter().map(|path| path.join("bin")));
+    bins
+}
+
+fn user_node_bin_dirs() -> Vec<PathBuf> {
+    let mut bins = Vec::new();
+    if let Some(home) = env::var_os("HOME") {
+        let home = PathBuf::from(home);
+        bins.push(home.join(".eai-setup/node/bin"));
+        bins.push(home.join(".eai-setup/npm-global/bin"));
+    }
+    bins.extend(nvm_node_bin_dirs());
+    bins
+}
+
+fn macos_package_bin_dirs() -> Vec<PathBuf> {
+    if !cfg!(target_os = "macos") { return Vec::new(); }
+    ["/opt/homebrew/bin", "/usr/local/bin"].into_iter().map(PathBuf::from).collect()
+}
+
 fn executable(program: &str) -> String {
-    if cfg!(unix) && matches!(program, "git" | "node" | "npm" | "eai") {
-        if let Some(home) = env::var_os("HOME") {
-            let node_path = Path::new(&home).join(".eai-setup/node/bin").join(program);
-            if node_path.exists() {
-                return node_path.to_string_lossy().to_string();
-            }
-            let path = Path::new(&home).join(".eai-setup/npm-global/bin").join(program);
-            if path.exists() {
+    if cfg!(unix) && matches!(program, "node" | "npm" | "eai") {
+        for directory in user_node_bin_dirs() {
+            let path = directory.join(program);
+            if path.is_file() {
                 return path.to_string_lossy().to_string();
             }
         }
     }
     if cfg!(target_os = "macos") && matches!(program, "brew" | "git" | "node" | "npm" | "eai") {
-        for candidate in ["/opt/homebrew/bin/brew", "/usr/local/bin/brew"] {
-            let candidate = Path::new(candidate);
-            let path = candidate.parent().unwrap().join(program);
-            if path.exists() {
+        for directory in macos_package_bin_dirs() {
+            let path = directory.join(program);
+            if path.is_file() {
                 return path.to_string_lossy().to_string();
             }
         }
@@ -103,16 +145,13 @@ fn run_program_in_directory(program: &str, args: &[&str], directory: Option<&Pat
     let mut command = Command::new(executable(program));
     command.args(args);
     if cfg!(unix) {
-        if let Some(home) = env::var_os("HOME") {
-            let node_bin = Path::new(&home).join(".eai-setup/node/bin");
-            let npm_bin = Path::new(&home).join(".eai-setup/npm-global/bin");
-            let mut paths = vec![node_bin, npm_bin];
-            if let Some(existing) = env::var_os("PATH") {
-                paths.extend(env::split_paths(&existing));
-            }
-            if let Ok(path) = env::join_paths(paths) {
-                command.env("PATH", path);
-            }
+        let mut paths = user_node_bin_dirs();
+        paths.extend(macos_package_bin_dirs());
+        if let Some(existing) = env::var_os("PATH") {
+            paths.extend(env::split_paths(&existing));
+        }
+        if let Ok(path) = env::join_paths(paths) {
+            command.env("PATH", path);
         }
     }
     if let Some(directory) = directory {
@@ -506,7 +545,7 @@ fn latest_node_artifact() -> Result<(String, String), String> {
     Err("no supported Node.js LTS macOS package was found".to_string())
 }
 
-fn node_tar_install_step(app: &AppHandle, version: &str, filename: &str, url: &str) -> BootstrapResult {
+fn node_tar_install_step(app: &AppHandle, node_version: &str, filename: &str, url: &str) -> BootstrapResult {
     let archive = env::temp_dir().join(format!("eai-node-{}.tar.gz", Uuid::new_v4()));
     let checksum_file = env::temp_dir().join(format!("eai-node-{}-SHASUMS256.txt", Uuid::new_v4()));
     let archive_string = archive.to_string_lossy().to_string();
@@ -515,7 +554,7 @@ fn node_tar_install_step(app: &AppHandle, version: &str, filename: &str, url: &s
     if let Err(error) = run_program("curl", &["--fail", "--location", "--proto", "=https", "--tlsv1.2", "--output", &archive_string, url]) {
         return command_result("node", false, &error, Some("Download the official Node.js LTS archive over HTTPS"), None, true);
     }
-    let checksum_url = format!("https://nodejs.org/dist/{version}/SHASUMS256.txt");
+    let checksum_url = format!("https://nodejs.org/dist/{node_version}/SHASUMS256.txt");
     emit_progress(app, "node", "Checking Node.js installer", "Verifying the archive checksum before installation.", Some(35), Some(75));
     if let Err(error) = run_program("curl", &["--fail", "--location", "--proto", "=https", "--tlsv1.2", "--output", &checksum_string, &checksum_url]) {
         let _ = fs::remove_file(&archive);
@@ -589,6 +628,16 @@ fn node_tar_install_step(app: &AppHandle, version: &str, filename: &str, url: &s
     let _ = fs::remove_dir_all(&extract_dir);
     if let Err(error) = expose_user_npm_bin() {
         return command_result("node", false, &format!("Node.js installed, but its user command path could not be configured: {error}"), Some("Open a new terminal after adding ~/.eai-setup/node/bin to PATH"), None, true);
+    }
+    if version("node", &["--version"]).is_none() || version("npm", &["--version"]).is_none() {
+        return command_result(
+            "node",
+            false,
+            "Node.js files were downloaded, but the desktop app could not run node and npm from the installed path.",
+            Some("Retry EAI Setup; if the problem continues, install the official Node.js LTS release for this Mac"),
+            None,
+            true,
+        );
     }
     emit_progress(app, "node", "Node.js and npm ready", "Continuing with the EAI CLI.", Some(100), Some(0));
     command_result("node", true, "Native Node.js and npm were installed for this user.", Some("official Node.js LTS ARM64 archive with checksum verification"), None, false)
