@@ -83,7 +83,7 @@ jobs:
         run: npm test
 
       - name: Build unsigned test bundle
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@v1
         with:
           projectPath: src-tauri
           args: --ci --target ${{ matrix.target }} --bundles ${{ matrix.bundle }}
