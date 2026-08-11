@@ -173,5 +173,5 @@ jobs:
           sha256sum "${windows[@]}" "${macos[@]}" "${ubuntu[@]}"
           for deb in "${ubuntu[@]}"; do
             dpkg-deb --info "$deb" >/dev/null
-            dpkg-deb --contents "$deb" | grep -q './usr/bin/eai-setup'
+            dpkg-deb --contents "$deb" | awk '$NF ~ /(^|\/)usr\/bin\/eai-setup$/ { found = 1 } END { exit found ? 0 : 1 }'
           done
