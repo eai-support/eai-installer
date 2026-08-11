@@ -174,6 +174,10 @@ fn run_program(program: &str, args: &[&str]) -> Result<(String, String), String>
 fn run_program_in_directory(program: &str, args: &[&str], directory: Option<&Path>) -> Result<(String, String), String> {
     let mut command = Command::new(executable(program));
     command.args(args);
+    // GUI-launched commands must never wait on a terminal that the installer
+    // does not expose. Interactive commands receive explicit non-interactive
+    // flags at their call site below.
+    command.stdin(Stdio::null());
     #[cfg(target_os = "windows")]
     {
         // The installer is a GUI application. Keep package managers and npm
@@ -858,9 +862,9 @@ fn run_bootstrap_sync(app: AppHandle, step: String, project_name: Option<String>
             if !directory.is_dir() {
                 return command_result("init", false, "The app folder could not be created.", Some("Choose a writable parent folder and retry."), None, true);
             }
-            match run_program_in_directory("eai", &["init", &name, "--current-dir"], Some(&directory)) {
-                Ok((stdout, stderr)) => command_result("init", true, "The app was initialised and the Gofer assets are ready.", Some("eai init <project-name> --current-dir"), Some(format!("{stdout}\n{stderr}")), false),
-                Err(error) => command_result("init", false, &error, Some("eai init <project-name> --current-dir"), None, true),
+            match run_program_in_directory("eai", &["init", &name, "--current-dir", "--skip-prompts", "--no-splash"], Some(&directory)) {
+                Ok((stdout, stderr)) => command_result("init", true, "The app was initialised and the Gofer assets are ready.", Some("eai init <project-name> --current-dir --skip-prompts --no-splash"), Some(format!("{stdout}\n{stderr}")), false),
+                Err(error) => command_result("init", false, &error, Some("eai init <project-name> --current-dir --skip-prompts --no-splash"), None, true),
             }
         }
         _ => command_result(&step, false, "Unsupported bootstrap step.", None, None, false),

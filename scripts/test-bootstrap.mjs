@@ -66,7 +66,8 @@ for (const step of ["homebrew", "git", "node", "eai-cli", "login", "init"]) {
   if (!rust.includes(`\"${step}\"`)) throw new Error(`Tauri adapter is missing ${step}`);
 }
 if (!rust.includes("@enterpriseai/cli")) throw new Error("Tauri adapter uses the wrong CLI package");
-if (!rust.includes("run_program_in_directory(\"eai\"")) throw new Error("Tauri adapter does not run eai init in the selected directory");
+if (!rust.includes("run_program_in_directory(\"eai\", &[\"init\", &name, \"--current-dir\", \"--skip-prompts\", \"--no-splash\"]")) throw new Error("Tauri adapter does not run eai init non-interactively in the selected directory");
+if (!rust.includes("command.stdin(Stdio::null())")) throw new Error("Tauri adapter does not close child stdin for GUI-launched commands");
 if (!rust.includes("run_program(\"eai\", &[\"login\"]")) throw new Error("Tauri adapter does not run eai login");
 if (!rust.includes("fn open_signup") || !rust.includes("EAI_SIGNUP_URL") || !rust.includes("www.enterpriseaigroup.com/signup/developer")) {
   throw new Error("Tauri adapter does not provide the fixed public account signup handoff");
