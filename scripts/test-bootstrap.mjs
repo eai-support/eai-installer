@@ -75,6 +75,9 @@ if (!rust.includes("pkexec")) throw new Error("Tauri adapter does not provide au
 for (const value of ["Homebrew.pkg", "/usr/sbin/pkgutil", "--check-signature", "with administrator privileges", "--stdinpass", "No Terminal window will open"]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing native macOS installation control: ${value}`);
 }
+for (const value of ["windows_package_bin_dirs", "ProgramFiles(x86)", "CREATE_NO_WINDOW", "creation_flags", "LOCALAPPDATA", "Windows package installation finished, but the expected command is not available yet.", "npm finished, but the eai command is not available yet."]) {
+  if (!rust.includes(value)) throw new Error(`Tauri adapter is missing Windows prerequisite safety support: ${value}`);
+}
 for (const value of ["xcode-select", "full Xcode is not required", "softwareupdate", "latest_command_line_tools_label", "refresh_macos_command_line_tools_catalog", "Refreshing Apple Software Update", "with administrator privileges", "secure administrator dialog", "native administrator install", "latest_node_artifact", "nodejs.org/dist/index.json", "osx-arm64-pkg", "osx-x64-pkg", "osx-arm64-tar", "osx-x64-tar", "SHASUMS256.txt", "shasum", "uname", "--prefix", "expose_user_npm_bin", "NVM_DIR", "versions/node", "NVM_BIN", "nvm_node_bin_dirs", "macos_package_bin_dirs"]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing minimal macOS setup support: ${value}`);
 }

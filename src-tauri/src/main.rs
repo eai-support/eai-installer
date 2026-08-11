@@ -6,6 +6,8 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
 use std::thread;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
@@ -113,6 +115,24 @@ fn macos_package_bin_dirs() -> Vec<PathBuf> {
     ["/opt/homebrew/bin", "/usr/local/bin"].into_iter().map(PathBuf::from).collect()
 }
 
+fn windows_package_bin_dirs() -> Vec<PathBuf> {
+    if !cfg!(target_os = "windows") { return Vec::new(); }
+    let mut directories = Vec::new();
+    for variable in ["ProgramFiles", "ProgramFiles(x86)", "LOCALAPPDATA", "APPDATA"] {
+        if let Some(root) = env::var_os(variable) {
+            let root = PathBuf::from(root);
+            directories.push(root.join("nodejs"));
+            directories.push(root.join("Git/cmd"));
+            directories.push(root.join("Git/bin"));
+            directories.push(root.join("npm"));
+            directories.push(root.join("EAI Setup/npm-global"));
+            directories.push(root.join("Programs/nodejs"));
+            directories.push(root.join("Programs/Git/cmd"));
+        }
+    }
+    directories
+}
+
 fn executable(program: &str) -> String {
     if cfg!(unix) && matches!(program, "node" | "npm" | "eai") {
         for directory in user_node_bin_dirs() {
@@ -130,11 +150,21 @@ fn executable(program: &str) -> String {
             }
         }
     }
-    if cfg!(target_os = "windows") && matches!(program, "npm" | "eai") {
-        format!("{program}.cmd")
-    } else {
-        program.to_string()
+    if cfg!(target_os = "windows") {
+        let filename = if matches!(program, "npm" | "eai") {
+            format!("{program}.cmd")
+        } else {
+            program.to_string()
+        };
+        for directory in windows_package_bin_dirs() {
+            let path = directory.join(&filename);
+            if path.is_file() {
+                return path.to_string_lossy().to_string();
+            }
+        }
+        return filename;
     }
+    program.to_string()
 }
 
 fn run_program(program: &str, args: &[&str]) -> Result<(String, String), String> {
@@ -144,6 +174,20 @@ fn run_program(program: &str, args: &[&str]) -> Result<(String, String), String>
 fn run_program_in_directory(program: &str, args: &[&str], directory: Option<&Path>) -> Result<(String, String), String> {
     let mut command = Command::new(executable(program));
     command.args(args);
+    #[cfg(target_os = "windows")]
+    {
+        // The installer is a GUI application. Keep package managers and npm
+        // launchers from opening a console window over the setup dialog.
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        command.creation_flags(CREATE_NO_WINDOW);
+        let mut paths = windows_package_bin_dirs();
+        if let Some(existing) = env::var_os("PATH") {
+            paths.extend(env::split_paths(&existing));
+        }
+        if let Ok(path) = env::join_paths(paths) {
+            command.env("PATH", path);
+        }
+    }
     if cfg!(unix) {
         let mut paths = user_node_bin_dirs();
         paths.extend(macos_package_bin_dirs());
@@ -184,7 +228,9 @@ fn applescript_quote(value: &str) -> String {
 }
 
 fn user_npm_prefix() -> Option<PathBuf> {
-    if cfg!(unix) {
+    if cfg!(target_os = "windows") {
+        env::var_os("LOCALAPPDATA").map(|root| Path::new(&root).join("EAI Setup/npm-global"))
+    } else if cfg!(unix) {
         env::var_os("HOME").map(|home| Path::new(&home).join(".eai-setup/npm-global"))
     } else {
         None
@@ -361,7 +407,16 @@ fn package_install_step(app: &AppHandle, step: &str, package: &str, message: &st
         return match run_program("winget", &["install", "--id", package_id, "-e", "--source", "winget", "--accept-source-agreements", "--accept-package-agreements"]) {
             Ok((stdout, stderr)) => {
                 emit_progress(app, step, &format!("{package} installed"), "Verifying the installation.", Some(90), Some(5));
-                command_result(step, true, message, Some("winget install (fixed package identifier)"), Some(format!("{stdout}\n{stderr}")), false)
+                let ready = if package == "git" {
+                    version("git", &["--version"]).is_some()
+                } else {
+                    version("node", &["--version"]).is_some() && version("npm", &["--version"]).is_some()
+                };
+                if ready {
+                    command_result(step, true, message, Some("winget install (fixed package identifier)"), Some(format!("{stdout}\n{stderr}")), false)
+                } else {
+                    command_result(step, false, "Windows package installation finished, but the expected command is not available yet.", Some("Restart EAI Setup to reload the Windows PATH, then retry."), Some(format!("{stdout}\n{stderr}")), true)
+                }
             }
             Err(error) => command_result(step, false, &error, Some("winget install (fixed package identifier)"), None, true),
         };
@@ -764,7 +819,15 @@ fn run_bootstrap_sync(app: AppHandle, step: String, project_name: Option<String>
                         return command_result("eai-cli", false, &format!("The EAI CLI installed, but its user command path could not be configured: {error}"), Some("Open a new terminal after adding ~/.eai-setup/npm-global/bin to PATH"), None, true);
                     }
                     emit_progress(&app, "eai-cli", "EAI CLI ready", "Verifying the eai command.", Some(90), Some(5));
-                    command_result("eai-cli", true, "The EAI CLI was installed or updated for this user.", Some("npm install --global --prefix ~/.eai-setup/npm-global @enterpriseai/cli"), Some(format!("{stdout}\n{stderr}")), false)
+                    if version("eai", &["--version"]).is_none() {
+                        return command_result("eai-cli", false, "npm finished, but the eai command is not available yet.", Some("Restart EAI Setup to reload the Windows PATH, then retry."), Some(format!("{stdout}\n{stderr}")), true);
+                    }
+                    let command = if cfg!(target_os = "windows") {
+                        "npm install --global --prefix %LOCALAPPDATA%\\EAI Setup\\npm-global @enterpriseai/cli"
+                    } else {
+                        "npm install --global --prefix ~/.eai-setup/npm-global @enterpriseai/cli"
+                    };
+                    command_result("eai-cli", true, "The EAI CLI was installed or updated for this user.", Some(command), Some(format!("{stdout}\n{stderr}")), false)
                 }
                 Err(error) => command_result("eai-cli", false, &error, Some("Install the EAI CLI from npm using a user-writable prefix"), None, true),
             }
