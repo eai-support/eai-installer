@@ -72,6 +72,10 @@ if (!rust.includes("fn open_signup") || !rust.includes("EAI_SIGNUP_URL") || !rus
   throw new Error("Tauri adapter does not provide the fixed public account signup handoff");
 }
 if (!rust.includes("pkexec")) throw new Error("Tauri adapter does not provide automatic Linux package installation");
+if (!rust.includes("tauri_plugin_dialog::init()")) throw new Error("Tauri adapter does not provide the native folder picker");
+if (!rust.includes("fn project_directory") || !rust.includes("fs::create_dir_all(&directory)")) {
+  throw new Error("Tauri adapter does not create the project folder before initialization");
+}
 for (const value of ["Homebrew.pkg", "/usr/sbin/pkgutil", "--check-signature", "with administrator privileges", "--stdinpass", "No Terminal window will open"]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing native macOS installation control: ${value}`);
 }
@@ -132,8 +136,11 @@ for (const color of ["#123d5b", "#83d8ef"]) {
 for (const panel of ["0", "3", "4", "5"]) {
   if (!wizard.includes(`data-panel="${panel}"`)) throw new Error(`wizard: missing panel ${panel}`);
 }
-for (const control of ["data-action=\"start\"", "data-action=\"login\"", "data-action=\"signup\"", "data-action=\"init\"", "data-action=\"finish\""]) {
+for (const control of ["data-action=\"start\"", "data-action=\"login\"", "data-action=\"signup\"", "data-action=\"choose-folder\"", "data-action=\"init\"", "data-action=\"finish\""]) {
   if (!wizard.includes(control)) throw new Error(`wizard: missing control ${control}`);
+}
+for (const value of ["id=\"choose-folder\"", "Use lowercase words separated by hyphens", "Parent folder", "A new folder with your project name will be created here"]) {
+  if (!wizard.includes(value)) throw new Error(`wizard: missing project location guidance: ${value}`);
 }
 if (!wizard.includes("Create an EAI account")) throw new Error("wizard: account signup action is missing");
 for (const obsolete of ["progress-area", "Step 3 of 6", "Step ${index + 1} of ${steps.length}", "Install missing tools", "I am signed in"]) {
@@ -146,10 +153,10 @@ for (const control of ["id=\"activity\"", "id=\"activity-title\"", "id=\"activit
 if (!wizard.includes("Recent activity")) throw new Error("wizard: recent activity heading is missing");
 const app = await readFile(new URL("../ui/app.js", import.meta.url), "utf8");
 if (app.includes('steps.push("homebrew")')) throw new Error("wizard: Homebrew must not be a required setup step");
-if (!app.includes("setActivity") || !app.includes("Installation complete") || !app.includes("listenForBootstrapProgress") || !app.includes("eventApi.listen") || !app.includes("renderInstallItems") || !app.includes("setDetectionState") || !app.includes("phaseForTitle") || !app.includes("async function startSetup") || !app.includes("window.setTimeout(() => startSetup(), 250)") || !app.includes("setStep(4)") || !app.includes("async function runSignup") || !app.includes("open_signup")) {
+if (!app.includes("setActivity") || !app.includes("Installation complete") || !app.includes("listenForBootstrapProgress") || !app.includes("eventApi.listen") || !app.includes("renderInstallItems") || !app.includes("setDetectionState") || !app.includes("phaseForTitle") || !app.includes("async function startSetup") || !app.includes("window.setTimeout(() => startSetup(), 250)") || !app.includes("setStep(4)") || !app.includes("async function runSignup") || !app.includes("open_signup") || !app.includes("dialog.open") || !app.includes("choose-folder")) {
   throw new Error("wizard: live activity status updates are missing");
 }
-for (const value of ["setInterval(refreshActivityHeartbeat, 1000)", "Elapsed ${elapsed}s", "Screen updated every second", "Last installer update", "Waiting for your input", "Action needed", "Still working", "activityLastHeartbeatLogAt", "waitingDetails", "activityEvents", "Stopped with error", "Checking the installed tools"]) {
+for (const value of ["setInterval(refreshActivityHeartbeat, 1000)", "Elapsed ${elapsed}s", "Screen updated every second", "Last installer update", "Waiting for your input", "Action needed", "Still working", "activityLastHeartbeatLogAt", "waitingDetails", "activityEvents", "Stopped with error", "Checking the required tools"]) {
   if (!app.includes(value)) throw new Error(`wizard: per-second progress feedback is missing: ${value}`);
 }
 if (app.includes('git: "macOS may show an installer window. If it appears, click Install; otherwise no action is needed."')) {
