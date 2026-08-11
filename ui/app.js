@@ -448,7 +448,7 @@ async function runInit() {
     return;
   }
   if (!directory) {
-    showOutput("Choose a folder for the app.", "Use Choose folder or enter a folder path.");
+    showOutput("Choose a parent folder for the app.", "Use Choose folder or enter a folder path.");
     document.querySelector("#project-directory").focus();
     return;
   }

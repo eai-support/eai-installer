@@ -362,6 +362,15 @@ fn command_result(step: &str, ok: bool, message: &str, command: Option<&str>, ou
     }
 }
 
+fn project_directory(parent: &Path, project_name: &str) -> PathBuf {
+    let selected_name = parent.file_name().and_then(|value| value.to_str());
+    if selected_name == Some(project_name) {
+        parent.to_path_buf()
+    } else {
+        parent.join(project_name)
+    }
+}
+
 #[tauri::command]
 fn detect_environment() -> EnvironmentReport {
     let platform = if cfg!(target_os = "windows") {
@@ -841,9 +850,13 @@ fn run_bootstrap_sync(app: AppHandle, step: String, project_name: Option<String>
             if !name.chars().all(|character| character.is_ascii_lowercase() || character.is_ascii_digit() || character == '-') || name.is_empty() || name.starts_with('-') || name.ends_with('-') {
                 return command_result("init", false, "Project name must be non-empty kebab-case.", None, None, true);
             }
-            let directory = directory.map(std::path::PathBuf::from).unwrap_or_else(|| env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")));
+            let parent = directory.map(std::path::PathBuf::from).unwrap_or_else(|| env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from(".")));
+            let directory = project_directory(&parent, &name);
+            if let Err(error) = fs::create_dir_all(&directory) {
+                return command_result("init", false, &format!("The app folder could not be created: {error}"), Some("Choose a writable parent folder and retry."), None, true);
+            }
             if !directory.is_dir() {
-                return command_result("init", false, "The selected project directory does not exist.", None, None, true);
+                return command_result("init", false, "The app folder could not be created.", Some("Choose a writable parent folder and retry."), None, true);
             }
             match run_program_in_directory("eai", &["init", &name, "--current-dir"], Some(&directory)) {
                 Ok((stdout, stderr)) => command_result("init", true, "The app was initialised and the Gofer assets are ready.", Some("eai init <project-name> --current-dir"), Some(format!("{stdout}\n{stderr}")), false),

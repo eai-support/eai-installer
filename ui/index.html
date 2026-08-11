@@ -69,18 +69,18 @@
 
         <section class="wizard-panel" data-panel="4" aria-labelledby="app-title" hidden>
           <h2 id="app-title">Start your EAI app</h2>
-          <p class="lead">Name your app and choose where to create it.</p>
+          <p class="lead">Name your app and choose its parent folder.</p>
           <div class="form-grid">
             <label for="project-name">Project name <input id="project-name" placeholder="customer-portal" autocomplete="off" aria-describedby="project-name-help" /></label>
             <p class="field-help" id="project-name-help">Use lowercase words separated by hyphens. Example: <code>customer-portal</code>.</p>
-            <label for="project-directory">Folder
+            <label for="project-directory">Parent folder
               <span class="folder-picker">
-                <input id="project-directory" placeholder="Choose a folder" autocomplete="off" aria-describedby="project-directory-help" />
+                <input id="project-directory" placeholder="Choose a parent folder" autocomplete="off" aria-describedby="project-directory-help" />
                 <button class="secondary" id="choose-folder" data-action="choose-folder" type="button">Choose folder</button>
               </span>
             </label>
           </div>
-          <p class="field-help" id="project-directory-help">The app will be created in this folder. Use Choose folder to open Finder or File Explorer.</p>
+          <p class="field-help" id="project-directory-help">A new folder with your project name will be created here. Use Choose folder to open Finder or File Explorer.</p>
           <div class="panel-actions end">
             <button class="primary" data-action="init">Create and initialise app</button>
           </div>

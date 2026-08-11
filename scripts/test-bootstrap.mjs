@@ -73,6 +73,9 @@ if (!rust.includes("fn open_signup") || !rust.includes("EAI_SIGNUP_URL") || !rus
 }
 if (!rust.includes("pkexec")) throw new Error("Tauri adapter does not provide automatic Linux package installation");
 if (!rust.includes("tauri_plugin_dialog::init()")) throw new Error("Tauri adapter does not provide the native folder picker");
+if (!rust.includes("fn project_directory") || !rust.includes("fs::create_dir_all(&directory)")) {
+  throw new Error("Tauri adapter does not create the project folder before initialization");
+}
 for (const value of ["Homebrew.pkg", "/usr/sbin/pkgutil", "--check-signature", "with administrator privileges", "--stdinpass", "No Terminal window will open"]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing native macOS installation control: ${value}`);
 }
@@ -136,7 +139,7 @@ for (const panel of ["0", "3", "4", "5"]) {
 for (const control of ["data-action=\"start\"", "data-action=\"login\"", "data-action=\"signup\"", "data-action=\"choose-folder\"", "data-action=\"init\"", "data-action=\"finish\""]) {
   if (!wizard.includes(control)) throw new Error(`wizard: missing control ${control}`);
 }
-for (const value of ["id=\"choose-folder\"", "Use lowercase words separated by hyphens", "Choose a folder"]) {
+for (const value of ["id=\"choose-folder\"", "Use lowercase words separated by hyphens", "Parent folder", "A new folder with your project name will be created here"]) {
   if (!wizard.includes(value)) throw new Error(`wizard: missing project location guidance: ${value}`);
 }
 if (!wizard.includes("Create an EAI account")) throw new Error("wizard: account signup action is missing");
