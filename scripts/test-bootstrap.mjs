@@ -176,7 +176,7 @@ if (!bundles.includes("Start-Sleep -Seconds 1")) {
   throw new Error("test-bundles workflow does not wait for the Windows installer handoff");
 }
 const debSelector = await readFile(new URL("./find-valid-deb.sh", import.meta.url), "utf8");
-if (!debSelector.includes("dpkg-deb --contents") || !debSelector.includes("./usr/bin/eai-setup")) {
+if (!debSelector.includes("dpkg-deb --contents") || !debSelector.includes("usr\\/bin\\/eai-setup")) {
   throw new Error("Linux package selector does not verify the installed executable payload");
 }
 for (const workflow of [bundles, await readFile(new URL("../.github/workflows/test-release.yml", import.meta.url), "utf8"), await readFile(new URL("../.github/workflows/release.yml", import.meta.url), "utf8")]) {

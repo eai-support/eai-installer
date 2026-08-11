@@ -5,7 +5,7 @@ set -euo pipefail
 root="${1:-src-tauri/target}"
 
 while IFS= read -r -d '' candidate; do
-  if dpkg-deb --contents "$candidate" | awk '$NF == "./usr/bin/eai-setup" { found = 1 } END { exit found ? 0 : 1 }'; then
+  if dpkg-deb --contents "$candidate" | awk '$NF ~ /(^|\/)usr\/bin\/eai-setup$/ { found = 1 } END { exit found ? 0 : 1 }'; then
     printf '%s\n' "$candidate"
     exit 0
   fi
