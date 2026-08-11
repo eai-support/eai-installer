@@ -50,7 +50,8 @@ GitHub Actions artifacts for the current branch or pull request:
 - Ubuntu x64 and ARM64 `.deb`
 
 Each native runner builds its bundle and performs an installation/package smoke
-test. The macOS job also copies the app to a disposable staging directory,
+test. Ubuntu validates that the selected `.deb` contains the executable before
+installing it, so a control-only package cannot be published. The macOS job also copies the app to a disposable staging directory,
 re-signs that copy ad hoc, removes its quarantine attribute, and launches the
 embedded executable. This proves that the unsigned development bundle runs;
 it is deliberately not a Gatekeeper trust test. A final Ubuntu job downloads
