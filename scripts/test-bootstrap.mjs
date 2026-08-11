@@ -25,9 +25,26 @@ if (!shell.includes('INSTALL_HOMEBREW="${EAI_SETUP_INSTALL_HOMEBREW:-0}"')) {
 }
 
 const manifest = JSON.parse(await readFile(new URL("../installer-manifest.json", import.meta.url), "utf8"));
+if (manifest.runtime?.accountSignupUrl !== "https://www.enterpriseaigroup.com/signup/developer") {
+  throw new Error("manifest: public developer signup URL is missing or incorrect");
+}
 const homebrew = manifest.prerequisites.find((item) => item.id === "homebrew");
-if (!homebrew || homebrew.platform !== "macos" || !homebrew.installers?.macos?.includes("raw.githubusercontent.com/Homebrew/install/HEAD/install.sh")) {
+if (!homebrew || homebrew.platform !== "macos" || !homebrew.installers?.macos?.includes("github.com/Homebrew/brew/releases/latest/download/Homebrew.pkg")) {
   throw new Error("manifest: macOS Homebrew prerequisite is not explicit");
+}
+if (homebrew.required !== false) throw new Error("manifest: Homebrew must remain optional for the minimal EAI setup");
+const git = manifest.prerequisites.find((item) => item.id === "git");
+if (!git?.installers?.macos?.includes("Command Line Tools") || git.installers.macos.includes("full Xcode is required")) {
+  throw new Error("manifest: macOS Git path must use Command Line Tools without requiring full Xcode");
+}
+const node = manifest.prerequisites.find((item) => item.id === "node");
+if (!node?.installers?.macos?.includes("nodejs.org") || !node.installers.macos.includes("checksum verification") || !node.installers.macos.includes("user-local")) {
+  throw new Error("manifest: macOS Node.js path must use the official checksum-verified user-local archive");
+}
+
+const dmgBackgroundSource = await readFile(new URL("../src-tauri/icons/dmg-background.svg", import.meta.url), "utf8");
+if (!dmgBackgroundSource.includes(">Install Enterprise AI harness</text>") || !dmgBackgroundSource.includes(">Drag Enterprise AI Setup to Applications to install</text>")) {
+  throw new Error("DMG background does not use the Enterprise AI harness heading");
 }
 
 const rust = await readFile(new URL("../src-tauri/src/main.rs", import.meta.url), "utf8");
@@ -41,12 +58,42 @@ for (const step of ["homebrew", "git", "node", "eai-cli", "login", "init"]) {
 if (!rust.includes("@enterpriseai/cli")) throw new Error("Tauri adapter uses the wrong CLI package");
 if (!rust.includes("run_program_in_directory(\"eai\"")) throw new Error("Tauri adapter does not run eai init in the selected directory");
 if (!rust.includes("run_program(\"eai\", &[\"login\"]")) throw new Error("Tauri adapter does not run eai login");
-if (!rust.includes("pkexec")) throw new Error("Tauri adapter does not provide automatic Linux package installation");
-if (!rust.includes("/usr/bin/osascript") || !rust.includes("Terminal") || !rust.includes("official Homebrew installer in Terminal")) {
-  throw new Error("Tauri adapter does not provide an interactive macOS Homebrew handoff");
+if (!rust.includes("fn open_signup") || !rust.includes("EAI_SIGNUP_URL") || !rust.includes("www.enterpriseaigroup.com/signup/developer")) {
+  throw new Error("Tauri adapter does not provide the fixed public account signup handoff");
 }
-if (rust.includes('run_program("bash", &[&path_string])')) {
-  throw new Error("Tauri adapter still runs Homebrew without a user-visible TTY");
+if (!rust.includes("pkexec")) throw new Error("Tauri adapter does not provide automatic Linux package installation");
+for (const value of ["Homebrew.pkg", "/usr/sbin/pkgutil", "--check-signature", "with administrator privileges", "--stdinpass", "No Terminal window will open"]) {
+  if (!rust.includes(value)) throw new Error(`Tauri adapter is missing native macOS installation control: ${value}`);
+}
+for (const value of ["xcode-select", "full Xcode is not required", "softwareupdate", "latest_command_line_tools_label", "refresh_macos_command_line_tools_catalog", "Refreshing Apple Software Update", "with administrator privileges", "secure administrator dialog", "native administrator install", "latest_node_artifact", "nodejs.org/dist/index.json", "osx-arm64-pkg", "osx-x64-pkg", "osx-arm64-tar", "osx-x64-tar", "SHASUMS256.txt", "shasum", "uname", "--prefix", "expose_user_npm_bin"]) {
+  if (!rust.includes(value)) throw new Error(`Tauri adapter is missing minimal macOS setup support: ${value}`);
+}
+if (!rust.includes("fn macos_git_ready()") || !rust.includes("/usr/bin/xcode-select") || !rust.includes("usr/bin/git")) {
+  throw new Error("Tauri adapter does not guard the macOS Git shim before detection");
+}
+const detectStart = rust.indexOf("fn detect_environment");
+const detectEnd = rust.indexOf("fn package_install_step");
+const detectSource = rust.slice(detectStart, detectEnd);
+if (detectSource.includes('version("git"')) {
+  throw new Error("Tauri adapter invokes the macOS Git shim directly during detection");
+}
+const cltStart = rust.indexOf("fn command_line_tools_install_step");
+const cltEnd = rust.indexOf("fn latest_node_artifact");
+const cltSource = rust.slice(cltStart, cltEnd);
+if (cltSource.includes('version("git"')) {
+  throw new Error("Tauri adapter invokes the macOS Git shim directly during Command Line Tools setup");
+}
+if (!rust.includes("/usr/bin/osascript") || rust.includes('tell application "Terminal"')) {
+  throw new Error("Tauri adapter still opens Terminal for Homebrew installation");
+}
+if (!rust.includes("Prefer the user-local archive") || !rust.includes("password was supplied once and is not saved")) {
+  throw new Error("Tauri adapter does not explain the no-second-prompt macOS path");
+}
+if (!rust.includes('command.env("PATH", path)') || !rust.includes(".eai-setup/node/bin")) {
+  throw new Error("Tauri adapter does not expose its user-managed Node.js path to npm child processes");
+}
+if (!rust.includes("async fn run_bootstrap") || !rust.includes("spawn_blocking")) {
+  throw new Error("Tauri adapter blocks the UI while running a bootstrap task");
 }
 if (rust.includes("Command::new(user") || rust.includes("shell = user")) {
   throw new Error("Tauri adapter appears to execute user-supplied commands");
@@ -55,22 +102,48 @@ if (rust.includes("Command::new(user") || rust.includes("shell = user")) {
 console.log("bootstrap safety checks ok");
 
 const wizard = await readFile(new URL("../ui/index.html", import.meta.url), "utf8");
+const brandLogo = await readFile(new URL("../ui/assets/eai-square-man-logo.png", import.meta.url));
+if (brandLogo.length < 1024) throw new Error("wizard: Enterprise AI logo asset is missing or unexpectedly small");
+for (const brandElement of ["Enterprise AI Setup", "assets/eai-square-man-logo.png", "class=\"brand-logo\"", "class=\"panel-logo\""]) {
+  if (!wizard.includes(brandElement)) throw new Error(`wizard: branding is missing ${brandElement}`);
+}
+const bundleLogo = await readFile(new URL("../src-tauri/icons/icon.png", import.meta.url));
+if (bundleLogo.length < 1024) throw new Error("bundle: Enterprise AI logo icon is missing or unexpectedly small");
+const bundleLogoSource = await readFile(new URL("../src-tauri/icons/icon.svg", import.meta.url), "utf8");
+for (const color of ["#123d5b", "#83d8ef"]) {
+  if (!bundleLogoSource.includes(color)) throw new Error(`bundle: Enterprise AI logo source is missing ${color}`);
+}
 for (const panel of ["0", "3", "4", "5"]) {
   if (!wizard.includes(`data-panel="${panel}"`)) throw new Error(`wizard: missing panel ${panel}`);
 }
-for (const control of ["data-action=\"start\"", "data-action=\"login\"", "data-action=\"init\"", "data-action=\"finish\""]) {
+for (const control of ["data-action=\"start\"", "data-action=\"login\"", "data-action=\"signup\"", "data-action=\"init\"", "data-action=\"finish\""]) {
   if (!wizard.includes(control)) throw new Error(`wizard: missing control ${control}`);
 }
+if (!wizard.includes("Create an EAI account")) throw new Error("wizard: account signup action is missing");
 for (const obsolete of ["progress-area", "Step 3 of 6", "Step ${index + 1} of ${steps.length}", "Install missing tools", "I am signed in"]) {
   if (wizard.includes(obsolete)) throw new Error(`wizard: unnecessary user step remains: ${obsolete}`);
 }
 if (!wizard.includes('id="retry-install"')) throw new Error("wizard: failed installation has no retry control");
-for (const control of ["id=\"activity\"", "id=\"activity-title\"", "id=\"activity-detail\""]) {
+for (const control of ["id=\"activity\"", "id=\"activity-title\"", "id=\"activity-detail\"", "id=\"activity-eta\"", "id=\"activity-heartbeat\"", "id=\"activity-log\"", "id=\"install-items\"", "id=\"admin-password\"", "id=\"admin-password-submit\""]) {
   if (!wizard.includes(control)) throw new Error(`wizard: missing activity status: ${control}`);
 }
+if (!wizard.includes("Recent activity")) throw new Error("wizard: recent activity heading is missing");
 const app = await readFile(new URL("../ui/app.js", import.meta.url), "utf8");
-if (!app.includes("setActivity") || !app.includes("Installation complete") || !app.includes("async function startSetup") || !app.includes("setStep(4)")) {
+if (app.includes('steps.push("homebrew")')) throw new Error("wizard: Homebrew must not be a required setup step");
+if (!app.includes("setActivity") || !app.includes("Installation complete") || !app.includes("listenForBootstrapProgress") || !app.includes("eventApi.listen") || !app.includes("renderInstallItems") || !app.includes("setDetectionState") || !app.includes("phaseForTitle") || !app.includes("async function startSetup") || !app.includes("window.setTimeout(() => startSetup(), 250)") || !app.includes("setStep(4)") || !app.includes("async function runSignup") || !app.includes("open_signup")) {
   throw new Error("wizard: live activity status updates are missing");
+}
+for (const value of ["setInterval(refreshActivityHeartbeat, 1000)", "Elapsed ${elapsed}s", "Screen updated every second", "Last installer update", "Waiting for your input", "Action needed", "Still working", "activityLastHeartbeatLogAt", "waitingDetails", "activityEvents", "Stopped with error", "Checking the installed tools"]) {
+  if (!app.includes(value)) throw new Error(`wizard: per-second progress feedback is missing: ${value}`);
+}
+if (app.includes('git: "macOS may show an installer window. If it appears, click Install; otherwise no action is needed."')) {
+  throw new Error("wizard: macOS Git fallback still tells users to wait for an unspecified installer window");
+}
+if (!app.includes("Working - no action needed") || !app.includes("Apple Software Update is still installing Git")) {
+  throw new Error("wizard: long-running macOS installs do not explain the live status clearly");
+}
+if (!app.includes('activity.hidden = !active && phase !== "Error"') || !app.includes("requestMacAdminPassword") || !app.includes("adminPassword")) {
+  throw new Error("wizard: failed activity log is hidden instead of remaining available for diagnosis");
 }
 const wizardState = await readFile(new URL("../ui/wizard-state.js", import.meta.url), "utf8");
 if (!wizardState.includes("prerequisitesReady") || !wizardState.includes("isKebabCase")) {
@@ -107,11 +180,15 @@ if (dmgBackground.length < 64 || dmgBackground.readUInt32BE(0) !== 0x89504e47) {
   throw new Error("Tauri DMG background image is missing or invalid");
 }
 const testRelease = await readFile(new URL("../.github/workflows/test-release.yml", import.meta.url), "utf8");
-for (const value of ["workflow_dispatch", "gh release create", "gh release upload", "eai-setup-macos-arm64.dmg", "eai-setup-windows-x64.exe", "eai-setup-ubuntu-amd64.deb", "eai-setup-ubuntu-arm64.deb", "ubuntu-24.04-arm"]) {
+for (const value of ["workflow_dispatch", "gh release create", "gh release upload", "eai-setup-macos-arm64.dmg", "eai-setup-macos-x64.dmg", "eai-setup-windows-x64.exe", "eai-setup-windows-arm64.exe", "eai-setup-ubuntu-amd64.deb", "eai-setup-ubuntu-arm64.deb", "x86_64-apple-darwin", "aarch64-pc-windows-msvc", "ubuntu-24.04-arm"]) {
   if (!testRelease.includes(value)) throw new Error(`test-release workflow is missing: ${value}`);
 }
 const release = await readFile(new URL("../.github/workflows/release.yml", import.meta.url), "utf8");
-for (const value of ["Add stable direct-download assets", "eai-setup-macos-arm64.dmg", "eai-setup-windows-x64.exe", "eai-setup-ubuntu-amd64.deb", "eai-setup-ubuntu-arm64.deb", "ubuntu-24.04-arm", "codesign --verify --deep --strict", "spctl --assess --type execute", "xcrun stapler validate"]) {
+for (const value of ["Add stable direct-download assets", "eai-setup-macos-arm64.dmg", "eai-setup-macos-x64.dmg", "eai-setup-windows-x64.exe", "eai-setup-windows-arm64.exe", "eai-setup-ubuntu-amd64.deb", "eai-setup-ubuntu-arm64.deb", "x86_64-apple-darwin", "aarch64-pc-windows-msvc", "ubuntu-24.04-arm", "codesign --verify --deep --strict", "spctl --assess --type execute", "xcrun stapler validate"]) {
   if (!release.includes(value)) throw new Error(`release workflow is missing: ${value}`);
+}
+const testBundles = await readFile(new URL("../.github/workflows/test-bundles.yml", import.meta.url), "utf8");
+for (const value of ["Windows ARM64", "macOS Intel", "aarch64-pc-windows-msvc", "x86_64-apple-darwin", "${#windows[@]}", "${#macos[@]}"]) {
+  if (!testBundles.includes(value)) throw new Error(`test-bundles workflow is missing multi-architecture coverage: ${value}`);
 }
 console.log("release and DMG checks ok");
