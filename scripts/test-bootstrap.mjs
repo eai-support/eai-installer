@@ -175,6 +175,15 @@ if (!bundles.includes("expected install roots") || !bundles.includes("Where-Obje
 if (!bundles.includes("Start-Sleep -Seconds 1")) {
   throw new Error("test-bundles workflow does not wait for the Windows installer handoff");
 }
+const debSelector = await readFile(new URL("./find-valid-deb.sh", import.meta.url), "utf8");
+if (!debSelector.includes("dpkg-deb --contents") || !debSelector.includes("usr\\/bin\\/eai-setup")) {
+  throw new Error("Linux package selector does not verify the installed executable payload");
+}
+for (const workflow of [bundles, await readFile(new URL("../.github/workflows/test-release.yml", import.meta.url), "utf8"), await readFile(new URL("../.github/workflows/release.yml", import.meta.url), "utf8")]) {
+  if (!workflow.includes("scripts/find-valid-deb.sh")) {
+    throw new Error("Linux packaging workflow does not use the validated Debian package selector");
+  }
+}
 console.log("test-bundle workflow checks ok");
 
 const tauriConfig = JSON.parse(await readFile(new URL("../src-tauri/tauri.conf.json", import.meta.url), "utf8"));

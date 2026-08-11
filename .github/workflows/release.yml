@@ -135,7 +135,11 @@ jobs:
           set -euo pipefail
           version="$(node -p "require('./package.json').version")"
           mkdir -p release-assets
-          bundle="$(find src-tauri/target -type f -path '*/bundle/${{ matrix.bundle }}/*' -print -quit)"
+          if [ "${{ matrix.bundle }}" = "deb" ]; then
+            bundle="$(scripts/find-valid-deb.sh src-tauri/target)"
+          else
+            bundle="$(find src-tauri/target -type f -path '*/bundle/${{ matrix.bundle }}/*' -print -quit)"
+          fi
           test -s "$bundle"
           cp "$bundle" "release-assets/${{ matrix.asset }}"
           gh release upload "v${version}" release-assets/* --clobber

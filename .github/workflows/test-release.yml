@@ -128,12 +128,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          deb="$(find src-tauri/target -type f -path '*/bundle/deb/*.deb' -print -quit)"
-          test -s "$deb"
+          deb="$(scripts/find-valid-deb.sh src-tauri/target)"
           deb="$(realpath "$deb")"
           package="$(dpkg-deb -f "$deb" Package)"
           sudo apt-get install -y "$deb"
           test "$(dpkg-query -W -f='${Status}' "$package")" = "install ok installed"
+          test -x /usr/bin/eai-setup
           sudo apt-get remove -y "$package"
 
       - name: Normalize release asset name
@@ -141,7 +141,11 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p release-asset
-          source="$(find src-tauri/target -type f -path '*/bundle/${{ matrix.bundle }}/*' -print -quit)"
+          if [ "${{ matrix.bundle }}" = "deb" ]; then
+            source="$(scripts/find-valid-deb.sh src-tauri/target)"
+          else
+            source="$(find src-tauri/target -type f -path '*/bundle/${{ matrix.bundle }}/*' -print -quit)"
+          fi
           test -s "$source"
           cp "$source" "release-asset/${{ matrix.asset }}"
 
@@ -163,6 +167,17 @@ jobs:
         with:
           path: release-assets
           merge-multiple: true
+
+      - name: Verify normalized Linux packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t ubuntu < <(find release-assets -type f -name '*.deb' -print)
+          test "${#ubuntu[@]}" -eq 2
+          for deb in "${ubuntu[@]}"; do
+            dpkg-deb --info "$deb" >/dev/null
+            dpkg-deb --contents "$deb" | awk '$NF ~ /(^|\/)usr\/bin\/eai-setup$/ { found = 1 } END { exit found ? 0 : 1 }'
+          done
 
       - name: Publish prerelease
         shell: bash

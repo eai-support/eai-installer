@@ -131,12 +131,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          deb="$(find src-tauri/target -type f -path '*/bundle/deb/*.deb' -print -quit)"
-          test -s "$deb"
+          deb="$(scripts/find-valid-deb.sh src-tauri/target)"
           deb="$(realpath "$deb")"
           package="$(dpkg-deb -f "$deb" Package)"
           sudo apt-get install -y "$deb"
           test "$(dpkg-query -W -f='${Status}' "$package")" = "install ok installed"
+          test -x /usr/bin/eai-setup
           sudo apt-get remove -y "$package"
 
       - name: Upload test installer
@@ -171,3 +171,7 @@ jobs:
           test "${#macos[@]}" -ge 2
           test "${#ubuntu[@]}" -ge 2
           sha256sum "${windows[@]}" "${macos[@]}" "${ubuntu[@]}"
+          for deb in "${ubuntu[@]}"; do
+            dpkg-deb --info "$deb" >/dev/null
+            dpkg-deb --contents "$deb" | awk '$NF ~ /(^|\/)usr\/bin\/eai-setup$/ { found = 1 } END { exit found ? 0 : 1 }'
+          done
