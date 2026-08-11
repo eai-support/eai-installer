@@ -22,12 +22,28 @@ jobs:
         include:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
+            bundle: nsis
+            asset: eai-setup-windows-x64.exe
+          - os: windows-latest
+            target: aarch64-pc-windows-msvc
+            bundle: nsis
+            asset: eai-setup-windows-arm64.exe
           - os: macos-latest
             target: aarch64-apple-darwin
+            bundle: dmg
+            asset: eai-setup-macos-arm64.dmg
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            bundle: dmg
+            asset: eai-setup-macos-x64.dmg
           - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
+            bundle: deb
+            asset: eai-setup-ubuntu-amd64.deb
           - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
+            bundle: deb
+            asset: eai-setup-ubuntu-arm64.deb
     runs-on: ${{ matrix.os }}
     environment: release
     steps:
@@ -93,6 +109,7 @@ jobs:
           APPLE_API_KEY_PATH: ${{ runner.temp }}/AuthKey_${{ secrets.APPLE_API_KEY }}.p8
         with:
           projectPath: src-tauri
+          args: --ci --target ${{ matrix.target }} --bundles ${{ matrix.bundle }}
           tagName: v__VERSION__
           releaseName: EAI Setup v__VERSION__
           releaseBody: Signed cross-platform EAI Setup bundle.
@@ -103,8 +120,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          app="$(find src-tauri/target/release/bundle -type d -name '*.app' -print -quit)"
-          dmg="$(find src-tauri/target/release/bundle/dmg -type f -name '*.dmg' -print -quit)"
+          app="$(find src-tauri/target -type d -name '*.app' -print -quit)"
+          dmg="$(find src-tauri/target -type f -path '*/bundle/dmg/*.dmg' -print -quit)"
           test -n "$app"
           test -s "$dmg"
           codesign --verify --deep --strict --verbose=2 "$app"
@@ -118,10 +135,7 @@ jobs:
           set -euo pipefail
           version="$(node -p "require('./package.json').version")"
           mkdir -p release-assets
-          case "${{ matrix.os }}" in
-            windows-latest) cp src-tauri/target/release/bundle/nsis/*.exe release-assets/eai-setup-windows-x64.exe ;;
-            macos-latest) cp src-tauri/target/release/bundle/dmg/*.dmg release-assets/eai-setup-macos-arm64.dmg ;;
-            ubuntu-22.04) cp src-tauri/target/release/bundle/deb/*.deb release-assets/eai-setup-ubuntu-amd64.deb ;;
-            ubuntu-24.04-arm) cp src-tauri/target/release/bundle/deb/*.deb release-assets/eai-setup-ubuntu-arm64.deb ;;
-          esac
+          bundle="$(find src-tauri/target -type f -path '*/bundle/${{ matrix.bundle }}/*' -print -quit)"
+          test -s "$bundle"
+          cp "$bundle" "release-assets/${{ matrix.asset }}"
           gh release upload "v${version}" release-assets/* --clobber

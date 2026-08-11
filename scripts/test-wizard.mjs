@@ -17,7 +17,7 @@ if (!wizard.isKebabCase("my-eai-app") || wizard.isKebabCase("My App") || wizard.
 
 const report = {
   platform: "macos",
-  package_manager: "brew",
+  package_manager: null,
   tools: [
     { command: "git", version: "git version 2.40" },
     { command: "node", version: "v20.0.0" },
@@ -26,9 +26,6 @@ const report = {
   ],
 };
 if (!wizard.prerequisitesReady(report)) throw new Error("complete prerequisite report should be ready");
-if (wizard.needsHomebrew(report, new Map(report.tools.map((tool) => [tool.command, tool])))) {
-  throw new Error("Homebrew should not be needed when brew is available");
-}
 if (wizard.prerequisitesReady({ platform: "linux", package_manager: "apt-get", tools: [{ command: "git", version: "2" }] })) {
   throw new Error("incomplete prerequisite report should not be ready");
 }

@@ -7,14 +7,19 @@ hands control to the normal EAI CLI flow.
 ## What one download does
 
 1. Detects the operating system, CPU architecture, and installed tools.
-2. Installs Homebrew on macOS only when it is missing. macOS may show its normal
-   administrator permission prompt.
-3. Installs missing Git and Node.js using the platform's signed package manager.
-   Windows, macOS, and Linux may show their normal permission prompt.
+2. Installs only the minimal missing developer tools. On macOS, Git uses
+   Apple's Command Line Tools (not full Xcode), and Node.js uses the official
+   checksum-verified Node.js LTS archive in a user-local directory. Homebrew is optional rather than an EAI
+   prerequisite, so an old Homebrew installation cannot block setup.
+3. Uses native permission prompts where required. Windows, macOS, and Linux
+   keep the progress status in the EAI Setup window rather than exposing a
+   terminal.
 4. Installs or updates the canonical `@enterpriseai/cli` npm package, whose
    command is `eai` and whose source repository is public at
    `eai-support/eai-cli`.
-5. Opens the normal browser sign-in flow with `eai login`.
+5. Opens the normal browser sign-in flow with `eai login`. New users can choose
+   **Create an EAI account** to open the public developer signup page, then
+   return to the installer and sign in.
 6. Lets the user choose an existing folder or a new project folder. Tenant
    selection remains part of the normal EAI CLI prompts, where the platform can
    show only tenants the signed-in user may access.
@@ -30,7 +35,9 @@ Releases. The links download the file itself, not a GitHub Actions artifact
 ZIP:
 
 - [macOS Apple Silicon DMG](https://github.com/eai-tools/eai-installer/releases/latest/download/eai-setup-macos-arm64.dmg)
+- [macOS Intel DMG](https://github.com/eai-tools/eai-installer/releases/latest/download/eai-setup-macos-x64.dmg)
 - [Windows x64 installer](https://github.com/eai-tools/eai-installer/releases/latest/download/eai-setup-windows-x64.exe)
+- [Windows ARM64 installer](https://github.com/eai-tools/eai-installer/releases/latest/download/eai-setup-windows-arm64.exe)
 - [Ubuntu/Debian x64 package](https://github.com/eai-tools/eai-installer/releases/latest/download/eai-setup-ubuntu-amd64.deb)
 - [Ubuntu/Debian ARM64 package](https://github.com/eai-tools/eai-installer/releases/latest/download/eai-setup-ubuntu-arm64.deb)
 
@@ -55,7 +62,7 @@ both scanning modes at once.
 ## Support target
 
 - Windows 10 and 11, x64 and arm64 where the prerequisite installers support it
-- Recent supported macOS releases on Apple Silicon and Intel
+- macOS 15 and newer on Apple Silicon and Intel; both native DMG architectures
 - Ubuntu/Debian Linux initially, with other distributions added by explicit
   adapters rather than unsafe shell guessing
 

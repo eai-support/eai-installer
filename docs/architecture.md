@@ -10,7 +10,7 @@ operations.
 
 ```text
 Signed EAI Setup
-  -> platform adapter (WinGet / Homebrew / distro package manager)
+  -> platform adapter (WinGet / native macOS packages / distro package manager)
   -> Git + Node/npm
   -> @enterpriseai/cli (command: eai)
   -> browser sign-in

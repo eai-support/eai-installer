@@ -3,15 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>EAI Setup</title>
+    <title>Enterprise AI Setup</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <main class="shell">
       <header class="topbar">
-        <div>
-          <p class="eyebrow">Enterprise AI Group</p>
-          <h1>EAI Setup</h1>
+        <div class="brand">
+          <img class="brand-logo" src="assets/eai-square-man-logo.png" alt="" />
+          <div>
+            <p class="eyebrow">Enterprise AI</p>
+            <h1>Enterprise AI Setup</h1>
+          </div>
         </div>
         <span id="platform" class="status">Detecting device</span>
       </header>
@@ -20,18 +23,30 @@
         <div class="activity" id="activity" hidden>
           <div class="activity-heading"><span class="activity-spinner" aria-hidden="true"></span><strong id="activity-title">Preparing setup</strong></div>
           <p id="activity-detail">The installer will show each action as it runs.</p>
+          <div class="activity-meta"><span id="activity-phase">Preparing</span><span id="activity-eta"></span><span id="activity-heartbeat">Elapsed 0s · Screen updated every second · Last installer update just now</span></div>
           <div class="activity-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Installation progress"><span id="activity-bar"></span></div>
+          <ul id="install-items" class="install-items" aria-label="Installation status" hidden></ul>
+          <div class="activity-log-panel">
+            <div class="activity-log-heading"><strong>Recent activity</strong><span id="activity-log-status">Live updates every few seconds</span></div>
+            <ol id="activity-log" class="activity-log" aria-label="Recent setup activity" aria-live="polite"></ol>
+          </div>
+          <div class="admin-password-panel" id="admin-password-panel" hidden>
+            <label for="admin-password">Mac login password <input id="admin-password" type="password" autocomplete="current-password" /></label>
+            <p>Used once to authorize Apple's minimal Git tools. Enterprise AI Setup does not save it and does not open Terminal.</p>
+            <div class="activity-actions"><button class="primary" id="admin-password-submit" type="button">Authorize Git installation</button><button class="secondary" id="admin-password-cancel" type="button">Cancel</button></div>
+          </div>
           <div class="activity-actions"><button class="secondary" id="retry-install" data-action="install-all" hidden>Try again</button></div>
         </div>
         <section class="wizard-panel current" data-panel="0" aria-labelledby="welcome-title">
-          <div class="panel-icon" aria-hidden="true">EAI</div>
+          <img class="panel-logo" src="assets/eai-square-man-logo.png" alt="Enterprise AI" />
           <p class="eyebrow">Welcome</p>
           <h2 id="welcome-title">Set up this computer for EAI</h2>
-          <p class="lead">EAI Setup checks this computer, installs only what is missing, and then guides you through sign-in and app creation.</p>
+          <p class="lead">Go from a new computer to your first EAI app with one guided setup. Enterprise AI Setup prepares the essentials, connects your account, and gets you ready to build.</p>
           <ul class="promise-list">
-            <li>Only the required Git, Node.js, npm, and EAI CLI components</li>
-            <li>Gofer and the app template through <code>eai init</code></li>
-            <li>No EAI password, token, or secret stored by this installer</li>
+            <li>Ready to build: the tools your EAI project needs are prepared for you</li>
+            <li>Secure access: sign in through your browser and keep credentials out of the installer</li>
+            <li>One guided flow: create your project and continue in your AI or editor workflow</li>
+            <li>No guesswork: your computer is checked first and only missing components are added</li>
           </ul>
           <div class="panel-actions end">
             <button class="primary" data-action="start">Start setup</button>
@@ -47,7 +62,9 @@
           </div>
           <div class="panel-actions end">
             <button class="primary" data-action="login">Sign in with browser</button>
+            <button class="secondary" data-action="signup">Create an EAI account</button>
           </div>
+          <p class="quiet">New to Enterprise AI? Create your account on the website, then return here and choose Sign in with browser.</p>
         </section>
 
         <section class="wizard-panel" data-panel="4" aria-labelledby="app-title" hidden>
@@ -76,7 +93,7 @@
         <output id="output" class="output" aria-live="polite" hidden></output>
       </section>
 
-      <footer>Gofer and the app template are installed by the supported <code>eai init</code> workflow. EAI Setup never stores your password or API secrets.</footer>
+      <footer>Gofer and the app template are installed by the supported <code>eai init</code> workflow. Enterprise AI Setup never stores your password or API secrets.</footer>
     </main>
     <script src="wizard-state.js"></script>
     <script src="app.js"></script>

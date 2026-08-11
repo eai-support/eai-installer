@@ -21,28 +21,40 @@ jobs:
         include:
           - label: Windows
             os: windows-latest
+            target: x86_64-pc-windows-msvc
             bundle: nsis
             artifact: eai-test-windows
-            source: src-tauri/target/release/bundle/nsis/*.exe
-            output: eai-setup-windows-x64.exe
+            asset: eai-setup-windows-x64.exe
+          - label: Windows ARM64
+            os: windows-latest
+            target: aarch64-pc-windows-msvc
+            bundle: nsis
+            artifact: eai-test-windows-arm64
+            asset: eai-setup-windows-arm64.exe
           - label: macOS
             os: macos-latest
+            target: aarch64-apple-darwin
             bundle: dmg
             artifact: eai-test-macos
-            source: src-tauri/target/release/bundle/dmg/*.dmg
-            output: eai-setup-macos-arm64.dmg
+            asset: eai-setup-macos-arm64.dmg
+          - label: macOS Intel
+            os: macos-latest
+            target: x86_64-apple-darwin
+            bundle: dmg
+            artifact: eai-test-macos-x64
+            asset: eai-setup-macos-x64.dmg
           - label: Ubuntu
             os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
             bundle: deb
             artifact: eai-test-ubuntu-amd64
-            source: src-tauri/target/release/bundle/deb/*.deb
-            output: eai-setup-ubuntu-amd64.deb
+            asset: eai-setup-ubuntu-amd64.deb
           - label: Ubuntu ARM64
             os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
             bundle: deb
             artifact: eai-test-ubuntu-arm64
-            source: src-tauri/target/release/bundle/deb/*.deb
-            output: eai-setup-ubuntu-arm64.deb
+            asset: eai-setup-ubuntu-arm64.deb
 
     steps:
       - uses: actions/checkout@v4
@@ -52,6 +64,8 @@ jobs:
           node-version: 20
 
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
 
       - name: Install Ubuntu Tauri dependencies
         if: runner.os == 'Linux'
@@ -72,13 +86,13 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         with:
           projectPath: src-tauri
-          args: --ci --bundles ${{ matrix.bundle }}
+          args: --ci --target ${{ matrix.target }} --bundles ${{ matrix.bundle }}
 
       - name: Smoke-test Windows installer
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $installer = Get-ChildItem "src-tauri/target/release/bundle/nsis" -Filter *.exe | Select-Object -First 1
+          $installer = Get-ChildItem "src-tauri/target" -Recurse -Filter *.exe | Where-Object { $_.FullName -match '\\bundle\\nsis\\' } | Select-Object -First 1
           if (-not $installer) { throw "Windows installer was not produced" }
           $installDir = Join-Path $env:RUNNER_TEMP "eai-setup-installed"
           New-Item -ItemType Directory -Force -Path $installDir | Out-Null
@@ -97,7 +111,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          dmg="$(find src-tauri/target/release/bundle/dmg -type f -name '*.dmg' -print -quit)"
+          dmg="$(find src-tauri/target -type f -path '*/bundle/dmg/*.dmg' -print -quit)"
           test -s "$dmg"
           mount="$RUNNER_TEMP/eai-setup-mount"
           mkdir -p "$mount"
@@ -114,7 +128,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          deb="$(find src-tauri/target/release/bundle/deb -type f -name '*.deb' -print -quit)"
+          deb="$(find src-tauri/target -type f -path '*/bundle/deb/*.deb' -print -quit)"
           test -s "$deb"
           deb="$(realpath "$deb")"
           package="$(dpkg-deb -f "$deb" Package)"
@@ -124,15 +138,12 @@ jobs:
 
       - name: Normalize release asset name
         shell: bash
-        env:
-          SOURCE_GLOB: ${{ matrix.source }}
-          OUTPUT_NAME: ${{ matrix.output }}
         run: |
           set -euo pipefail
           mkdir -p release-asset
-          source="$(find ${SOURCE_GLOB%/*} -type f -name "${SOURCE_GLOB##*/}" -print -quit)"
+          source="$(find src-tauri/target -type f -path '*/bundle/${{ matrix.bundle }}/*' -print -quit)"
           test -s "$source"
-          cp "$source" "release-asset/$OUTPUT_NAME"
+          cp "$source" "release-asset/${{ matrix.asset }}"
 
       - name: Upload normalized release asset
         uses: actions/upload-artifact@v4

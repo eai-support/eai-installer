@@ -10,7 +10,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "EAI Setup",
+        "title": "Enterprise AI Setup",
         "width": 900,
         "height": 680,
         "minWidth": 720,

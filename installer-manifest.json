@@ -20,10 +20,10 @@
       "id": "homebrew",
       "command": "brew",
       "minimumVersion": "4.0",
-      "required": true,
+      "required": false,
       "platform": "macos",
       "installers": {
-        "macos": "Official Homebrew installer from https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh when Homebrew is missing; macOS may request permission"
+        "macos": "Official signed Homebrew.pkg from https://github.com/Homebrew/brew/releases/latest/download/Homebrew.pkg when Homebrew is missing; EAI Setup verifies the package and uses the native macOS administrator dialog without opening Terminal"
       }
     },
     {
@@ -33,7 +33,7 @@
       "required": true,
       "installers": {
         "windows": "winget install --id Git.Git -e --source winget",
-        "macos": "brew install git",
+        "macos": "Apple Command Line Tools via the native xcode-select installer; full Xcode is not required",
         "linux": "sudo apt-get install -y git or sudo dnf install -y git"
       }
     },
@@ -44,7 +44,7 @@
       "required": true,
       "installers": {
         "windows": "winget install --id OpenJS.NodeJS.LTS -e --source winget",
-        "macos": "brew install node",
+        "macos": "Official Node.js LTS macOS archive from https://nodejs.org/ with checksum verification and a user-local install; signed package fallback if an archive is unavailable",
         "linux": "Use the distribution package manager and verify Node.js 20 or newer"
       }
     },
@@ -71,7 +71,7 @@
   ],
   "workflow": [
     "detect platform and installed tools",
-    "detect and install only missing Homebrew, Git, and Node.js prerequisites using fixed platform adapters",
+    "detect and install only missing Git, Node.js, npm, and the EAI CLI using fixed platform adapters and native permission prompts; Homebrew is optional",
     "install or update the EAI CLI from npm",
     "open browser-based eai login",
     "select or confirm the company tenant",
@@ -80,6 +80,7 @@
     "verify the generated project and show the next AI/editor action"
   ],
   "runtime": {
+    "accountSignupUrl": "https://www.enterpriseaigroup.com/signup/developer",
     "userCommands": [
       "eai login",
       "eai whoami",
@@ -95,7 +96,15 @@
     "windows": ["10", "11"],
     "macos": ["Apple Silicon", "Intel", "recent supported macOS releases"],
     "linux": ["Ubuntu/Debian first", "Fedora/RHEL adapter planned"],
-    "architectures": ["x64", "arm64"]
+    "architectures": ["x64", "arm64"],
+    "downloadAssets": {
+      "windows-x64": "eai-setup-windows-x64.exe",
+      "windows-arm64": "eai-setup-windows-arm64.exe",
+      "macos-x64": "eai-setup-macos-x64.dmg",
+      "macos-arm64": "eai-setup-macos-arm64.dmg",
+      "ubuntu-amd64": "eai-setup-ubuntu-amd64.deb",
+      "ubuntu-arm64": "eai-setup-ubuntu-arm64.deb"
+    }
   },
   "security": {
     "telemetryDefault": false,

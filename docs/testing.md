@@ -6,11 +6,15 @@
 required safety controls, and confirms the public source references are not
 private platform endpoints. It does not perform a live tenant mutation.
 
-The bootstrap contract tests also verify that macOS Homebrew installation is an
-explicit step, uses the official HTTPS source, and cannot be triggered by an
-arbitrary command or URL. The clean-machine matrix must include a macOS host
-without Homebrew so the consent, administrator prompt, PATH refresh, Git,
-Node.js/npm, and CLI handoff are exercised together.
+The bootstrap contract tests also verify that Homebrew is optional on macOS,
+that missing Git uses Apple's Command Line Tools rather than full Xcode, and
+that a missing Software Update listing triggers Apple's native catalog refresh
+before the setup reports a recoverable error.
+that missing Node.js uses the official signed Node.js LTS package over HTTPS.
+The desktop path must not open Terminal: it uses native macOS administrator
+dialogs and reports progress back to the EAI Setup window. The clean-machine
+matrix must include macOS Apple Silicon and Intel hosts without Homebrew so the
+minimal Git, Node.js/npm, and CLI handoff are exercised together.
 
 ## CI checks
 
@@ -24,7 +28,7 @@ Node.js/npm, and CLI handoff are exercised together.
 
 A release is incomplete until all of the following are true:
 
-1. The three platform bundles build on Windows, macOS, and Linux.
+1. The native architecture bundles build on Windows, macOS, and Linux.
 2. Windows and macOS artifacts are signed and, where applicable, notarized.
 3. Tauri updater artifacts are enabled only after signed update keys and their
    public verification key are added to the application configuration.
@@ -41,9 +45,9 @@ use a test tenant and test user, not production credentials.
 The `Test installer bundles` workflow produces three unsigned, short-lived
 GitHub Actions artifacts for the current branch or pull request:
 
-- Windows NSIS `.exe`
-- macOS `.dmg`
-- Ubuntu 22.04 `.deb`
+- Windows x64 and ARM64 NSIS `.exe`
+- macOS Apple Silicon and Intel `.dmg`
+- Ubuntu x64 and ARM64 `.deb`
 
 Each native runner builds its bundle and performs an installation/package smoke
 test. The macOS job also copies the app to a disposable staging directory,
@@ -82,8 +86,11 @@ workflow with a unique version such as `0.1.0-pr9`. It publishes a prerelease
 with these stable asset names:
 
 - `eai-setup-macos-arm64.dmg`
+- `eai-setup-macos-x64.dmg`
 - `eai-setup-windows-x64.exe`
+- `eai-setup-windows-arm64.exe`
 - `eai-setup-ubuntu-amd64.deb`
+- `eai-setup-ubuntu-arm64.deb`
 
 Production releases use the same stable asset names, so public documentation
 can use GitHub's `/releases/latest/download/<asset-name>` links without
