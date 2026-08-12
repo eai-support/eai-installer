@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::cmp::Reverse;
 use std::env;
 use std::fs;
@@ -44,6 +44,7 @@ struct BootstrapResult {
     command: Option<String>,
     output: Option<String>,
     requires_user_action: bool,
+    project_directory: Option<String>,
 }
 
 #[derive(Clone, Serialize)]
@@ -54,6 +55,45 @@ struct BootstrapProgress {
     detail: String,
     progress: Option<u8>,
     estimated_seconds: Option<u64>,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AiSurface {
+    id: String,
+    name: String,
+    provider: String,
+    kind: String,
+    install_url: String,
+    launch_support: String,
+    installed: bool,
+    recommended: bool,
+    previously_used: bool,
+    status: String,
+    next_action: String,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AiSurfaceInventory {
+    contract_version: String,
+    platform: String,
+    project_directory: String,
+    preferred_surface: Option<String>,
+    recommended_surface: Option<String>,
+    surfaces: Vec<AiSurface>,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AiLaunchResult {
+    action: String,
+    launched: bool,
+    surface_id: String,
+    surface_name: String,
+    project_directory: String,
+    prepared_prompt: bool,
+    message: String,
 }
 
 const EAI_SIGNUP_URL: &str = "https://www.enterpriseaigroup.com/signup/developer";
@@ -372,6 +412,7 @@ fn command_result(step: &str, ok: bool, message: &str, command: Option<&str>, ou
         command: command.map(ToString::to_string),
         output,
         requires_user_action,
+        project_directory: None,
     }
 }
 
@@ -937,7 +978,11 @@ fn run_bootstrap_sync(app: AppHandle, step: String, project_name: Option<String>
                 "--no-splash",
             ];
             match run_program_in_directory("eai", &init_args, Some(&directory)) {
-                Ok((stdout, stderr)) => command_result("init", true, "The app was initialised and the Gofer assets are ready.", Some("eai init <project-name> --company-tenant <company-tenant-id> --current-dir --skip-prompts --no-splash"), Some(format!("{stdout}\n{stderr}")), false),
+                Ok((stdout, stderr)) => {
+                    let mut result = command_result("init", true, "The app was initialised and the Gofer assets are ready.", Some("eai init <project-name> --company-tenant <company-tenant-id> --current-dir --skip-prompts --no-splash"), Some(format!("{stdout}\n{stderr}")), false);
+                    result.project_directory = Some(directory.to_string_lossy().to_string());
+                    result
+                }
                 Err(error) => command_result("init", false, &error, Some("eai init <project-name> --company-tenant <company-tenant-id> --current-dir --skip-prompts --no-splash"), None, true),
             }
         }
@@ -974,6 +1019,40 @@ fn open_signup() -> Result<String, String> {
 }
 
 #[tauri::command]
+fn detect_ai_surfaces(directory: String) -> Result<AiSurfaceInventory, String> {
+    let (stdout, stderr) = run_program("eai", &["start", &directory, "--check", "--format", "json"])?;
+    let inventory: AiSurfaceInventory = serde_json::from_str(&stdout).map_err(|error| {
+        let detail = if stderr.is_empty() { stdout } else { stderr };
+        format!("EAI could not read the installed AI workspaces: {error}. {detail}")
+    })?;
+    if inventory.contract_version != "eai.ai-surfaces/v1" {
+        return Err(format!("EAI returned an unsupported AI workspace contract: {}", inventory.contract_version));
+    }
+    Ok(inventory)
+}
+
+#[tauri::command]
+fn start_ai_surface(directory: String, surface_id: String) -> Result<AiLaunchResult, String> {
+    let (stdout, stderr) = run_program(
+        "eai",
+        &["start", &directory, "--surface", &surface_id, "--format", "json"],
+    )?;
+    serde_json::from_str(&stdout).map_err(|error| {
+        let detail = if stderr.is_empty() { stdout } else { stderr };
+        format!("EAI could not confirm the AI workspace handoff: {error}. {detail}")
+    })
+}
+
+#[tauri::command]
+fn install_ai_surface(surface_id: String) -> Result<String, String> {
+    let (stdout, _) = run_program(
+        "eai",
+        &["start", "--surface", &surface_id, "--install", "--format", "json"],
+    )?;
+    Ok(stdout)
+}
+
+#[tauri::command]
 fn local_device_id() -> Result<String, String> {
     let home = if cfg!(target_os = "windows") {
         env::var("USERPROFILE").map_err(|_| "user profile directory is unavailable".to_string())?
@@ -995,7 +1074,7 @@ fn local_device_id() -> Result<String, String> {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![detect_environment, run_bootstrap, get_company_tenants, open_signup, local_device_id])
+        .invoke_handler(tauri::generate_handler![detect_environment, run_bootstrap, get_company_tenants, open_signup, detect_ai_surfaces, start_ai_surface, install_ai_surface, local_device_id])
         .run(tauri::generate_context!())
         .expect("error while running EAI Setup");
 }

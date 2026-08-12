@@ -90,6 +90,16 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .primary { background: #1b6d50; border-color: #1b6d50; color: #fff; }
 .primary:hover:not(:disabled) { background: #15583f; color: #fff; }
 .completion-command { display: inline-block; margin-top: 20px; padding: 12px 14px; background: #202b31; color: #ecf3f1; border-radius: 5px; }
+.surface-field { margin: 22px 0 12px; padding: 0; border: 0; }
+.surface-field legend { margin-bottom: 9px; font-size: 13px; font-weight: 700; }
+.surface-options { display: grid; gap: 8px; }
+.surface-option { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 11px 12px; border: 1px solid #c9d4d9; border-radius: 6px; background: #fff; }
+.surface-option:has(input:checked) { border-color: #1b6d50; box-shadow: 0 0 0 2px rgba(27, 109, 80, .12); }
+.surface-option input { margin: 0; padding: 0; }
+.surface-option strong { display: block; font-size: 13px; }
+.surface-option small { display: block; margin-top: 2px; color: #65747c; font-size: 11px; font-weight: 400; }
+.surface-badge { color: #176448; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.surface-install { padding: 7px 9px; font-size: 12px; }
 .output { display: block; min-height: 48px; margin: 0 46px 28px; background: #202b31; color: #ecf3f1; border-radius: 5px; padding: 14px; font-size: 13px; line-height: 1.45; }
 footer { color: #65747c; font-size: 12px; line-height: 1.5; margin-top: 18px; }
 code { font-family: ui-monospace, SFMono-Regular, monospace; }

@@ -26,8 +26,13 @@ hands control to the normal EAI CLI flow.
    show only tenants the signed-in user may access.
 7. Runs `eai init`, which fetches the supported Gofer assets and EAI app
    template through the existing CLI contract.
-8. Verifies the project and shows the next action for the user's selected AI
-   or editor host.
+8. Detects supported AI workspaces without reading provider accounts or project
+   files. It remembers the last successfully opened workspace and recommends
+   GitHub Copilot in VS Code when the user needs to choose one.
+9. After one clear provider-access confirmation, opens the project in GitHub
+   Copilot, Claude, Codex, or Grok with an EAI first request prepared where the
+   provider supports it. If a workspace is missing, the installer can open only
+   that provider's fixed official installation page.
 
 ## Download the installer
 
@@ -52,7 +57,8 @@ release assets are signed and notarized when the release signing environment is
 configured.
 
 The installer does not copy private platform code, embed a tenant secret, or
-silently install a commercial AI product. A public download is intentional;
+silently install a commercial AI product or accept provider credentials. A
+public download is intentional;
 EAI access remains controlled by browser authentication, tenant membership,
 application policy, and the platform's own authorization checks.
 

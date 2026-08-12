@@ -62,8 +62,11 @@ const windowsIcon = await readFile(new URL("../src-tauri/icons/icon.ico", import
 if (windowsIcon.length < 32 || windowsIcon.readUInt16LE(2) !== 1) {
   throw new Error("Tauri Windows icon resource is missing or invalid");
 }
-for (const step of ["homebrew", "git", "node", "eai-cli", "login", "init"]) {
+for (const step of ["homebrew", "git", "node", "eai-cli", "login", "init", "start"]) {
   if (!rust.includes(`\"${step}\"`)) throw new Error(`Tauri adapter is missing ${step}`);
+}
+for (const value of ["detect_ai_surfaces", "start_ai_surface", "install_ai_surface", "AiSurfaceInventory", "eai", "start", "--check"]) {
+  if (!rust.includes(value)) throw new Error(`Tauri adapter is missing AI workspace handoff: ${value}`);
 }
 for (const value of ["get_company_tenants", "tenant", "list", "--format", "json", "directMembership", "parentId"]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing company workspace discovery: ${value}`);
@@ -80,6 +83,12 @@ if (!rust.includes("pkexec")) throw new Error("Tauri adapter does not provide au
 if (!rust.includes("tauri_plugin_dialog::init()")) throw new Error("Tauri adapter does not provide the native folder picker");
 if (!rust.includes("fn project_directory") || !rust.includes("fs::create_dir_all(&directory)")) {
   throw new Error("Tauri adapter does not create the project folder before initialization");
+}
+if (!rust.includes("project_directory: Option<String>") || !rust.includes("result.project_directory = Some")) {
+  throw new Error("Tauri adapter does not return the exact created project directory to the AI workspace handoff");
+}
+if (!rust.includes('inventory.contract_version != "eai.ai-surfaces/v1"')) {
+  throw new Error("Tauri adapter does not enforce the versioned AI surface contract");
 }
 for (const value of ["Homebrew.pkg", "/usr/sbin/pkgutil", "--check-signature", "with administrator privileges", "--stdinpass", "No Terminal window will open"]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing native macOS installation control: ${value}`);
@@ -141,8 +150,11 @@ for (const color of ["#123d5b", "#83d8ef"]) {
 for (const panel of ["0", "3", "4", "5"]) {
   if (!wizard.includes(`data-panel="${panel}"`)) throw new Error(`wizard: missing panel ${panel}`);
 }
-for (const control of ["data-action=\"start\"", "data-action=\"login\"", "data-action=\"signup\"", "data-action=\"choose-folder\"", "data-action=\"init\"", "data-action=\"finish\""]) {
+for (const control of ["data-action=\"start\"", "data-action=\"login\"", "data-action=\"signup\"", "data-action=\"choose-folder\"", "data-action=\"init\"", "data-action=\"start-ai\"", "data-action=\"finish\""]) {
   if (!wizard.includes(control)) throw new Error(`wizard: missing control ${control}`);
+}
+for (const value of ["id=\"ai-surface-status\"", "id=\"ai-surface-options\"", "id=\"ai-surface-consent\"", "Start building with EAI", "may use your provider account"]) {
+  if (!wizard.includes(value)) throw new Error(`wizard: AI workspace handoff is missing ${value}`);
 }
 for (const value of ["id=\"company-tenant-field\"", "id=\"company-tenant\"", "Company workspace", "Choose where this app will be created"]) {
   if (!wizard.includes(value)) throw new Error(`wizard: missing company workspace selection: ${value}`);
@@ -163,6 +175,9 @@ const app = await readFile(new URL("../ui/app.js", import.meta.url), "utf8");
 if (app.includes('steps.push("homebrew")')) throw new Error("wizard: Homebrew must not be a required setup step");
 if (!app.includes("setActivity") || !app.includes("Installation complete") || !app.includes("listenForBootstrapProgress") || !app.includes("eventApi.listen") || !app.includes("renderInstallItems") || !app.includes("setDetectionState") || !app.includes("phaseForTitle") || !app.includes("async function startSetup") || !app.includes("window.setTimeout(() => startSetup(), 250)") || !app.includes("setStep(4)") || !app.includes("async function runSignup") || !app.includes("open_signup") || !app.includes("dialog.open") || !app.includes("choose-folder") || !app.includes("get_company_tenants") || !app.includes("companyTenantId")) {
   throw new Error("wizard: live activity status updates are missing");
+}
+for (const value of ["loadAiSurfaces", "renderAiSurfaces", "startAiSurface", "detect_ai_surfaces", "start_ai_surface", "install_ai_surface"]) {
+  if (!app.includes(value)) throw new Error(`wizard: AI workspace behavior is missing ${value}`);
 }
 for (const value of ["setInterval(refreshActivityHeartbeat, 1000)", "Elapsed ${elapsed}s", "Screen updated every second", "Last installer update", "Waiting for your input", "Action needed", "Still working", "activityLastHeartbeatLogAt", "waitingDetails", "activityEvents", "Stopped with error", "Checking the required tools"]) {
   if (!app.includes(value)) throw new Error(`wizard: per-second progress feedback is missing: ${value}`);
