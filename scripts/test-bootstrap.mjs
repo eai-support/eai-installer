@@ -193,9 +193,16 @@ const debSelector = await readFile(new URL("./find-valid-deb.sh", import.meta.ur
 if (!debSelector.includes("dpkg-deb --contents") || !debSelector.includes("usr\\/bin\\/eai-setup")) {
   throw new Error("Linux package selector does not verify the installed executable payload");
 }
+const dmgSelector = await readFile(new URL("./find-valid-dmg.sh", import.meta.url), "utf8");
+if (!dmgSelector.includes("hdiutil imageinfo") || !dmgSelector.includes("*/bundle/dmg/*.dmg")) {
+  throw new Error("macOS package selector does not verify a real DMG image");
+}
 for (const workflow of [bundles, await readFile(new URL("../.github/workflows/test-release.yml", import.meta.url), "utf8"), await readFile(new URL("../.github/workflows/release.yml", import.meta.url), "utf8")]) {
   if (!workflow.includes("scripts/find-valid-deb.sh")) {
     throw new Error("Linux packaging workflow does not use the validated Debian package selector");
+  }
+  if (!workflow.includes("scripts/find-valid-dmg.sh")) {
+    throw new Error("macOS packaging workflow does not use the validated DMG selector");
   }
 }
 console.log("test-bundle workflow checks ok");
@@ -223,5 +230,10 @@ for (const value of ["Add stable direct-download assets", "eai-setup-macos-arm64
 const testBundles = await readFile(new URL("../.github/workflows/test-bundles.yml", import.meta.url), "utf8");
 for (const value of ["Windows ARM64", "macOS Intel", "aarch64-pc-windows-msvc", "x86_64-apple-darwin", "${#windows[@]}", "${#macos[@]}"]) {
   if (!testBundles.includes(value)) throw new Error(`test-bundles workflow is missing multi-architecture coverage: ${value}`);
+}
+for (const value of ["verify-published-macos", "gh release download", "hdiutil imageinfo", "hdiutil attach"]) {
+  if (!(await readFile(new URL("../.github/workflows/test-release.yml", import.meta.url), "utf8")).includes(value)) {
+    throw new Error(`test-release workflow is missing published DMG verification: ${value}`);
+  }
 }
 console.log("release and DMG checks ok");

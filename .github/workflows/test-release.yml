@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Semantic test version, for example 0.1.1"
+        description: "Semantic test version, for example 0.1.2"
         required: true
         type: string
 
@@ -111,7 +111,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          dmg="$(find src-tauri/target -type f -path '*/bundle/dmg/*.dmg' -print -quit)"
+          dmg="$(scripts/find-valid-dmg.sh src-tauri/target)"
           test -s "$dmg"
           mount="$RUNNER_TEMP/eai-setup-mount"
           mkdir -p "$mount"
@@ -143,10 +143,15 @@ jobs:
           mkdir -p release-asset
           if [ "${{ matrix.bundle }}" = "deb" ]; then
             source="$(scripts/find-valid-deb.sh src-tauri/target)"
+          elif [ "${{ matrix.bundle }}" = "dmg" ]; then
+            source="$(scripts/find-valid-dmg.sh src-tauri/target)"
           else
             source="$(find src-tauri/target -type f -path '*/bundle/${{ matrix.bundle }}/*' -print -quit)"
           fi
           test -s "$source"
+          if [ "${{ matrix.bundle }}" = "dmg" ]; then
+            hdiutil imageinfo "$source" >/dev/null
+          fi
           cp "$source" "release-asset/${{ matrix.asset }}"
 
       - name: Upload normalized release asset
@@ -201,3 +206,37 @@ jobs:
               --notes "Unsigned test installers. Use only for controlled validation; this is not a production release." \
               --prerelease
           fi
+
+  verify-published-macos:
+    name: Verify published macOS downloads
+    needs: publish
+    runs-on: macos-latest
+    steps:
+      - name: Download published DMGs
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p published
+          gh release download "eai-setup-test-v${{ inputs.version }}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern 'eai-setup-macos-*.dmg' \
+            --dir published
+
+      - name: Mount and inspect published DMGs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t dmgs < <(find published -type f -name '*.dmg' -print)
+          test "${#dmgs[@]}" -eq 2
+          for dmg in "${dmgs[@]}"; do
+            hdiutil imageinfo "$dmg" >/dev/null
+            mount="$RUNNER_TEMP/$(basename "$dmg" .dmg)"
+            mkdir -p "$mount"
+            hdiutil attach "$dmg" -nobrowse -readonly -mountpoint "$mount"
+            trap 'hdiutil detach "$mount" -quiet || true' EXIT
+            test -n "$(find "$mount" -maxdepth 1 -name '*.app' -print -quit)"
+            hdiutil detach "$mount" -quiet
+            trap - EXIT
+          done

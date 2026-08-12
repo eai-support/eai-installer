@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Semantic release version, for example 0.1.1"
+        description: "Semantic release version, for example 0.1.2"
         required: true
         type: string
   push:
@@ -136,7 +136,7 @@ jobs:
         run: |
           set -euo pipefail
           app="$(find src-tauri/target -type d -name '*.app' -print -quit)"
-          dmg="$(find src-tauri/target -type f -path '*/bundle/dmg/*.dmg' -print -quit)"
+          dmg="$(scripts/find-valid-dmg.sh src-tauri/target)"
           test -n "$app"
           test -s "$dmg"
           codesign --verify --deep --strict --verbose=2 "$app"
@@ -152,9 +152,14 @@ jobs:
           mkdir -p release-assets
           if [ "${{ matrix.bundle }}" = "deb" ]; then
             bundle="$(scripts/find-valid-deb.sh src-tauri/target)"
+          elif [ "${{ matrix.bundle }}" = "dmg" ]; then
+            bundle="$(scripts/find-valid-dmg.sh src-tauri/target)"
           else
             bundle="$(find src-tauri/target -type f -path '*/bundle/${{ matrix.bundle }}/*' -print -quit)"
           fi
           test -s "$bundle"
+          if [ "${{ matrix.bundle }}" = "dmg" ]; then
+            hdiutil imageinfo "$bundle" >/dev/null
+          fi
           cp "$bundle" "release-assets/${{ matrix.asset }}"
           gh release upload "v${version}" release-assets/* --clobber
