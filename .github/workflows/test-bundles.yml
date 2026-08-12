@@ -114,8 +114,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          dmg="$(find src-tauri/target -type f -path '*/bundle/dmg/*.dmg' -print -quit)"
+          dmg="$(scripts/find-valid-dmg.sh src-tauri/target)"
           test -s "$dmg"
+          hdiutil imageinfo "$dmg" >/dev/null
           mount="$RUNNER_TEMP/eai-setup-mount"
           mkdir -p "$mount"
           hdiutil attach "$dmg" -nobrowse -readonly -mountpoint "$mount"
