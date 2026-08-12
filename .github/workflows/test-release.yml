@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Semantic test version, for example 0.1.2"
+        description: "Semantic test version, for example 0.1.3"
         required: true
         type: string
 
@@ -228,7 +228,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -t dmgs < <(find published -type f -name '*.dmg' -print)
+          shopt -s nullglob
+          dmgs=(published/*.dmg)
           test "${#dmgs[@]}" -eq 2
           for dmg in "${dmgs[@]}"; do
             hdiutil imageinfo "$dmg" >/dev/null
