@@ -45,6 +45,22 @@ commands.
   new folder derived from a validated kebab-case project name.
 - Gofer and the app template are fetched by `eai init`, so the CLI's supported
   provenance and compatibility checks remain in charge.
+- Supported AI workspaces are detected through `eai start --check --format
+  json`. Detection reads installed command and application metadata only.
+- The first use asks the user which ready AI workspace to use. Later uses may
+  preselect the last workspace that opened successfully, while still allowing
+  the user to switch.
+- GitHub Copilot in VS Code is the default recommendation when no supported
+  workspace is installed. Claude, Codex, and Grok remain explicit choices.
+- EAI Setup opens a fixed official provider installation page only after the
+  user requests it. It does not accept provider credentials, agree to provider
+  terms, or silently install commercial software.
+- Starting a workspace clearly states that the selected provider may read the
+  project and use the user's provider account. The installer stays open until
+  the handoff succeeds or fails.
+- The prepared first request starts with the business outcome, teaches EAI as
+  it becomes relevant, keeps internal stage names hidden, and pauses once for
+  approval of the business specification.
 
 ## Failure categories
 
@@ -58,3 +74,7 @@ commands.
 - `project-location`: the selected directory is unavailable or not writable.
 - `initialization`: `eai init` returned a failure; preserve its diagnostic and
   do not claim that the app is ready.
+- `ai-workspace-detection`: the CLI could not produce the supported versioned
+  workspace inventory; the completed app remains safe and usable.
+- `ai-workspace-handoff`: the chosen provider could not open the project; keep
+  setup open and offer another detected workspace or `eai start` recovery.

@@ -29,5 +29,16 @@ if (!wizard.prerequisitesReady(report)) throw new Error("complete prerequisite r
 if (wizard.prerequisitesReady({ platform: "linux", package_manager: "apt-get", tools: [{ command: "git", version: "2" }] })) {
   throw new Error("incomplete prerequisite report should not be ready");
 }
+const surfaceInventory = {
+  preferredSurface: "claude-desktop",
+  recommendedSurface: "vscode-copilot",
+  surfaces: [
+    { id: "vscode-copilot", installed: true },
+    { id: "claude-desktop", installed: true },
+  ],
+};
+if (wizard.chooseAiSurface(surfaceInventory) !== "claude-desktop") throw new Error("wizard does not remember a ready AI surface");
+surfaceInventory.surfaces[1].installed = false;
+if (wizard.chooseAiSurface(surfaceInventory) !== "vscode-copilot") throw new Error("wizard does not fall back from a stale AI surface preference");
 
 console.log("wizard state tests ok");

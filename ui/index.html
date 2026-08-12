@@ -94,11 +94,18 @@
 
         <section class="wizard-panel" data-panel="5" aria-labelledby="complete-title" hidden>
           <div class="panel-icon success" aria-hidden="true">OK</div>
-          <h2 id="complete-title">EAI is ready to use</h2>
-          <p class="lead" id="complete-message">Your app setup is complete. Continue in your chosen AI or editor host.</p>
-          <div class="completion-command"><code id="next-command">eai whoami</code></div>
+          <h2 id="complete-title">Start building with EAI</h2>
+          <p class="lead" id="complete-message">Your app is ready. Choose where you want to work with AI.</p>
+          <div id="ai-surface-status" class="callout"><strong>Finding your AI workspaces</strong><p>EAI is checking this computer. No provider account or project content is read.</p></div>
+          <fieldset id="ai-surface-field" class="surface-field" hidden>
+            <legend>AI workspace</legend>
+            <div id="ai-surface-options" class="surface-options"></div>
+          </fieldset>
+          <p id="ai-surface-consent" class="quiet" hidden>Starting your chosen workspace lets that provider read this project and may use your provider account. You can review the prepared first request before it is sent.</p>
+          <div class="completion-command"><code id="next-command">eai start</code></div>
           <div class="panel-actions end">
-            <button class="primary" data-action="finish">Close setup</button>
+            <button class="secondary" data-action="finish">Close setup</button>
+            <button class="primary" id="start-ai" data-action="start-ai" hidden>Start EAI</button>
           </div>
         </section>
 
