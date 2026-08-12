@@ -19,6 +19,8 @@ const adminPasswordPanel = document.querySelector("#admin-password-panel");
 const adminPasswordInput = document.querySelector("#admin-password");
 const adminPasswordSubmit = document.querySelector("#admin-password-submit");
 const adminPasswordCancel = document.querySelector("#admin-password-cancel");
+const companyTenantField = document.querySelector("#company-tenant-field");
+const companyTenantSelect = document.querySelector("#company-tenant");
 
 const wizard = EAIWizard.createState();
 let environmentReport = null;
@@ -30,6 +32,8 @@ let activityStartedAt = 0;
 let activityLastUpdateAt = 0;
 let activityLastHeartbeatLogAt = 0;
 let pendingAdminPassword = null;
+let companyTenants = [];
+let selectedCompanyTenantId = null;
 const activityEvents = [];
 
 const stepLabels = {
@@ -332,7 +336,7 @@ async function runBootstrapStep(step) {
       setActivity("Git setup cancelled", "No changes were made. Enter the Mac password to retry the Apple Command Line Tools installation.", 0, false, "", "Error");
       return false;
     }
-    result = await invoke("run_bootstrap", { step, projectName: null, directory: null, adminPassword });
+    result = await invoke("run_bootstrap", { step, projectName: null, directory: null, adminPassword, companyTenantId: null });
   } catch (error) {
     showOutput("This setup step could not start.", String(error));
     setActivity(`${stepLabels[step] || step} setup failed`, `The step could not finish: ${String(error)}`, 0, false, "", "Error");
@@ -415,10 +419,61 @@ async function runLogin() {
   const result = await runBootstrapStep("login");
   if (result) {
     showOutput(demoMode ? "Preview only: the signed app will open browser sign-in." : "Browser sign-in completed.");
-    setActivity("Sign-in complete", "Continuing to app setup.", 100, false);
-    setStep(4);
+    if (demoMode || await loadCompanyTenants()) {
+      setActivity("Sign-in complete", "Your company workspaces are ready. Continue to app setup.", 100, false, "Ready");
+      setStep(4);
+    }
   } else {
     setActivity("Sign-in needs attention", "Complete browser sign-in, then try again. See recent activity for the last result.", 0, false, "", "Error");
+  }
+}
+
+function renderCompanyTenants() {
+  if (!companyTenantField || !companyTenantSelect) return;
+  companyTenantSelect.replaceChildren();
+  if (companyTenants.length === 1) {
+    selectedCompanyTenantId = companyTenants[0].id;
+    companyTenantField.hidden = true;
+    return;
+  }
+
+  selectedCompanyTenantId = companyTenants.find((tenant) => tenant.active)?.id || null;
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = "Choose a company workspace";
+  placeholder.disabled = true;
+  placeholder.selected = !selectedCompanyTenantId;
+  companyTenantSelect.append(placeholder);
+  for (const tenant of companyTenants) {
+    const option = document.createElement("option");
+    option.value = tenant.id;
+    option.textContent = tenant.displayName;
+    option.selected = tenant.id === selectedCompanyTenantId;
+    companyTenantSelect.append(option);
+  }
+  companyTenantField.hidden = false;
+}
+
+async function loadCompanyTenants() {
+  if (demoMode) return true;
+  setActivity("Checking company workspaces", "Finding where your new app can be created.", null, true, "", "Checking");
+  try {
+    companyTenants = await invoke("get_company_tenants");
+    if (!Array.isArray(companyTenants) || companyTenants.length === 0) {
+      throw new Error("No company workspaces are available for this account.");
+    }
+    renderCompanyTenants();
+    if (companyTenants.length === 1) {
+      recordActivityEvent("Workspace ready", `Using ${companyTenants[0].displayName} for this app.`, "Ready");
+      return true;
+    }
+    recordActivityEvent("Workspace choice", "Choose the company workspace that should own this app.", "Waiting");
+    setActivity("Choose a company workspace", "Select the company workspace that should own this app, then continue.", 100, false, "", "Waiting");
+    return true;
+  } catch (error) {
+    showOutput("Company workspaces could not be loaded.", String(error));
+    setActivity("Company workspaces need attention", "The app cannot be created until a company workspace is available. Try signing in again.", 0, false, "", "Error");
+    return false;
   }
 }
 
@@ -452,11 +507,17 @@ async function runInit() {
     document.querySelector("#project-directory").focus();
     return;
   }
+  if (!demoMode && !selectedCompanyTenantId) {
+    showOutput("Choose the company workspace for this app.");
+    setActivity("Choose a company workspace", "Select the company workspace that should own this app, then continue.", 100, false, "", "Waiting");
+    companyTenantSelect?.focus();
+    return;
+  }
   setActivity("Creating your EAI app", `Initialising ${name} and fetching the supported Gofer assets.`, null);
   startActivityHeartbeat("init");
   let result;
   try {
-    result = await invoke("run_bootstrap", { step: "init", projectName: name, directory: directory || null });
+    result = await invoke("run_bootstrap", { step: "init", projectName: name, directory: directory || null, companyTenantId: selectedCompanyTenantId });
   } catch (error) {
     showOutput("App initialisation could not start.", String(error));
     setActivity("App setup failed", `The app could not finish initialising: ${String(error)}`, 0, false, "", "Error");
@@ -505,6 +566,14 @@ async function runAction(action) {
     }
     return;
   }
+  if (action === "select-company-tenant") {
+    selectedCompanyTenantId = companyTenantSelect?.value || null;
+    if (selectedCompanyTenantId) {
+      const tenant = companyTenants.find((item) => item.id === selectedCompanyTenantId);
+      setActivity("Company workspace selected", `${tenant?.displayName || "Company workspace"} will own this app.`, 100, false, "", "Ready");
+    }
+    return;
+  }
   if (action === "init") return runInit();
   if (action === "finish") showOutput("You can close this window.");
 }
@@ -518,6 +587,7 @@ for (const button of document.querySelectorAll("[data-back]")) {
 for (const button of document.querySelectorAll("[data-action]")) {
   button.addEventListener("click", () => runAction(button.dataset.action));
 }
+companyTenantSelect?.addEventListener("change", () => runAction("select-company-tenant"));
 
 setStep(0);
 // The installer should make the first decision itself. The button remains as

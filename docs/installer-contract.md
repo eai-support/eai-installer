@@ -37,6 +37,10 @@ commands.
 - `eai login` remains browser-based and interactive. The sign-in panel also
   opens the public developer signup page for customers who do not have an EAI
   account yet; the installer never collects or stores signup credentials.
+- After sign-in, the installer discovers active top-level company workspaces
+  through `eai tenant list --format json`. It selects the only workspace
+  automatically, or asks the user to choose one when several are available,
+  then passes that explicit workspace to `eai init --company-tenant`.
 - A project is created only in a user-selected directory, or in an explicit
   new folder derived from a validated kebab-case project name.
 - Gofer and the app template are fetched by `eai init`, so the CLI's supported

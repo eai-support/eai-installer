@@ -65,8 +65,12 @@ if (windowsIcon.length < 32 || windowsIcon.readUInt16LE(2) !== 1) {
 for (const step of ["homebrew", "git", "node", "eai-cli", "login", "init"]) {
   if (!rust.includes(`\"${step}\"`)) throw new Error(`Tauri adapter is missing ${step}`);
 }
+for (const value of ["get_company_tenants", "tenant", "list", "--format", "json", "directMembership", "parentId"]) {
+  if (!rust.includes(value)) throw new Error(`Tauri adapter is missing company workspace discovery: ${value}`);
+}
 if (!rust.includes("@enterpriseai/cli")) throw new Error("Tauri adapter uses the wrong CLI package");
-if (!rust.includes("run_program_in_directory(\"eai\", &[\"init\", &name, \"--current-dir\", \"--skip-prompts\", \"--no-splash\"]")) throw new Error("Tauri adapter does not run eai init non-interactively in the selected directory");
+if (!rust.includes("run_program_in_directory(\"eai\", &init_args")) throw new Error("Tauri adapter does not run eai init non-interactively in the selected directory");
+if (!rust.includes("\"--company-tenant\"")) throw new Error("Tauri adapter does not pass the selected company workspace to eai init");
 if (!rust.includes("command.stdin(Stdio::null())")) throw new Error("Tauri adapter does not close child stdin for GUI-launched commands");
 if (!rust.includes("run_program(\"eai\", &[\"login\"]")) throw new Error("Tauri adapter does not run eai login");
 if (!rust.includes("fn open_signup") || !rust.includes("EAI_SIGNUP_URL") || !rust.includes("www.enterpriseaigroup.com/signup/developer")) {
@@ -140,6 +144,9 @@ for (const panel of ["0", "3", "4", "5"]) {
 for (const control of ["data-action=\"start\"", "data-action=\"login\"", "data-action=\"signup\"", "data-action=\"choose-folder\"", "data-action=\"init\"", "data-action=\"finish\""]) {
   if (!wizard.includes(control)) throw new Error(`wizard: missing control ${control}`);
 }
+for (const value of ["id=\"company-tenant-field\"", "id=\"company-tenant\"", "Company workspace", "Choose where this app will be created"]) {
+  if (!wizard.includes(value)) throw new Error(`wizard: missing company workspace selection: ${value}`);
+}
 for (const value of ["id=\"choose-folder\"", "Use lowercase words separated by hyphens", "Parent folder", "A new folder with your project name will be created here"]) {
   if (!wizard.includes(value)) throw new Error(`wizard: missing project location guidance: ${value}`);
 }
@@ -154,7 +161,7 @@ for (const control of ["id=\"activity\"", "id=\"activity-title\"", "id=\"activit
 if (!wizard.includes("Recent activity")) throw new Error("wizard: recent activity heading is missing");
 const app = await readFile(new URL("../ui/app.js", import.meta.url), "utf8");
 if (app.includes('steps.push("homebrew")')) throw new Error("wizard: Homebrew must not be a required setup step");
-if (!app.includes("setActivity") || !app.includes("Installation complete") || !app.includes("listenForBootstrapProgress") || !app.includes("eventApi.listen") || !app.includes("renderInstallItems") || !app.includes("setDetectionState") || !app.includes("phaseForTitle") || !app.includes("async function startSetup") || !app.includes("window.setTimeout(() => startSetup(), 250)") || !app.includes("setStep(4)") || !app.includes("async function runSignup") || !app.includes("open_signup") || !app.includes("dialog.open") || !app.includes("choose-folder")) {
+if (!app.includes("setActivity") || !app.includes("Installation complete") || !app.includes("listenForBootstrapProgress") || !app.includes("eventApi.listen") || !app.includes("renderInstallItems") || !app.includes("setDetectionState") || !app.includes("phaseForTitle") || !app.includes("async function startSetup") || !app.includes("window.setTimeout(() => startSetup(), 250)") || !app.includes("setStep(4)") || !app.includes("async function runSignup") || !app.includes("open_signup") || !app.includes("dialog.open") || !app.includes("choose-folder") || !app.includes("get_company_tenants") || !app.includes("companyTenantId")) {
   throw new Error("wizard: live activity status updates are missing");
 }
 for (const value of ["setInterval(refreshActivityHeartbeat, 1000)", "Elapsed ${elapsed}s", "Screen updated every second", "Last installer update", "Waiting for your input", "Action needed", "Still working", "activityLastHeartbeatLogAt", "waitingDetails", "activityEvents", "Stopped with error", "Checking the required tools"]) {

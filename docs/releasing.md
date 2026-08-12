@@ -19,8 +19,8 @@ Run `npm test`. The version check fails if a source is not a valid
 ## Test release
 
 Use the `Publish test installer release` workflow with the exact version in
-the repository, for example `0.1.3`. It publishes an unsigned prerelease with
-the tag `eai-setup-test-v0.1.3` and six native assets for Windows, macOS, and
+the repository, for example `0.1.4`. It publishes an unsigned prerelease with
+the tag `eai-setup-test-v0.1.4` and six native assets for Windows, macOS, and
 Ubuntu.
 
 ## Production release
@@ -28,8 +28,8 @@ Ubuntu.
 After the release PR is merged, create and push the matching tag, for example:
 
 ```bash
-git tag v0.1.3
-git push origin v0.1.3
+git tag v0.1.4
+git push origin v0.1.4
 ```
 
 The release workflow validates that the tag and all source versions match,
