@@ -71,6 +71,12 @@
           <h2 id="app-title">Start your EAI app</h2>
           <p class="lead">Name your app and choose its parent folder.</p>
           <div class="form-grid">
+            <div id="company-tenant-field" hidden>
+              <label for="company-tenant">Company workspace
+                <select id="company-tenant" aria-describedby="company-tenant-help"></select>
+              </label>
+              <p class="field-help" id="company-tenant-help">Choose where this app will be created.</p>
+            </div>
             <label for="project-name">Project name <input id="project-name" placeholder="customer-portal" autocomplete="off" aria-describedby="project-name-help" /></label>
             <p class="field-help" id="project-name-help">Use lowercase words separated by hyphens. Example: <code>customer-portal</code>.</p>
             <label for="project-directory">Parent folder

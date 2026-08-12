@@ -28,6 +28,15 @@ struct EnvironmentReport {
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CompanyTenant {
+    id: String,
+    display_name: String,
+    slug: String,
+    active: bool,
+}
+
+#[derive(Serialize)]
 struct BootstrapResult {
     ok: bool,
     step: String,
@@ -364,6 +373,59 @@ fn command_result(step: &str, ok: bool, message: &str, command: Option<&str>, ou
         output,
         requires_user_action,
     }
+}
+
+fn list_company_tenants() -> Result<Vec<CompanyTenant>, String> {
+    let (stdout, stderr) = run_program("eai", &["tenant", "list", "--format", "json"])?;
+    let payload: serde_json::Value = serde_json::from_str(&stdout).map_err(|error| {
+        if stderr.is_empty() {
+            format!("The EAI CLI returned invalid company workspace data: {error}")
+        } else {
+            format!("The EAI CLI returned invalid company workspace data: {error} ({stderr})")
+        }
+    })?;
+    let entries = payload
+        .get("tenants")
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| "The EAI CLI did not return company workspace data.".to_string())?;
+
+    let mut tenants = entries
+        .iter()
+        .filter_map(|entry| {
+            let parent_id = entry.get("parentId");
+            let is_root = parent_id.is_none() || parent_id.is_some_and(serde_json::Value::is_null);
+            let direct_membership = entry
+                .get("directMembership")
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false);
+            let is_active = entry
+                .get("isActive")
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(true);
+            if !is_root || !direct_membership || !is_active {
+                return None;
+            }
+            Some(CompanyTenant {
+                id: entry.get("id")?.as_str()?.to_string(),
+                display_name: entry.get("displayName")?.as_str()?.to_string(),
+                slug: entry.get("slug")?.as_str()?.to_string(),
+                active: entry
+                    .get("active")
+                    .and_then(serde_json::Value::as_bool)
+                    .unwrap_or(false),
+            })
+        })
+        .collect::<Vec<_>>();
+    tenants.sort_by_key(|tenant| (!tenant.active, tenant.display_name.to_ascii_lowercase()));
+    if tenants.is_empty() {
+        return Err("No active company workspaces are available for this account. Ask a company administrator to add you, then sign in again.".to_string());
+    }
+    Ok(tenants)
+}
+
+#[tauri::command]
+fn get_company_tenants() -> Result<Vec<CompanyTenant>, String> {
+    list_company_tenants()
 }
 
 fn project_directory(parent: &Path, project_name: &str) -> PathBuf {
@@ -809,7 +871,7 @@ fn homebrew_install_step(app: &AppHandle) -> BootstrapResult {
     command_result("homebrew", false, "Homebrew did not become available after macOS completed the installer.", Some("Retry EAI Setup or install Homebrew from the official signed package"), None, true)
 }
 
-fn run_bootstrap_sync(app: AppHandle, step: String, project_name: Option<String>, directory: Option<String>, admin_password: Option<String>) -> BootstrapResult {
+fn run_bootstrap_sync(app: AppHandle, step: String, project_name: Option<String>, directory: Option<String>, admin_password: Option<String>, company_tenant_id: Option<String>) -> BootstrapResult {
     match step.as_str() {
         "homebrew" => homebrew_install_step(&app),
         "git" => package_install_step(&app, "git", "git", "Git installation completed.", admin_password.as_deref()),
@@ -862,9 +924,21 @@ fn run_bootstrap_sync(app: AppHandle, step: String, project_name: Option<String>
             if !directory.is_dir() {
                 return command_result("init", false, "The app folder could not be created.", Some("Choose a writable parent folder and retry."), None, true);
             }
-            match run_program_in_directory("eai", &["init", &name, "--current-dir", "--skip-prompts", "--no-splash"], Some(&directory)) {
-                Ok((stdout, stderr)) => command_result("init", true, "The app was initialised and the Gofer assets are ready.", Some("eai init <project-name> --current-dir --skip-prompts --no-splash"), Some(format!("{stdout}\n{stderr}")), false),
-                Err(error) => command_result("init", false, &error, Some("eai init <project-name> --current-dir --skip-prompts --no-splash"), None, true),
+            let Some(company_tenant_id) = company_tenant_id.filter(|value| !value.trim().is_empty()) else {
+                return command_result("init", false, "Choose a company workspace before creating the app.", Some("Select a company workspace in EAI Setup, then retry."), None, true);
+            };
+            let init_args = [
+                "init",
+                &name,
+                "--company-tenant",
+                company_tenant_id.as_str(),
+                "--current-dir",
+                "--skip-prompts",
+                "--no-splash",
+            ];
+            match run_program_in_directory("eai", &init_args, Some(&directory)) {
+                Ok((stdout, stderr)) => command_result("init", true, "The app was initialised and the Gofer assets are ready.", Some("eai init <project-name> --company-tenant <company-tenant-id> --current-dir --skip-prompts --no-splash"), Some(format!("{stdout}\n{stderr}")), false),
+                Err(error) => command_result("init", false, &error, Some("eai init <project-name> --company-tenant <company-tenant-id> --current-dir --skip-prompts --no-splash"), None, true),
             }
         }
         _ => command_result(&step, false, "Unsupported bootstrap step.", None, None, false),
@@ -872,9 +946,9 @@ fn run_bootstrap_sync(app: AppHandle, step: String, project_name: Option<String>
 }
 
 #[tauri::command]
-async fn run_bootstrap(app: AppHandle, step: String, project_name: Option<String>, directory: Option<String>, admin_password: Option<String>) -> BootstrapResult {
+async fn run_bootstrap(app: AppHandle, step: String, project_name: Option<String>, directory: Option<String>, admin_password: Option<String>, company_tenant_id: Option<String>) -> BootstrapResult {
     let failure_step = step.clone();
-    match tauri::async_runtime::spawn_blocking(move || run_bootstrap_sync(app, step, project_name, directory, admin_password)).await {
+    match tauri::async_runtime::spawn_blocking(move || run_bootstrap_sync(app, step, project_name, directory, admin_password, company_tenant_id)).await {
         Ok(result) => result,
         Err(error) => command_result(
             &failure_step,
@@ -921,7 +995,7 @@ fn local_device_id() -> Result<String, String> {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![detect_environment, run_bootstrap, open_signup, local_device_id])
+        .invoke_handler(tauri::generate_handler![detect_environment, run_bootstrap, get_company_tenants, open_signup, local_device_id])
         .run(tauri::generate_context!())
         .expect("error while running EAI Setup");
 }
