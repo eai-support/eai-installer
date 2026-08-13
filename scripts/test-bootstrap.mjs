@@ -163,6 +163,12 @@ for (const value of ["id=\"choose-folder\"", "Use lowercase words separated by h
   if (!wizard.includes(value)) throw new Error(`wizard: missing project location guidance: ${value}`);
 }
 if (!wizard.includes("Create an EAI account")) throw new Error("wizard: account signup action is missing");
+for (const value of ["Start building with EAI", "id=\"complete-location\"", "data-action=\"open-project\"", "Open project folder"]) {
+  if (!wizard.includes(value)) throw new Error(`wizard: completion guidance is missing: ${value}`);
+}
+if (wizard.includes('id="next-command"') || wizard.includes("completion-command")) {
+  throw new Error("wizard: internal init command must not be shown on the completion screen");
+}
 for (const obsolete of ["progress-area", "Step 3 of 6", "Step ${index + 1} of ${steps.length}", "Install missing tools", "I am signed in"]) {
   if (wizard.includes(obsolete)) throw new Error(`wizard: unnecessary user step remains: ${obsolete}`);
 }
@@ -173,7 +179,7 @@ for (const control of ["id=\"activity\"", "id=\"activity-title\"", "id=\"activit
 if (!wizard.includes("Recent activity")) throw new Error("wizard: recent activity heading is missing");
 const app = await readFile(new URL("../ui/app.js", import.meta.url), "utf8");
 if (app.includes('steps.push("homebrew")')) throw new Error("wizard: Homebrew must not be a required setup step");
-if (!app.includes("setActivity") || !app.includes("Installation complete") || !app.includes("listenForBootstrapProgress") || !app.includes("eventApi.listen") || !app.includes("renderInstallItems") || !app.includes("setDetectionState") || !app.includes("phaseForTitle") || !app.includes("async function startSetup") || !app.includes("window.setTimeout(() => startSetup(), 250)") || !app.includes("setStep(4)") || !app.includes("async function runSignup") || !app.includes("open_signup") || !app.includes("dialog.open") || !app.includes("choose-folder") || !app.includes("get_company_tenants") || !app.includes("companyTenantId")) {
+if (!app.includes("setActivity") || !app.includes("Installation complete") || !app.includes("listenForBootstrapProgress") || !app.includes("eventApi.listen") || !app.includes("renderInstallItems") || !app.includes("setDetectionState") || !app.includes("phaseForTitle") || !app.includes("async function startSetup") || !app.includes("window.setTimeout(() => startSetup(), 250)") || !app.includes("setStep(4)") || !app.includes("async function runSignup") || !app.includes("open_signup") || !app.includes("dialog.open") || !app.includes("choose-folder") || !app.includes("get_company_tenants") || !app.includes("companyTenantId") || !app.includes("open_project") || !app.includes("projectPath")) {
   throw new Error("wizard: live activity status updates are missing");
 }
 for (const value of ["loadAiSurfaces", "renderAiSurfaces", "startAiSurface", "detect_ai_surfaces", "start_ai_surface", "install_ai_surface"]) {

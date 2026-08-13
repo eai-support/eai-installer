@@ -40,12 +40,12 @@ The public release channel serves native installers directly from GitHub
 Releases. The links download the file itself, not a GitHub Actions artifact
 ZIP:
 
-- [macOS Apple Silicon DMG](https://github.com/eai-tools/eai-installer/releases/latest/download/eai-setup-macos-arm64.dmg)
-- [macOS Intel DMG](https://github.com/eai-tools/eai-installer/releases/latest/download/eai-setup-macos-x64.dmg)
-- [Windows x64 installer](https://github.com/eai-tools/eai-installer/releases/latest/download/eai-setup-windows-x64.exe)
-- [Windows ARM64 installer](https://github.com/eai-tools/eai-installer/releases/latest/download/eai-setup-windows-arm64.exe)
-- [Ubuntu/Debian x64 package](https://github.com/eai-tools/eai-installer/releases/latest/download/eai-setup-ubuntu-amd64.deb)
-- [Ubuntu/Debian ARM64 package](https://github.com/eai-tools/eai-installer/releases/latest/download/eai-setup-ubuntu-arm64.deb)
+- [macOS Apple Silicon DMG](https://github.com/eai-support/eai-installer/releases/latest/download/eai-setup-macos-arm64.dmg)
+- [macOS Intel DMG](https://github.com/eai-support/eai-installer/releases/latest/download/eai-setup-macos-x64.dmg)
+- [Windows x64 installer](https://github.com/eai-support/eai-installer/releases/latest/download/eai-setup-windows-x64.exe)
+- [Windows ARM64 installer](https://github.com/eai-support/eai-installer/releases/latest/download/eai-setup-windows-arm64.exe)
+- [Ubuntu/Debian x64 package](https://github.com/eai-support/eai-installer/releases/latest/download/eai-setup-ubuntu-amd64.deb)
+- [Ubuntu/Debian ARM64 package](https://github.com/eai-support/eai-installer/releases/latest/download/eai-setup-ubuntu-arm64.deb)
 
 Choose the Ubuntu/Debian package that matches the computer's architecture. The
 ARM64 package is intended for ARM64 Linux machines such as Apple Silicon VMs;
@@ -130,4 +130,5 @@ release` workflow when a direct, native test download is needed.
 - [Installer contract](docs/installer-contract.md)
 - [Testing and release gates](docs/testing.md)
 - [Releasing and semantic versioning](docs/releasing.md)
+- [Release end-to-end gate](docs/release-e2e.md)
 - [Security policy](SECURITY.md)

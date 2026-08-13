@@ -25,13 +25,35 @@ Ubuntu.
 
 ## Production release
 
-After the release PR is merged, create and push the matching tag, for example:
+After the release PR is merged, run the release controller with the matching
+version:
 
 ```bash
-git tag v0.1.4
-git push origin v0.1.4
+./release.sh publish 0.1.4
 ```
 
-The release workflow validates that the tag and all source versions match,
-then requires the configured signing and notarization credentials before
-publishing the customer release.
+It creates and pushes the matching tag. The release workflow validates that
+the tag and all source versions match, then requires the configured signing and
+notarization credentials before publishing the customer release.
+
+## End-to-end release gate
+
+Use the repository release controller after the release PR has merged:
+
+```bash
+./release.sh publish 0.2.0
+```
+
+It waits for the GitHub release, downloads the exact assets from that release,
+and runs the macOS, Windows, and Ubuntu VM adapters. A release is not complete
+when package CI passes alone. The VM adapters must complete browser sign-in,
+tenant selection, app creation, generated-project verification, and cleanup.
+Before creating the tag, `publish` runs a live preflight. It requires a
+protected test tenant, one real VM command per operating system, and the
+approved V4 app-deprovision adapter. If any is missing, no tag is created and
+no test app is created.
+
+There is no local mock or bypass mode. To rerun a published release after
+repairing a VM or platform dependency, use `./release.sh e2e <version>` with
+the same protected live configuration. A code fix requires a new patch,
+because the release gate must test the exact published asset.

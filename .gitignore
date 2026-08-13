@@ -4,6 +4,7 @@ node_modules/
 .npm/
 target/
 dist/
+artifacts/
 src-tauri/gen/
 .env
 .env.*

@@ -36,9 +36,23 @@ A release is incomplete until all of the following are true:
    browser login and project handoff without storing a credential.
 5. A smoke project confirms `eai init` fetched the supported Gofer/template
    assets and that the generated repository is usable.
+6. The exact published assets pass the three-machine release gate and every
+   test app has a verified cleanup receipt.
 
 The clean-machine test belongs in a controlled release environment. It should
 use a test tenant and test user, not production credentials.
+
+The release controller is run by `release.sh`. It has no mock mode and cannot
+declare a release healthy from simulated installer files, simulated tenant
+records, or a synthetic cleanup receipt. The live gate fails closed before
+downloading assets or creating an app unless the protected VM commands,
+test-tenant ID, and approved V4 app-deprovision adapter are configured.
+
+`npm test` checks this contract. The live release gate must be run from a
+protected release environment with real GitHub release assets, real clean
+machines, real EAI authentication, and real tenant cleanup. It is intentionally
+not a GitHub-hosted unit test because it needs interactive operating-system
+installers, browser sign-in, and a tenant-admin cleanup action.
 
 ## Test installer downloads
 

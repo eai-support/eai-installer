@@ -43,6 +43,7 @@ struct BootstrapResult {
     message: String,
     command: Option<String>,
     output: Option<String>,
+    project_path: Option<String>,
     requires_user_action: bool,
     project_directory: Option<String>,
 }
@@ -411,6 +412,7 @@ fn command_result(step: &str, ok: bool, message: &str, command: Option<&str>, ou
         message: message.to_string(),
         command: command.map(ToString::to_string),
         output,
+        project_path: None,
         requires_user_action,
         project_directory: None,
     }
@@ -981,6 +983,7 @@ fn run_bootstrap_sync(app: AppHandle, step: String, project_name: Option<String>
                 Ok((stdout, stderr)) => {
                     let mut result = command_result("init", true, "The app was initialised and the Gofer assets are ready.", Some("eai init <project-name> --company-tenant <company-tenant-id> --current-dir --skip-prompts --no-splash"), Some(format!("{stdout}\n{stderr}")), false);
                     result.project_directory = Some(directory.to_string_lossy().to_string());
+                    result.project_path = Some(directory.to_string_lossy().to_string());
                     result
                 }
                 Err(error) => command_result("init", false, &error, Some("eai init <project-name> --company-tenant <company-tenant-id> --current-dir --skip-prompts --no-splash"), None, true),
@@ -1053,6 +1056,23 @@ fn install_ai_surface(surface_id: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+fn open_project(path: String) -> Result<(), String> {
+    let directory = PathBuf::from(path);
+    if !directory.is_dir() {
+        return Err("The project folder is no longer available.".to_string());
+    }
+    let directory = directory.to_string_lossy().to_string();
+    let result = if cfg!(target_os = "macos") {
+        run_program("open", &[&directory])
+    } else if cfg!(target_os = "windows") {
+        run_program("explorer.exe", &[&directory])
+    } else {
+        run_program("xdg-open", &[&directory])
+    };
+    result.map(|_| ())
+}
+
+#[tauri::command]
 fn local_device_id() -> Result<String, String> {
     let home = if cfg!(target_os = "windows") {
         env::var("USERPROFILE").map_err(|_| "user profile directory is unavailable".to_string())?
@@ -1074,7 +1094,7 @@ fn local_device_id() -> Result<String, String> {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![detect_environment, run_bootstrap, get_company_tenants, open_signup, detect_ai_surfaces, start_ai_surface, install_ai_surface, local_device_id])
+        .invoke_handler(tauri::generate_handler![detect_environment, run_bootstrap, get_company_tenants, open_signup, detect_ai_surfaces, start_ai_surface, install_ai_surface, open_project, local_device_id])
         .run(tauri::generate_context!())
         .expect("error while running EAI Setup");
 }
