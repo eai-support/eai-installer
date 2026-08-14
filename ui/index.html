@@ -75,7 +75,13 @@
               <label for="company-tenant">Company workspace
                 <select id="company-tenant" aria-describedby="company-tenant-help"></select>
               </label>
-              <p class="field-help" id="company-tenant-help">Choose where this app will be created.</p>
+              <p class="field-help" id="company-tenant-help">Choose where this app is managed.</p>
+            </div>
+            <div id="app-selection-field" hidden>
+              <label for="app-selection">App
+                <select id="app-selection" aria-describedby="app-selection-help"></select>
+              </label>
+              <p class="field-help" id="app-selection-help">Use an existing app or choose Create a new app.</p>
             </div>
             <label for="project-name">Project name <input id="project-name" placeholder="customer-portal" autocomplete="off" aria-describedby="project-name-help" /></label>
             <p class="field-help" id="project-name-help">Use lowercase words separated by hyphens. Example: <code>customer-portal</code>.</p>
@@ -88,7 +94,7 @@
           </div>
           <p class="field-help" id="project-directory-help">A new folder with your project name will be created here. Use Choose folder to open Finder or File Explorer.</p>
           <div class="panel-actions end">
-            <button class="primary" data-action="init">Create and initialise app</button>
+            <button class="primary" id="init-app" data-action="init">Create and initialise app</button>
           </div>
         </section>
 
