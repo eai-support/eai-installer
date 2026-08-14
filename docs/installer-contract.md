@@ -43,6 +43,9 @@ commands.
   then passes that explicit workspace to `eai init --company-tenant`.
 - A project is created only in a user-selected directory, or in an explicit
   new folder derived from a validated kebab-case project name.
+- When app creation finishes, the installer shows the exact project folder and
+  opens it in Finder, File Explorer, or the Linux file manager. It does not
+  ask the user to copy or run an internal bootstrap command.
 - Gofer and the app template are fetched by `eai init`, so the CLI's supported
   provenance and compatibility checks remain in charge.
 - Supported AI workspaces are detected through `eai start --check --format

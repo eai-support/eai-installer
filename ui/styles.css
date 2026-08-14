@@ -89,7 +89,7 @@ button:focus-visible { outline: 3px solid rgba(27, 109, 80, .25); outline-offset
 button:disabled { cursor: not-allowed; opacity: .5; }
 .primary { background: #1b6d50; border-color: #1b6d50; color: #fff; }
 .primary:hover:not(:disabled) { background: #15583f; color: #fff; }
-.completion-command { display: inline-block; margin-top: 20px; padding: 12px 14px; background: #202b31; color: #ecf3f1; border-radius: 5px; }
+.completion-location { margin-top: 20px; padding: 14px 16px; border: 1px solid #c9d9e0; border-radius: 5px; background: #f4f8f9; color: #35444c; font-size: 14px; overflow-wrap: anywhere; }
 .surface-field { margin: 22px 0 12px; padding: 0; border: 0; }
 .surface-field legend { margin-bottom: 9px; font-size: 13px; font-weight: 700; }
 .surface-options { display: grid; gap: 8px; }

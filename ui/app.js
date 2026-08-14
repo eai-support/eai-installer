@@ -2,7 +2,8 @@ const output = document.querySelector("#output");
 const platform = document.querySelector("#platform");
 const panels = [...document.querySelectorAll("[data-panel]")];
 const completeMessage = document.querySelector("#complete-message");
-const nextCommand = document.querySelector("#next-command");
+const completeLocation = document.querySelector("#complete-location");
+const openProjectButton = document.querySelector("#open-project");
 const activity = document.querySelector("#activity");
 const activityTitle = document.querySelector("#activity-title");
 const activityDetail = document.querySelector("#activity-detail");
@@ -42,6 +43,7 @@ let selectedCompanyTenantId = null;
 let createdProjectDirectory = null;
 let aiSurfaceInventory = null;
 let selectedAiSurfaceId = null;
+let projectPath = null;
 const activityEvents = [];
 
 const stepLabels = {
@@ -541,10 +543,16 @@ async function runInit() {
   }
   completeMessage.textContent = result.demo
     ? "Preview complete. The signed desktop app will run eai init in the selected folder."
-    : `The ${name} app was initialised successfully.`;
-  nextCommand.textContent = result.command ? result.command.replace("<project-name>", name) : "eai whoami";
+    : `The ${name} app was created successfully. Open its folder to start building.`;
+  projectPath = result.project_path || null;
   wizard.projectName = name;
   createdProjectDirectory = result.project_directory || (directory.endsWith(`/${name}`) || directory.endsWith(`\\${name}`) ? directory : `${directory}/${name}`);
+  if (!projectPath) projectPath = createdProjectDirectory;
+  if (completeLocation) {
+    completeLocation.textContent = projectPath ? `Project folder: ${projectPath}` : "Your project folder is ready.";
+    completeLocation.hidden = !projectPath;
+  }
+  if (openProjectButton) openProjectButton.hidden = !projectPath || demoMode;
   setStep(5);
   setActivity("Setup complete", "Your EAI app and developer tools are ready.", 100, false);
   showOutput("Setup complete.");
@@ -611,7 +619,6 @@ async function loadAiSurfaces() {
     renderAiSurfaces();
   } catch (error) {
     aiSurfaceStatus.innerHTML = "<strong>AI workspace check needs attention</strong><p>You can close setup and run <code>eai start</code> from the project folder.</p>";
-    nextCommand.textContent = "eai start";
     showOutput("Your app is ready, but AI workspace detection did not finish.", String(error));
   }
 }
@@ -634,7 +641,6 @@ async function startAiSurface() {
     const result = await invoke("start_ai_surface", { directory: createdProjectDirectory, surfaceId: surface.id });
     setActivity(`${surface.name} started`, result.message || "Your project was handed to the AI workspace.", 100, false, "", "Ready");
     completeMessage.textContent = `${surface.name} has this EAI project ready.`;
-    nextCommand.textContent = result.preparedPrompt ? "Review the prepared request, then send it." : "Start with /eai";
     startAiButton.textContent = `Open ${surface.name} again`;
     showOutput("AI workspace started.", "Setup will stay open until you close it.");
   } catch (error) {
@@ -680,6 +686,18 @@ async function runAction(action) {
   }
   if (action === "init") return runInit();
   if (action === "start-ai") return startAiSurface();
+  if (action === "open-project") {
+    if (!projectPath) return;
+    try {
+      await invoke("open_project", { path: projectPath });
+      setActivity("Project folder opened", "Your EAI app is ready in the file manager.", 100, false, "", "Ready");
+      showOutput("Project folder opened.");
+    } catch (error) {
+      showOutput("The project folder could not be opened.", String(error));
+      setActivity("Project folder could not open", "Use the folder location shown above to open it manually.", 100, false, "", "Error");
+    }
+    return;
+  }
   if (action === "finish") showOutput("You can close this window.");
 }
 
