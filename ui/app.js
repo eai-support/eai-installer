@@ -22,6 +22,10 @@ const adminPasswordSubmit = document.querySelector("#admin-password-submit");
 const adminPasswordCancel = document.querySelector("#admin-password-cancel");
 const companyTenantField = document.querySelector("#company-tenant-field");
 const companyTenantSelect = document.querySelector("#company-tenant");
+const appSelectionField = document.querySelector("#app-selection-field");
+const appSelection = document.querySelector("#app-selection");
+const projectNameInput = document.querySelector("#project-name");
+const initAppButton = document.querySelector("#init-app");
 const aiSurfaceStatus = document.querySelector("#ai-surface-status");
 const aiSurfaceField = document.querySelector("#ai-surface-field");
 const aiSurfaceOptions = document.querySelector("#ai-surface-options");
@@ -40,6 +44,7 @@ let activityLastHeartbeatLogAt = 0;
 let pendingAdminPassword = null;
 let companyTenants = [];
 let selectedCompanyTenantId = null;
+let selectedCompanyAppKey = null;
 let createdProjectDirectory = null;
 let aiSurfaceInventory = null;
 let selectedAiSurfaceId = null;
@@ -444,6 +449,7 @@ function renderCompanyTenants() {
   if (companyTenants.length === 1) {
     selectedCompanyTenantId = companyTenants[0].id;
     companyTenantField.hidden = true;
+    renderCompanyApps();
     return;
   }
 
@@ -462,6 +468,71 @@ function renderCompanyTenants() {
     companyTenantSelect.append(option);
   }
   companyTenantField.hidden = false;
+  renderCompanyApps();
+}
+
+function selectedCompanyTenant() {
+  return companyTenants.find((tenant) => tenant.id === selectedCompanyTenantId) || null;
+}
+
+function renderCompanyApps() {
+  if (!appSelectionField || !appSelection) return;
+  const tenant = selectedCompanyTenant();
+  const apps = Array.isArray(tenant?.apps) ? tenant.apps : [];
+  appSelection.replaceChildren();
+  selectedCompanyAppKey = null;
+
+  if (apps.length === 0) {
+    appSelectionField.hidden = true;
+    if (projectNameInput) {
+      projectNameInput.readOnly = false;
+      projectNameInput.value = "";
+    }
+    if (initAppButton) initAppButton.textContent = "Create and initialise app";
+    return;
+  }
+
+  const createOption = document.createElement("option");
+  createOption.value = "";
+  createOption.textContent = "Create a new app";
+  appSelection.append(createOption);
+  for (const app of apps) {
+    const option = document.createElement("option");
+    option.value = app.key;
+    option.textContent = `${app.displayName} (${app.key}) · ${app.status}`;
+    appSelection.append(option);
+  }
+  appSelection.value = "";
+  appSelectionField.hidden = false;
+  if (projectNameInput) projectNameInput.readOnly = false;
+  if (initAppButton) initAppButton.textContent = "Create and initialise app";
+}
+
+function selectCompanyApp() {
+  selectedCompanyAppKey = appSelection?.value || null;
+  if (selectedCompanyAppKey) {
+    if (projectNameInput) {
+      projectNameInput.value = selectedCompanyAppKey;
+      projectNameInput.readOnly = true;
+    }
+    if (initAppButton) initAppButton.textContent = "Use app and initialise project";
+    const app = selectedCompanyTenant()?.apps?.find((item) => item.key === selectedCompanyAppKey);
+    setActivity(
+      "Existing app selected",
+      `The local project will use ${app?.displayName || selectedCompanyAppKey}. No new platform app will be created.`,
+      100,
+      false,
+      "Ready",
+      "Ready",
+    );
+    return;
+  }
+  if (projectNameInput) {
+    projectNameInput.value = "";
+    projectNameInput.readOnly = false;
+  }
+  if (initAppButton) initAppButton.textContent = "Create and initialise app";
+  setActivity("Create a new app", "Enter a project name and choose its parent folder.", 100, false, "Ready", "Ready");
 }
 
 async function loadCompanyTenants() {
@@ -505,7 +576,7 @@ async function runSignup() {
 }
 
 async function runInit() {
-  const name = document.querySelector("#project-name").value.trim();
+  const name = projectNameInput.value.trim();
   const directory = document.querySelector("#project-directory").value.trim();
   if (!EAIWizard.isKebabCase(name)) {
     showOutput("Use lowercase words separated by hyphens, for example customer-portal.");
@@ -527,7 +598,7 @@ async function runInit() {
   startActivityHeartbeat("init");
   let result;
   try {
-    result = await invoke("run_bootstrap", { step: "init", projectName: name, directory: directory || null, companyTenantId: selectedCompanyTenantId });
+    result = await invoke("run_bootstrap", { step: "init", projectName: name, directory: directory || null, companyTenantId: selectedCompanyTenantId, appKey: selectedCompanyAppKey });
   } catch (error) {
     showOutput("App initialisation could not start.", String(error));
     setActivity("App setup failed", `The app could not finish initialising: ${String(error)}`, 0, false, "", "Error");
@@ -543,7 +614,9 @@ async function runInit() {
   }
   completeMessage.textContent = result.demo
     ? "Preview complete. The signed desktop app will run eai init in the selected folder."
-    : `The ${name} app was created successfully. Open its folder to start building.`;
+    : selectedCompanyAppKey
+      ? `The ${name} project is connected to your existing EAI app. Open its folder to start building.`
+      : `The ${name} app was created successfully. Open its folder to start building.`;
   projectPath = result.project_path || null;
   wizard.projectName = name;
   createdProjectDirectory = result.project_directory || (directory.endsWith(`/${name}`) || directory.endsWith(`\\${name}`) ? directory : `${directory}/${name}`);
@@ -678,10 +751,15 @@ async function runAction(action) {
   }
   if (action === "select-company-tenant") {
     selectedCompanyTenantId = companyTenantSelect?.value || null;
+    renderCompanyApps();
     if (selectedCompanyTenantId) {
       const tenant = companyTenants.find((item) => item.id === selectedCompanyTenantId);
       setActivity("Company workspace selected", `${tenant?.displayName || "Company workspace"} will own this app.`, 100, false, "", "Ready");
     }
+    return;
+  }
+  if (action === "select-company-app") {
+    selectCompanyApp();
     return;
   }
   if (action === "init") return runInit();
@@ -711,6 +789,7 @@ for (const button of document.querySelectorAll("[data-action]")) {
   button.addEventListener("click", () => runAction(button.dataset.action));
 }
 companyTenantSelect?.addEventListener("change", () => runAction("select-company-tenant"));
+appSelection?.addEventListener("change", () => runAction("select-company-app"));
 
 setStep(0);
 // The installer should make the first decision itself. The button remains as
