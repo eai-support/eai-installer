@@ -1,6 +1,6 @@
 [package]
 name = "eai-setup"
-version = "0.2.0"
+version = "0.3.0"
 description = "EAI Setup desktop bootstrapper"
 authors = ["Enterprise AI Group"]
 edition = "2021"
