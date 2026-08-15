@@ -9,7 +9,9 @@ usage() {
 Usage:
   ./release.sh <patch|minor|major> [message]
   ./release.sh publish <version>
+  ./release.sh publish-diagnostic <version>
   ./release.sh e2e <version>
+  ./release.sh diagnostic-e2e <version>
 
 The version commands create a release PR. They never push directly to main.
 After that PR is merged, `publish` tags the merged version, waits for the
@@ -20,6 +22,8 @@ Examples:
   ./release.sh patch "Improve clean-machine bootstrap"
   ./release.sh minor "Add release VM gate"
   ./release.sh publish 0.2.0
+  ./release.sh publish-diagnostic 0.3.0
+  ./release.sh diagnostic-e2e 0.3.0
 EOF
 }
 
@@ -95,11 +99,31 @@ publish_release() {
   git show-ref --verify --quiet "refs/tags/$tag" && die "Local tag already exists: $tag"
   git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1 && die "Remote tag already exists: $tag"
   npm test
-  node scripts/release-e2e.mjs --version "$version" --repo "$REPO" --tag "$tag" --driver "${EAI_VM_DRIVER:-command}" --deprovision "${EAI_DEPROVISION_MODE:-api}" --preflight
+  node scripts/release-e2e.mjs --version "$version" --repo "$REPO" --tag "$tag" --driver "${EAI_VM_DRIVER:-command}" --deprovision api --preflight
   git tag -a "$tag" -m "EAI Setup v$version"
   git push origin "$tag"
   wait_for_release_workflow "$tag"
-  node scripts/release-e2e.mjs --version "$version" --repo "$REPO" --tag "$tag" --driver "${EAI_VM_DRIVER:-command}" --deprovision "${EAI_DEPROVISION_MODE:-api}"
+  node scripts/release-e2e.mjs --version "$version" --repo "$REPO" --tag "$tag" --driver "${EAI_VM_DRIVER:-command}" --deprovision api
+}
+
+publish_diagnostic_release() {
+  local version="$1"
+  [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "publish-diagnostic requires MAJOR.MINOR.PATCH"
+  require_command git
+  require_command node
+  require_command gh
+  cd "$ROOT"
+  ensure_clean_main
+  [[ "$(version_from_source)" == "$version" ]] || die "package.json is $(version_from_source), not $version"
+  local tag="v$version"
+  git show-ref --verify --quiet "refs/tags/$tag" && die "Local tag already exists: $tag"
+  git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1 && die "Remote tag already exists: $tag"
+  npm test
+  node scripts/release-e2e.mjs --version "$version" --repo "$REPO" --tag "$tag" --driver "${EAI_VM_DRIVER:-command}" --deprovision mock --diagnostic --preflight
+  git tag -a "$tag" -m "EAI Setup v$version (diagnostic cleanup)"
+  git push origin "$tag"
+  wait_for_release_workflow "$tag"
+  node scripts/release-e2e.mjs --version "$version" --repo "$REPO" --tag "$tag" --driver "${EAI_VM_DRIVER:-command}" --deprovision mock --diagnostic
 }
 
 run_e2e() {
@@ -108,6 +132,14 @@ run_e2e() {
   require_command node
   cd "$ROOT"
   node scripts/release-e2e.mjs --version "$version" --repo "$REPO" "$@"
+}
+
+run_diagnostic_e2e() {
+  local version="$1"
+  shift
+  require_command node
+  cd "$ROOT"
+  node scripts/release-e2e.mjs --version "$version" --repo "$REPO" "$@" --driver command --deprovision mock --diagnostic
 }
 
 command="${1:-}"
@@ -119,11 +151,21 @@ case "$command" in
     [[ -n "${2:-}" ]] || { usage; exit 2; }
     publish_release "$2"
     ;;
+  publish-diagnostic)
+    [[ -n "${2:-}" ]] || { usage; exit 2; }
+    publish_diagnostic_release "$2"
+    ;;
   e2e)
     [[ -n "${2:-}" ]] || { usage; exit 2; }
     version="$2"
     shift 2
     run_e2e "$version" "$@"
+    ;;
+  diagnostic-e2e)
+    [[ -n "${2:-}" ]] || { usage; exit 2; }
+    version="$2"
+    shift 2
+    run_diagnostic_e2e "$version" "$@"
     ;;
   *)
     usage

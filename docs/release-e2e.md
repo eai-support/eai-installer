@@ -26,8 +26,33 @@ exact release assets, and runs the VM gate. A failed code gate requires a new
 patch version. A transient VM failure may rerun the same immutable tag after
 the environment is repaired.
 
-There is no mock mode. The controller cannot claim success from simulated
-installer files, simulated tenant records, or a synthetic cleanup receipt.
+When app deletion is intentionally unavailable, use the separate
+`publish-diagnostic` command:
+
+```bash
+./release.sh publish-diagnostic 0.3.0
+```
+
+This publishes the release after the real guest checks are configured, but
+uses diagnostic-only cleanup and leaves the created test apps in the harness
+tenant. Its E2E evidence is `passed_with_mock_cleanup`, not a clean-release
+approval. The normal `publish` command remains real-cleanup-only.
+
+The production release gate has no mock mode. It cannot claim success from
+simulated installer files, simulated tenant records, or a synthetic cleanup
+receipt.
+
+For installer diagnosis only, run the explicitly labelled diagnostic command:
+
+    ./release.sh diagnostic-e2e 0.3.0
+
+This still downloads the published GitHub assets and runs the real macOS,
+Windows, and Ubuntu guest checks. It can create a real test app, but it records
+cleanup as not-verified and does not delete anything. A successful result is
+reported as passed_with_mock_cleanup; it is evidence that the installer and
+guest workflow ran, not evidence that a release is safe to publish. The
+publish command always uses the real V4 cleanup adapter and rejects this
+diagnostic mode.
 
 ## Live VM adapter contract
 
@@ -44,6 +69,30 @@ variables:
 - `EAI_VM_APP_STATE_FILE`, where the adapter must write app creation state
 - `EAI_HARNESS_TENANT_NAME`
 - `EAI_HARNESS_USER_EMAIL`
+
+### What the VM commands mean
+
+The VM commands are release-team adapters, not commands that customers run.
+They are protected scripts maintained by the release owner for the three clean
+guest machines. The controller starts one command per guest and passes the
+published asset, download URL, unique test app name, and receipt paths through
+environment variables.
+
+A macOS adapter may reset or start the Parallels macOS guest, download the DMG
+inside that guest, run the installer, complete the browser sign-in, create the
+test app, and write the JSON receipts back through the shared test folder. The
+Windows adapter does the same with PowerShell and the Windows installer. The
+Ubuntu adapter does the same with a shell script and the Debian package.
+
+The important boundary is that the work happens inside the guest. A host-side
+script that only checks whether a file exists is not a valid VM adapter. In a
+CI environment, the same contract can be implemented by an ephemeral Windows,
+macOS, or Ubuntu runner instead of Parallels.
+
+The release team owns the machine names, Parallels or runner connection,
+browser automation, and protected credentials. These values belong in the
+release environment or OS keychain, never in this repository or a public
+release asset.
 
 The controller requires an OS-specific command for every guest. Do not use a
 shared host command: download, installation, authentication, tenant, and app
@@ -137,9 +186,10 @@ confirmation proof, and `"cleanupVerified": true`:
 }
 ```
 
-The controller marks the release gate failed if cleanup is missing,
+The controller marks the production release gate failed if cleanup is missing,
 unverified, names another app, or does not match whether the guest created an
-app. There is no fake cleanup path.
+app. The diagnostic path is intentionally the only exception, and its report
+cannot be used as production release evidence.
 
 At the time of writing, production EAI does not expose the required whole-app
 V4 deprovision route. The live gate therefore cannot honestly pass until that

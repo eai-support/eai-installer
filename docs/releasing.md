@@ -53,7 +53,18 @@ protected test tenant, one real VM command per operating system, and the
 approved V4 app-deprovision adapter. If any is missing, no tag is created and
 no test app is created.
 
-There is no local mock or bypass mode. To rerun a published release after
-repairing a VM or platform dependency, use `./release.sh e2e <version>` with
-the same protected live configuration. A code fix requires a new patch,
-because the release gate must test the exact published asset.
+There is no local mock or bypass mode for the production gate. To rerun a
+published release after repairing a VM or platform dependency, use
+./release.sh e2e <version> with the same protected live configuration. A code
+fix requires a new patch, because the release gate must test the exact
+published asset.
+
+For installer-only diagnosis while V4 app deletion is unavailable, use
+./release.sh diagnostic-e2e <version>. This runs the real published-asset VM
+workflow but does not delete the created test app, so it is never a release
+approval or a substitute for the live cleanup gate.
+
+If a tagged release is still required before V4 app deletion is available,
+use ./release.sh publish-diagnostic <version>. This is an explicit exception:
+it publishes only after the real guest workflow passes, but its cleanup
+evidence is unverified and the created test apps remain in the harness tenant.
