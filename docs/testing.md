@@ -53,6 +53,11 @@ uses the real published assets and real guest workflow, but deliberately does
 not delete the test app. It reports passed_with_mock_cleanup and must not be
 used to approve or publish a release.
 
+release.sh publish-diagnostic <version> can publish a tagged release while
+using that same diagnostic gate. It is an explicit exception for the period
+before V4 app deletion is available; it leaves test apps behind and must not
+be described as clean-release evidence.
+
 `npm test` checks this contract. The live release gate must be run from a
 protected release environment with real GitHub release assets, real clean
 machines, real EAI authentication, and real tenant cleanup. It is intentionally

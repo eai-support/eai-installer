@@ -63,3 +63,8 @@ For installer-only diagnosis while V4 app deletion is unavailable, use
 ./release.sh diagnostic-e2e <version>. This runs the real published-asset VM
 workflow but does not delete the created test app, so it is never a release
 approval or a substitute for the live cleanup gate.
+
+If a tagged release is still required before V4 app deletion is available,
+use ./release.sh publish-diagnostic <version>. This is an explicit exception:
+it publishes only after the real guest workflow passes, but its cleanup
+evidence is unverified and the created test apps remain in the harness tenant.

@@ -26,6 +26,18 @@ exact release assets, and runs the VM gate. A failed code gate requires a new
 patch version. A transient VM failure may rerun the same immutable tag after
 the environment is repaired.
 
+When app deletion is intentionally unavailable, use the separate
+`publish-diagnostic` command:
+
+```bash
+./release.sh publish-diagnostic 0.3.0
+```
+
+This publishes the release after the real guest checks are configured, but
+uses diagnostic-only cleanup and leaves the created test apps in the harness
+tenant. Its E2E evidence is `passed_with_mock_cleanup`, not a clean-release
+approval. The normal `publish` command remains real-cleanup-only.
+
 The production release gate has no mock mode. It cannot claim success from
 simulated installer files, simulated tenant records, or a synthetic cleanup
 receipt.
