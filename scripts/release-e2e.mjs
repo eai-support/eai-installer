@@ -25,6 +25,10 @@ function parseArgs(argv) {
       result.preflight = true;
       continue;
     }
+    if (value === "--diagnostic") {
+      result.diagnostic = true;
+      continue;
+    }
     if (value.startsWith("--")) {
       const key = value.slice(2);
       const next = argv[index + 1];
@@ -45,9 +49,10 @@ function usage() {
     `  --tag <tag>               Published release tag (default: v<version>)\n` +
     `  --output <directory>      Evidence directory\n` +
     `  --driver command          Real VM adapter (default: EAI_VM_DRIVER or command)\n` +
-    `  --deprovision api         Real V4 app cleanup adapter (default: api)\n` +
+    `  --deprovision api|mock    Real V4 cleanup, or diagnostic-only mock cleanup\n` +
     `  --vms <csv>               VM ids: macos,windows,ubuntu\n` +
     `  --preflight               Validate live credentials, VM drivers, and cleanup before release\n` +
+    `  --diagnostic              Required with --deprovision mock; never valid for publish\n` +
     `  --dry-run                 Print the planned actions without changing a tenant\n`;
 }
 
@@ -175,8 +180,26 @@ async function runVm({ driver, vm, asset, output, release, appName, runId, tenan
   return payload;
 }
 
-async function cleanup({ mode, appName, tenantName, runId, output, appCreated }) {
-  if (mode !== "api") throw new Error(`Only the real V4 cleanup mode is supported; received ${mode}`);
+async function cleanup({ mode, diagnostic, appName, tenantName, runId, output, appCreated }) {
+  if (mode === "mock") {
+    if (!diagnostic) throw new Error("Mock cleanup is diagnostic-only; pass --diagnostic explicitly");
+    const receipt = {
+      status: "not-verified",
+      source: "diagnostic-mock",
+      operationId: `diagnostic-${runId}`,
+      appName,
+      appCreated,
+      confirmation: appName,
+      deletedRecords: null,
+      deletedResources: null,
+      cleanupVerified: false,
+      simulated: true,
+      note: "No tenant records or resources were deleted. Run the real V4 cleanup gate before treating this release as safe to publish.",
+    };
+    writeJson(path.join(output, "cleanup-receipt.json"), receipt);
+    return receipt;
+  }
+  if (mode !== "api") throw new Error(`Unsupported cleanup mode: ${mode}`);
   const command = process.env.EAI_APP_DEPROVISION_COMMAND;
   if (!command) throw new Error("Live cleanup is unavailable: set EAI_APP_DEPROVISION_COMMAND to the approved V4 app deprovision adapter. No test app may be created without it.");
   const receiptPath = path.join(output, "cleanup-receipt.json");
@@ -205,13 +228,15 @@ async function cleanup({ mode, appName, tenantName, runId, output, appCreated })
   return receipt;
 }
 
-function validateLiveConfiguration({ driver, deprovision, vms }) {
+function validateLiveConfiguration({ driver, deprovision, diagnostic, vms }) {
   if (driver !== "command") throw new Error("The release gate only supports real command-driven VMs; mock drivers are removed.");
-  if (deprovision !== "api") throw new Error("The release gate only supports the real V4 app cleanup adapter; mock cleanup is removed.");
+  if (deprovision !== "api" && deprovision !== "mock") throw new Error(`Unsupported cleanup mode: ${deprovision}`);
+  if (deprovision === "mock" && !diagnostic) throw new Error("Mock cleanup is diagnostic-only; pass --diagnostic explicitly.");
+  if (diagnostic && deprovision !== "mock") throw new Error("--diagnostic is only valid with --deprovision mock.");
   if (!process.env.EAI_HARNESS_TENANT_ID) throw new Error("EAI_HARNESS_TENANT_ID is required; the live gate refuses to guess a tenant.");
   if (!/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(process.env.EAI_HARNESS_TENANT_ID)) throw new Error("EAI_HARNESS_TENANT_ID must be a tenant UUID.");
   if (!process.env.EAI_HARNESS_USER_EMAIL) throw new Error("EAI_HARNESS_USER_EMAIL is required; the live gate refuses to guess a test user.");
-  if (!process.env.EAI_APP_DEPROVISION_COMMAND) throw new Error("EAI_APP_DEPROVISION_COMMAND is required before any live app is created.");
+  if (deprovision === "api" && !process.env.EAI_APP_DEPROVISION_COMMAND) throw new Error("EAI_APP_DEPROVISION_COMMAND is required before any live app is created.");
   const missing = vms.filter((vm) => !process.env[`EAI_VM_${vm.toUpperCase()}_COMMAND`]);
   if (missing.length > 0) throw new Error(`Real VM commands are missing for: ${missing.join(", ")}. Set EAI_VM_<VM>_COMMAND for every guest.`);
 }
@@ -229,20 +254,21 @@ async function main() {
   const output = path.resolve(options.output || path.join(root, "artifacts", "release-e2e", options.version, runId));
   const driver = options.driver || process.env.EAI_VM_DRIVER || "command";
   const deprovision = options.deprovision || process.env.EAI_DEPROVISION_MODE || "api";
+  const diagnostic = options.diagnostic === true;
   const vms = String(options.vms || process.env.EAI_RELEASE_VMS || "macos,windows,ubuntu").split(",").map((value) => value.trim()).filter(Boolean);
   const tenantName = process.env.EAI_HARNESS_TENANT_NAME || "EAI release test tenant";
   const release = { version: options.version, tag, repo };
   fs.mkdirSync(output, { recursive: true });
-  const report = { release, runId, tenantName, driver, deprovision, vms, status: "running", assets: [], machines: [] };
+  const report = { release, runId, tenantName, driver, deprovision, diagnostic, vms, status: "running", assets: [], machines: [] };
   writeJson(path.join(output, "release-e2e.json"), report);
 
   if (options.dryRun) {
     console.log(JSON.stringify({ ...report, planned: vms.map((vm) => ({ vm, asset: assetFor(vm), appName: appNameFor(vm, runId) })) }, null, 2));
     return;
   }
-  validateLiveConfiguration({ driver, deprovision, vms });
+  validateLiveConfiguration({ driver, deprovision, diagnostic, vms });
   if (options.preflight) {
-    console.log(JSON.stringify({ status: "ready", release, driver, deprovision, vms, tenantName }, null, 2));
+    console.log(JSON.stringify({ status: "ready", release, driver, deprovision, diagnostic, vms, tenantName }, null, 2));
     return;
   }
 
@@ -276,19 +302,19 @@ async function main() {
         const appState = fs.existsSync(appStatePath) ? JSON.parse(fs.readFileSync(appStatePath, "utf8")) : {};
         const appCreated = appState.appCreated === true || machine.result?.appCreated === true || machine.result?.checks?.app === "passed";
         machine.appCreated = appCreated;
-        machine.cleanup = await cleanup({ mode: deprovision, appName, tenantName, runId, output: path.join(output, vm), appCreated });
+        machine.cleanup = await cleanup({ mode: deprovision, diagnostic, appName, tenantName, runId, output: path.join(output, vm), appCreated });
         machine.cleanupVerified = machine.cleanup.cleanupVerified === true;
-        if (!machine.cleanupVerified) failed = true;
+        if (!machine.cleanupVerified && !diagnostic) failed = true;
       } catch (error) {
         machine.cleanupVerified = false;
         machine.cleanupError = redact(error.message);
-        failed = true;
+        if (!diagnostic) failed = true;
       }
       report.machines.push(machine);
       writeJson(path.join(output, "release-e2e.json"), report);
     }
   }
-  report.status = failed ? "failed" : "passed";
+  report.status = failed ? "failed" : diagnostic ? "passed_with_mock_cleanup" : "passed";
   report.completedAt = new Date().toISOString();
   writeJson(path.join(output, "release-e2e.json"), report);
   console.log(JSON.stringify({ status: report.status, report: path.join(output, "release-e2e.json"), machines: report.machines.map(({ vm, status, cleanupVerified, error, cleanupError }) => ({ vm, status, cleanupVerified, error, cleanupError })) }, null, 2));

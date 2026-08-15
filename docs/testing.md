@@ -42,11 +42,16 @@ A release is incomplete until all of the following are true:
 The clean-machine test belongs in a controlled release environment. It should
 use a test tenant and test user, not production credentials.
 
-The release controller is run by `release.sh`. It has no mock mode and cannot
+The production release controller is run by release.sh publish. It cannot
 declare a release healthy from simulated installer files, simulated tenant
 records, or a synthetic cleanup receipt. The live gate fails closed before
 downloading assets or creating an app unless the protected VM commands,
 test-tenant ID, and approved V4 app-deprovision adapter are configured.
+
+release.sh diagnostic-e2e <version> is available for installer debugging. It
+uses the real published assets and real guest workflow, but deliberately does
+not delete the test app. It reports passed_with_mock_cleanup and must not be
+used to approve or publish a release.
 
 `npm test` checks this contract. The live release gate must be run from a
 protected release environment with real GitHub release assets, real clean

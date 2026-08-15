@@ -17,10 +17,14 @@ assert.match(releaseShell, /patch\|minor\|major/);
 assert.match(releaseShell, /release PR/);
 assert.match(releaseShell, /git push origin "\$tag"/);
 assert.doesNotMatch(releaseShell, /git push origin main/);
-assert.doesNotMatch(releaseShell, /--mock|mock-assets|allow-mock-cleanup/);
-assert.doesNotMatch(runnerSource, /mockPayloadState|mock-app-deprovision|mock installer asset/);
-assert.doesNotMatch(runnerSource, /options\.mock|driver === "mock"|mode === "mock"/);
-assert.equal(fs.existsSync(path.join(root, "scripts", "mock-app-deprovision.mjs")), false);
+assert.match(releaseShell, /diagnostic-e2e/);
+const publishSection = releaseShell.slice(releaseShell.indexOf("publish_release"), releaseShell.indexOf("run_e2e"));
+assert.match(publishSection, /--deprovision api/);
+assert.doesNotMatch(publishSection, /EAI_DEPROVISION_MODE/);
+assert.match(runnerSource, /diagnostic-only/);
+assert.match(runnerSource, /source: "diagnostic-mock"/);
+assert.match(runnerSource, /passed_with_mock_cleanup/);
+assert.match(runnerSource, /cleanupVerified: false/);
 assert.match(runnerSource, /EAI_HARNESS_TENANT_ID/);
 assert.match(runnerSource, /EAI_APP_DEPROVISION_COMMAND/);
 assert.match(runnerSource, /EAI_VM_\$\{vm\.toUpperCase\(\)\}_COMMAND/);
@@ -59,6 +63,39 @@ const blocked = spawnSync(process.execPath, [runner, "--version", "0.2.0", "--ou
 assert.equal(blocked.status, 1);
 assert.match(blocked.stderr, /EAI_HARNESS_TENANT_ID is required/);
 assert.doesNotMatch(blocked.stderr, /mock/i);
+
+const diagnosticEnvironment = {
+  ...cleanEnvironment,
+  EAI_HARNESS_TENANT_ID: "00000000-0000-4000-8000-000000000000",
+  EAI_HARNESS_USER_EMAIL: "release-test@example.invalid",
+  EAI_VM_MACOS_COMMAND: "true",
+  EAI_VM_WINDOWS_COMMAND: "true",
+  EAI_VM_UBUNTU_COMMAND: "true",
+};
+const mockWithoutFlag = spawnSync(process.execPath, [runner, "--version", "0.2.0", "--output", path.join(output, "mock-without-flag"), "--deprovision", "mock", "--preflight"], {
+  cwd: root,
+  encoding: "utf8",
+  env: diagnosticEnvironment,
+});
+assert.equal(mockWithoutFlag.status, 1);
+assert.match(mockWithoutFlag.stderr, /diagnostic-only/);
+
+const diagnosticPreflight = spawnSync(process.execPath, [runner, "--version", "0.2.0", "--output", path.join(output, "diagnostic"), "--deprovision", "mock", "--diagnostic", "--preflight"], {
+  cwd: root,
+  encoding: "utf8",
+  env: diagnosticEnvironment,
+});
+assert.equal(diagnosticPreflight.status, 0);
+assert.match(diagnosticPreflight.stdout, /"deprovision": "mock"/);
+assert.match(diagnosticPreflight.stdout, /"diagnostic": true/);
+
+const diagnosticWithApi = spawnSync(process.execPath, [runner, "--version", "0.2.0", "--output", path.join(output, "diagnostic-with-api"), "--deprovision", "api", "--diagnostic", "--preflight"], {
+  cwd: root,
+  encoding: "utf8",
+  env: diagnosticEnvironment,
+});
+assert.equal(diagnosticWithApi.status, 1);
+assert.match(diagnosticWithApi.stderr, /only valid with --deprovision mock/);
 
 const shellSyntax = execFileSync("bash", ["-n", path.join(root, "release.sh")], {
   cwd: root,
