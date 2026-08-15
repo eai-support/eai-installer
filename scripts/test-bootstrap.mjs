@@ -25,6 +25,9 @@ if (!shell.includes('INSTALL_HOMEBREW="${EAI_SETUP_INSTALL_HOMEBREW:-0}"')) {
 }
 
 const manifest = JSON.parse(await readFile(new URL("../installer-manifest.json", import.meta.url), "utf8"));
+if (manifest.sources.cliRepository !== "https://github.com/eai-support/eai.git" || manifest.sources.goferRepository !== "https://github.com/eai-support/eai-gofer.git") {
+  throw new Error("manifest: CLI and Gofer repositories must use the current public repositories");
+}
 if (manifest.runtime?.accountSignupUrl !== "https://www.enterpriseaigroup.com/signup/developer") {
   throw new Error("manifest: public developer signup URL is missing or incorrect");
 }
@@ -58,6 +61,9 @@ if (!dmgBackgroundSource.includes(">Install Enterprise AI harness</text>") || !d
 }
 
 const rust = await readFile(new URL("../src-tauri/src/main.rs", import.meta.url), "utf8");
+for (const value of ["MIN_EAI_CLI_VERSION", "@enterpriseai/cli", "version\", \"--json", "eai_cli_version()", "latest_eai_cli_requirement()"] ) {
+  if (!rust.includes(value)) throw new Error(`Tauri adapter does not verify the canonical EAI CLI release: ${value}`);
+}
 const windowsIcon = await readFile(new URL("../src-tauri/icons/icon.ico", import.meta.url));
 if (windowsIcon.length < 32 || windowsIcon.readUInt16LE(2) !== 1) {
   throw new Error("Tauri Windows icon resource is missing or invalid");

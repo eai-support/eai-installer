@@ -108,6 +108,12 @@ struct AiLaunchResult {
 
 const EAI_SIGNUP_URL: &str = "https://www.enterpriseaigroup.com/signup/developer";
 
+// This is the minimum CLI version known to be compatible with this installer
+// release. The npm check below lets an older installer update to a newer CLI
+// when one is available, while this floor keeps the flow safe when npm is
+// temporarily unreachable.
+const MIN_EAI_CLI_VERSION: (u64, u64, u64) = (3, 15, 1);
+
 fn emit_progress(
     app: &AppHandle,
     step: &str,
@@ -321,6 +327,33 @@ fn version(program: &str, args: &[&str]) -> Option<String> {
     run_program(program, args).ok().map(|(stdout, stderr)| {
         if stdout.is_empty() { stderr } else { stdout }
     })
+}
+
+fn semantic_version(value: &str) -> Option<(u64, u64, u64)> {
+    let value = value.trim().trim_start_matches('v');
+    let mut parts = value.split('.');
+    Some((
+        parts.next()?.parse().ok()?,
+        parts.next()?.parse().ok()?,
+        parts.next()?.split(|character: char| !character.is_ascii_digit()).next()?.parse().ok()?,
+    ))
+}
+
+fn latest_eai_cli_requirement() -> (u64, u64, u64) {
+    let Some(value) = run_program("npm", &["view", "@enterpriseai/cli", "version", "--json"])
+        .ok()
+        .map(|(stdout, _)| stdout)
+    else {
+        return MIN_EAI_CLI_VERSION;
+    };
+    let value = value.trim().trim_matches('"');
+    semantic_version(value).unwrap_or(MIN_EAI_CLI_VERSION).max(MIN_EAI_CLI_VERSION)
+}
+
+fn eai_cli_version() -> Option<String> {
+    let current = version("eai", &["--version"])?;
+    let current_version = semantic_version(&current)?;
+    (current_version >= latest_eai_cli_requirement()).then_some(current)
 }
 
 fn macos_git_ready() -> bool {
@@ -561,7 +594,7 @@ fn detect_environment() -> EnvironmentReport {
             ToolState { command: "git".to_string(), version: git_version() },
             ToolState { command: "node".to_string(), version: version("node", &["--version"]) },
             ToolState { command: "npm".to_string(), version: version("npm", &["--version"]) },
-            ToolState { command: "eai".to_string(), version: version("eai", &["--version"]) },
+            ToolState { command: "eai".to_string(), version: eai_cli_version() },
         ],
         package_manager,
     }
