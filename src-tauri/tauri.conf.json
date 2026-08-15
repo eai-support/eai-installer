@@ -46,6 +46,11 @@
         }
       }
     },
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    },
     "createUpdaterArtifacts": false
   }
 }

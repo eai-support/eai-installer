@@ -42,6 +42,12 @@ A release is incomplete until all of the following are true:
 The clean-machine test belongs in a controlled release environment. It should
 use a test tenant and test user, not production credentials.
 
+The Windows NSIS bundle uses the current-user install mode. This keeps the EAI
+Setup application in the user's profile and avoids an administrator prompt for
+the installer itself. EAI Setup may still ask for permission when the user
+chooses to install system-managed Git or Node.js prerequisites; that request is
+separate and is shown by the setup window as an explicit action.
+
 The production release controller is run by release.sh publish. It cannot
 declare a release healthy from simulated installer files, simulated tenant
 records, or a synthetic cleanup receipt. The live gate fails closed before
