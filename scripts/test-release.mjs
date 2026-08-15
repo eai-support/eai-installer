@@ -12,6 +12,7 @@ const runner = path.join(root, "scripts", "release-e2e.mjs");
 const releaseShell = fs.readFileSync(path.join(root, "release.sh"), "utf8");
 const runnerSource = fs.readFileSync(runner, "utf8");
 const releaseWorkflow = fs.readFileSync(path.join(root, ".github", "workflows", "release.yml"), "utf8");
+const tauriConfig = JSON.parse(fs.readFileSync(path.join(root, "src-tauri", "tauri.conf.json"), "utf8"));
 const output = fs.mkdtempSync(path.join(os.tmpdir(), "eai-installer-release-contract-"));
 
 assert.match(releaseShell, /patch\|minor\|major/);
@@ -55,6 +56,7 @@ for (const dependency of [
   assert.match(releaseWorkflow, new RegExp(`\\b${dependency.replaceAll(".", "\\.")}\\b`));
 }
 assert.match(releaseWorkflow, /name: Require release signing configuration[\s\S]*name: Check Rust target/);
+assert.equal(tauriConfig.bundle?.windows?.nsis?.installMode, "currentUser");
 
 const dryRun = execFileSync(process.execPath, [runner, "--version", "0.2.0", "--dry-run"], {
   cwd: root,
