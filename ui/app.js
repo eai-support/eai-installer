@@ -49,6 +49,7 @@ let createdProjectDirectory = null;
 let aiSurfaceInventory = null;
 let selectedAiSurfaceId = null;
 let projectPath = null;
+let initInProgress = false;
 const activityEvents = [];
 
 const stepLabels = {
@@ -278,7 +279,16 @@ async function listenForBootstrapProgress() {
 
 function showOutput(message, detail = "") {
   output.hidden = false;
-  output.textContent = detail ? `${message} ${detail}` : message;
+  const cleanMessage = EAIWizard.cleanText(message);
+  const cleanDetail = EAIWizard.cleanText(detail);
+  output.textContent = cleanDetail ? `${cleanMessage} ${cleanDetail}` : cleanMessage;
+}
+
+function setInitButtonBusy(busy) {
+  if (!initAppButton) return;
+  initAppButton.disabled = busy;
+  initAppButton.setAttribute("aria-busy", String(busy));
+  initAppButton.textContent = EAIWizard.initButtonLabel(selectedCompanyAppKey, busy);
 }
 
 async function invoke(command, args = {}) {
@@ -488,7 +498,7 @@ function renderCompanyApps() {
       projectNameInput.readOnly = false;
       projectNameInput.value = "";
     }
-    if (initAppButton) initAppButton.textContent = "Create and initialise app";
+    setInitButtonBusy(false);
     return;
   }
 
@@ -505,7 +515,7 @@ function renderCompanyApps() {
   appSelection.value = "";
   appSelectionField.hidden = false;
   if (projectNameInput) projectNameInput.readOnly = false;
-  if (initAppButton) initAppButton.textContent = "Create and initialise app";
+  setInitButtonBusy(false);
 }
 
 function selectCompanyApp() {
@@ -515,7 +525,7 @@ function selectCompanyApp() {
       projectNameInput.value = selectedCompanyAppKey;
       projectNameInput.readOnly = true;
     }
-    if (initAppButton) initAppButton.textContent = "Use app and initialise project";
+    setInitButtonBusy(false);
     const app = selectedCompanyTenant()?.apps?.find((item) => item.key === selectedCompanyAppKey);
     setActivity(
       "Existing app selected",
@@ -531,7 +541,7 @@ function selectCompanyApp() {
     projectNameInput.value = "";
     projectNameInput.readOnly = false;
   }
-  if (initAppButton) initAppButton.textContent = "Create and initialise app";
+  setInitButtonBusy(false);
   setActivity("Create a new app", "Enter a project name and choose its parent folder.", 100, false, "Ready", "Ready");
 }
 
@@ -576,6 +586,7 @@ async function runSignup() {
 }
 
 async function runInit() {
+  if (initInProgress) return;
   const name = projectNameInput.value.trim();
   const directory = document.querySelector("#project-directory").value.trim();
   if (!EAIWizard.isKebabCase(name)) {
@@ -594,22 +605,28 @@ async function runInit() {
     companyTenantSelect?.focus();
     return;
   }
+  initInProgress = true;
+  setInitButtonBusy(true);
   setActivity("Creating your EAI app", `Initialising ${name} and fetching the supported Gofer assets.`, null);
   startActivityHeartbeat("init");
   let result;
   try {
     result = await invoke("run_bootstrap", { step: "init", projectName: name, directory: directory || null, companyTenantId: selectedCompanyTenantId, appKey: selectedCompanyAppKey });
   } catch (error) {
-    showOutput("App initialisation could not start.", String(error));
-    setActivity("App setup failed", `The app could not finish initialising: ${String(error)}`, 0, false, "", "Error");
+    const failure = EAIWizard.describeInitFailure(error, environmentReport?.platform);
+    showOutput(failure.title, `${failure.detail} Next: ${failure.next}`);
+    setActivity(failure.title, failure.detail, 0, false, "", "Error");
     return;
   } finally {
     stopActivityHeartbeat();
     activeBootstrapStep = null;
+    initInProgress = false;
+    setInitButtonBusy(false);
   }
   if (!result.ok && !result.demo) {
-    showOutput(result.message || "App initialisation failed.", result.command ? `Next: ${result.command.replace("<project-name>", name)}` : "");
-    setActivity("App setup failed", result.message || "The app could not finish initialising. Review recent activity and retry.", 0, false, "", "Error");
+    const failure = EAIWizard.describeInitFailure(result.message, environmentReport?.platform);
+    showOutput(failure.title, `Next: ${failure.next}`);
+    setActivity(failure.title, failure.detail, 0, false, "", "Error");
     return;
   }
   completeMessage.textContent = result.demo

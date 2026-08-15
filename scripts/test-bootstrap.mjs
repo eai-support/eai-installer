@@ -129,6 +129,9 @@ if (!rust.includes("Prefer the user-local archive") || !rust.includes("password 
 if (!rust.includes('command.env("PATH", path)') || !rust.includes(".eai-setup/node/bin") || !rust.includes("versions/node")) {
   throw new Error("Tauri adapter does not expose user-managed Node.js paths to npm child processes");
 }
+if (!rust.includes("fn clean_process_output") || !rust.includes("character == '\\u{1b}'")) {
+  throw new Error("Tauri adapter does not remove terminal control sequences from GUI diagnostics");
+}
 if (!rust.includes("Node.js files were downloaded, but the desktop app could not run node and npm")) {
   throw new Error("Tauri adapter reports Node.js ready before verifying the installed executables");
 }
@@ -188,7 +191,7 @@ for (const control of ["id=\"activity\"", "id=\"activity-title\"", "id=\"activit
 if (!wizard.includes("Recent activity")) throw new Error("wizard: recent activity heading is missing");
 const app = await readFile(new URL("../ui/app.js", import.meta.url), "utf8");
 if (app.includes('steps.push("homebrew")')) throw new Error("wizard: Homebrew must not be a required setup step");
-if (!app.includes("setActivity") || !app.includes("Installation complete") || !app.includes("listenForBootstrapProgress") || !app.includes("eventApi.listen") || !app.includes("renderInstallItems") || !app.includes("setDetectionState") || !app.includes("phaseForTitle") || !app.includes("async function startSetup") || !app.includes("window.setTimeout(() => startSetup(), 250)") || !app.includes("setStep(4)") || !app.includes("async function runSignup") || !app.includes("open_signup") || !app.includes("dialog.open") || !app.includes("choose-folder") || !app.includes("get_company_tenants") || !app.includes("companyTenantId") || !app.includes("appKey") || !app.includes("renderCompanyApps") || !app.includes("open_project") || !app.includes("projectPath")) {
+if (!app.includes("setActivity") || !app.includes("Installation complete") || !app.includes("listenForBootstrapProgress") || !app.includes("eventApi.listen") || !app.includes("renderInstallItems") || !app.includes("setDetectionState") || !app.includes("phaseForTitle") || !app.includes("async function startSetup") || !app.includes("window.setTimeout(() => startSetup(), 250)") || !app.includes("setStep(4)") || !app.includes("async function runSignup") || !app.includes("open_signup") || !app.includes("dialog.open") || !app.includes("choose-folder") || !app.includes("get_company_tenants") || !app.includes("companyTenantId") || !app.includes("appKey") || !app.includes("renderCompanyApps") || !app.includes("open_project") || !app.includes("projectPath") || !app.includes("initInProgress") || !app.includes("setInitButtonBusy") || !app.includes("aria-busy") || !app.includes("describeInitFailure")) {
   throw new Error("wizard: live activity status updates are missing");
 }
 for (const value of ["loadAiSurfaces", "renderAiSurfaces", "startAiSurface", "detect_ai_surfaces", "start_ai_surface", "install_ai_surface"]) {
@@ -206,8 +209,11 @@ if (!app.includes("Working - no action needed") || !app.includes("Apple Software
 if (!app.includes('activity.hidden = !active && phase !== "Error"') || !app.includes("requestMacAdminPassword") || !app.includes("adminPassword")) {
   throw new Error("wizard: failed activity log is hidden instead of remaining available for diagnosis");
 }
+if (!app.includes("cleanText") || !app.includes("describeInitFailure")) {
+  throw new Error("wizard: cross-platform app initialization diagnostics are missing");
+}
 const wizardState = await readFile(new URL("../ui/wizard-state.js", import.meta.url), "utf8");
-if (!wizardState.includes("prerequisitesReady") || !wizardState.includes("isKebabCase")) {
+if (!wizardState.includes("prerequisitesReady") || !wizardState.includes("isKebabCase") || !wizardState.includes("describeInitFailure") || !wizardState.includes("Windows needs the latest EAI CLI") || !wizardState.includes("initButtonLabel")) {
   throw new Error("wizard: state validation contract is missing");
 }
 

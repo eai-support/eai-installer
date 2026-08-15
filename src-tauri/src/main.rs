@@ -112,7 +112,7 @@ const EAI_SIGNUP_URL: &str = "https://www.enterpriseaigroup.com/signup/developer
 // release. The npm check below lets an older installer update to a newer CLI
 // when one is available, while this floor keeps the flow safe when npm is
 // temporarily unreachable.
-const MIN_EAI_CLI_VERSION: (u64, u64, u64) = (3, 15, 1);
+const MIN_EAI_CLI_VERSION: (u64, u64, u64) = (3, 15, 2);
 
 fn emit_progress(
     app: &AppHandle,
@@ -236,6 +236,31 @@ fn run_program(program: &str, args: &[&str]) -> Result<(String, String), String>
     run_program_in_directory(program, args, None)
 }
 
+fn clean_process_output(value: &str) -> String {
+    let mut clean = String::with_capacity(value.len());
+    let mut in_escape = false;
+    for character in value.chars() {
+        if in_escape {
+            if ('@'..='~').contains(&character) {
+                in_escape = false;
+            }
+            continue;
+        }
+        if character == '\u{1b}' {
+            in_escape = true;
+            continue;
+        }
+        if character == '\r' {
+            continue;
+        }
+        if character.is_control() && character != '\n' && character != '\t' {
+            continue;
+        }
+        clean.push(character);
+    }
+    clean.trim().to_string()
+}
+
 fn run_program_in_directory(program: &str, args: &[&str], directory: Option<&Path>) -> Result<(String, String), String> {
     let mut command = Command::new(executable(program));
     command.args(args);
@@ -273,8 +298,8 @@ fn run_program_in_directory(program: &str, args: &[&str], directory: Option<&Pat
     let output = command
         .output()
         .map_err(|error| format!("could not start {program}: {error}"))?;
-    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+    let stdout = clean_process_output(&String::from_utf8_lossy(&output.stdout));
+    let stderr = clean_process_output(&String::from_utf8_lossy(&output.stderr));
     if output.status.success() {
         Ok((stdout, stderr))
     } else {

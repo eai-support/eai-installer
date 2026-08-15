@@ -6,6 +6,13 @@
 required safety controls, and confirms the public source references are not
 private platform endpoints. It does not perform a live tenant mutation.
 
+The full desktop interaction traceability list is in
+[`docs/scenario-matrix.md`](./scenario-matrix.md). It covers the user choices
+at every wizard stage, including existing versus new apps, folder picker
+cancel/selection, prerequisite failures, duplicate clicks, and Windows npm
+launcher failures. Deterministic behavior is checked locally; native bundle
+and guest-machine behavior is checked by the platform workflows below.
+
 The bootstrap contract tests also verify that Homebrew is optional on macOS,
 that missing Git uses Apple's Command Line Tools rather than full Xcode, and
 that a missing Software Update listing triggers Apple's native catalog refresh
@@ -47,6 +54,12 @@ Setup application in the user's profile and avoids an administrator prompt for
 the installer itself. EAI Setup may still ask for permission when the user
 chooses to install system-managed Git or Node.js prerequisites; that request is
 separate and is shown by the setup window as an explicit action.
+
+On Windows, EAI Setup requires an EAI CLI release that launches the `npm.cmd`
+script through the Windows shell. If an older CLI reports `spawn EINVAL` while
+installing app dependencies, the project scaffold may already exist; reopen
+EAI Setup so it can update the CLI, then choose Try again. The wizard removes
+terminal formatting codes and keeps the recovery message visible.
 
 The production release controller is run by release.sh publish. It cannot
 declare a release healthy from simulated installer files, simulated tenant
