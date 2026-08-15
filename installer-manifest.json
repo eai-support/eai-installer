@@ -10,8 +10,8 @@
   "sources": {
     "cliPackage": "@enterpriseai/cli",
     "cliCommand": "eai",
-    "cliRepository": "https://github.com/eai-support/eai-cli.git",
-    "goferRepository": "https://github.com/eai-support/gofer.git",
+    "cliRepository": "https://github.com/eai-support/eai.git",
+    "goferRepository": "https://github.com/eai-support/eai-gofer.git",
     "appTemplateRepository": "https://github.com/eai-support/eai-app-template.git",
     "initializationCommand": "eai init"
   },
@@ -62,7 +62,7 @@
     {
       "id": "eai-cli",
       "command": "eai",
-      "minimumVersion": "3.8.0",
+      "minimumVersion": "3.15.1",
       "required": true,
       "installers": {
         "all": "npm install --global @enterpriseai/cli"
