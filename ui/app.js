@@ -29,7 +29,9 @@ const initAppButton = document.querySelector("#init-app");
 const aiSurfaceStatus = document.querySelector("#ai-surface-status");
 const aiSurfaceField = document.querySelector("#ai-surface-field");
 const aiSurfaceOptions = document.querySelector("#ai-surface-options");
+const aiSurfaceNext = document.querySelector("#ai-surface-next");
 const aiSurfaceConsent = document.querySelector("#ai-surface-consent");
+const refreshAiButton = document.querySelector("#refresh-ai");
 const startAiButton = document.querySelector("#start-ai");
 
 const wizard = EAIWizard.createState();
@@ -66,6 +68,46 @@ const stepEstimates = {
   node: 75,
   "eai-cli": 45,
 };
+
+const aiSurfaceGuidance = {
+  "copilot-desktop": {
+    label: "GitHub Copilot app",
+    ready: "GitHub Copilot will open. Sign in to GitHub if asked, choose Add local repositories, and select the project folder shown above.",
+    notInstalled: "Download GitHub Copilot from GitHub. After installing it, return here and select Check again.",
+  },
+  "copilot-cli": {
+    label: "GitHub Copilot CLI",
+    ready: "A terminal will open in this project. The first use asks you to run /login and confirm that you trust this folder.",
+    notInstalled: "GitHub supports a terminal install for Copilot CLI. EAI will open the official instructions; after installing, return here and select Check again.",
+  },
+  "vscode-copilot": {
+    label: "GitHub Copilot in VS Code",
+    ready: "VS Code will open this project. Sign in to GitHub in VS Code if asked, then open Copilot Chat.",
+    notInstalled: "Install VS Code and the GitHub Copilot extension from the official page. Return here and select Check again.",
+  },
+};
+
+function aiSurfaceCopy(surface) {
+  return aiSurfaceGuidance[surface?.id] || {
+    label: surface?.name || "AI workspace",
+    ready: `${surface?.name || "The AI workspace"} will open with this project. Follow its sign-in or project selection prompts.`,
+    notInstalled: `Open the official ${surface?.provider || "provider"} page, install ${surface?.name || "the workspace"}, then return here and select Check again.`,
+  };
+}
+
+function updateAiSurfaceControls(surface) {
+  if (!surface) {
+    if (aiSurfaceNext) aiSurfaceNext.hidden = true;
+    if (startAiButton) startAiButton.textContent = "Choose an AI workspace";
+    return;
+  }
+  const copy = aiSurfaceCopy(surface);
+  if (startAiButton) startAiButton.textContent = surface.installed ? `Open ${copy.label}` : `Get ${copy.label}`;
+  if (aiSurfaceNext) {
+    aiSurfaceNext.hidden = false;
+    aiSurfaceNext.textContent = surface.installed ? copy.ready : copy.notInstalled;
+  }
+}
 
 function formatEta(seconds) {
   if (seconds === null || seconds === undefined) return "";
@@ -739,14 +781,14 @@ function renderAiSurfaces() {
     input.checked = surface.id === selectedAiSurfaceId;
     input.addEventListener("change", () => {
       selectedAiSurfaceId = surface.id;
-      startAiButton.textContent = surface.installed ? `Start EAI in ${surface.name}` : `Get ${surface.name}`;
+      updateAiSurfaceControls(surface);
     });
     const copy = document.createElement("span");
     const name = document.createElement("strong");
-    name.textContent = surface.name;
+    name.textContent = aiSurfaceCopy(surface).label;
     const detail = document.createElement("small");
     detail.textContent = surface.installed
-      ? `${surface.provider} · ${surface.launchSupport === "manual-project" ? "Ready; choose the project after opening" : "Ready; opens this project"}`
+      ? `${surface.provider} · Ready${surface.launchSupport === "manual-project" ? "; connect the project when it opens" : "; opens this project"}`
       : `${surface.provider} · Not installed`;
     copy.append(name, detail);
     const badge = document.createElement("span");
@@ -758,16 +800,17 @@ function renderAiSurfaces() {
   const selected = aiSurfaceInventory.surfaces.find((surface) => surface.id === selectedAiSurfaceId);
   aiSurfaceField.hidden = false;
   aiSurfaceConsent.hidden = false;
+  if (refreshAiButton) refreshAiButton.hidden = false;
   startAiButton.hidden = false;
-  startAiButton.textContent = selected?.installed ? `Start EAI in ${selected.name}` : selected ? `Get ${selected.name}` : "Choose an AI workspace";
+  updateAiSurfaceControls(selected);
   const readyCount = aiSurfaceInventory.surfaces.filter((surface) => surface.installed).length;
   aiSurfaceStatus.innerHTML = readyCount
-    ? `<strong>${readyCount} AI workspace${readyCount === 1 ? " is" : "s are"} ready</strong><p>Choose one below. EAI remembers the last workspace that opens successfully.</p>`
-    : "<strong>An AI workspace is required</strong><p>GitHub Copilot provides the most complete EAI experience today. Claude, Codex, and Grok are also supported.</p>";
+    ? `<strong>${readyCount} AI workspace${readyCount === 1 ? " is" : "s are"} ready</strong><p>Choose one below. EAI will open the project and explain the next step.</p>`
+    : "<strong>Choose an AI workspace</strong><p>GitHub Copilot, Claude, Codex, and Grok can work with your EAI project. Install one only if you need it.</p>";
 }
 
 async function loadAiSurfaces() {
-  if (!createdProjectDirectory) return;
+  if (!createdProjectDirectory) return false;
   try {
     aiSurfaceInventory = await invoke("detect_ai_surfaces", { directory: createdProjectDirectory });
     if (aiSurfaceInventory.demo) {
@@ -776,6 +819,8 @@ async function loadAiSurfaces() {
         recommendedSurface: "vscode-copilot",
         surfaces: [
           { id: "vscode-copilot", name: "GitHub Copilot in VS Code", provider: "GitHub", launchSupport: "project-and-prompt", installed: false, recommended: true },
+          { id: "copilot-cli", name: "GitHub Copilot CLI", provider: "GitHub", launchSupport: "project-and-prompt", installed: false, recommended: false },
+          { id: "copilot-desktop", name: "GitHub Copilot app", provider: "GitHub", launchSupport: "manual-project", installed: false, recommended: false },
           { id: "claude-desktop", name: "Claude Desktop", provider: "Anthropic", launchSupport: "manual-project", installed: false, recommended: false },
           { id: "codex-desktop", name: "Codex Desktop", provider: "OpenAI", launchSupport: "project-only", installed: false, recommended: false },
           { id: "grok-cli", name: "Grok Build", provider: "xAI", launchSupport: "project-and-prompt", installed: false, recommended: false },
@@ -783,9 +828,26 @@ async function loadAiSurfaces() {
       };
     }
     renderAiSurfaces();
+    return true;
   } catch (error) {
     aiSurfaceStatus.innerHTML = "<strong>AI workspace check needs attention</strong><p>You can close setup and run <code>eai start</code> from the project folder.</p>";
     showOutput("Your app is ready, but AI workspace detection did not finish.", String(error));
+    return false;
+  }
+}
+
+async function refreshAiSurfaces() {
+  if (!createdProjectDirectory || !refreshAiButton) return;
+  refreshAiButton.disabled = true;
+  setActivity("Checking AI workspaces", "Checking installed apps and commands. EAI does not read provider accounts or project files.", null, true, "", "Checking");
+  try {
+    const refreshed = await loadAiSurfaces();
+    if (refreshed) {
+      showOutput("AI workspace check complete.", "Choose Open or Get for the workspace you want to use.");
+      setActivity("AI workspace check complete", "The list above reflects the apps and commands currently available on this computer.", 100, false, "", "Ready");
+    }
+  } finally {
+    refreshAiButton.disabled = false;
   }
 }
 
@@ -796,19 +858,20 @@ async function startAiSurface() {
     return;
   }
   startAiButton.disabled = true;
-  setActivity(surface.installed ? `Starting ${surface.name}` : `Opening ${surface.name} download`, surface.installed ? "Opening this project and preparing the first EAI conversation." : `Opening the official ${surface.provider} installation page.`, null, true, "", "Opening");
+  const copy = aiSurfaceCopy(surface);
+  setActivity(surface.installed ? `Opening ${copy.label}` : `Opening ${copy.label} download`, surface.installed ? copy.ready : copy.notInstalled, null, true, "", "Opening");
   try {
     if (!surface.installed) {
       await invoke("install_ai_surface", { surfaceId: surface.id });
-      setActivity("Official download opened", `Install ${surface.name}, then return here and choose it again.`, 100, false, "", "Ready");
-      showOutput(`The official ${surface.provider} page opened.`, "EAI Setup does not install or sign in to an AI provider without your approval.");
+      setActivity("Official download opened", copy.notInstalled, 100, false, "", "Ready");
+      showOutput(`The official ${surface.provider} page opened.`, "Install the selected workspace, return here, and choose Check again. EAI does not sign in to an AI provider for you.");
       return;
     }
     const result = await invoke("start_ai_surface", { directory: createdProjectDirectory, surfaceId: surface.id });
-    setActivity(`${surface.name} started`, result.message || "Your project was handed to the AI workspace.", 100, false, "", "Ready");
-    completeMessage.textContent = `${surface.name} has this EAI project ready.`;
-    startAiButton.textContent = `Open ${surface.name} again`;
-    showOutput("AI workspace started.", "Setup will stay open until you close it.");
+    setActivity(`${copy.label} opened`, copy.ready, 100, false, "", "Ready");
+    completeMessage.textContent = `${copy.label} is open. Complete its sign-in or project connection step to start building.`;
+    startAiButton.textContent = `Open ${copy.label} again`;
+    showOutput(`${copy.label} opened.`, copy.ready);
   } catch (error) {
     setActivity("AI workspace could not start", String(error), 0, false, "", "Error");
     showOutput("Your app is safe and complete.", `Run eai start from ${createdProjectDirectory} or try another workspace.`);
@@ -857,6 +920,7 @@ async function runAction(action) {
   }
   if (action === "init") return runInit();
   if (action === "start-ai") return startAiSurface();
+  if (action === "refresh-ai") return refreshAiSurfaces();
   if (action === "open-project") {
     if (!projectPath) return;
     try {

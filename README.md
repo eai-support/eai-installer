@@ -30,11 +30,16 @@ hands control to the normal EAI CLI flow.
    second Windows shell launcher inside the CLI.
 8. Detects supported AI workspaces without reading provider accounts or project
    files. It remembers the last successfully opened workspace and recommends
-   GitHub Copilot in VS Code when the user needs to choose one.
+   GitHub Copilot in VS Code when the user needs to choose one. The GitHub
+   Copilot app, Copilot CLI, and Copilot in VS Code are shown as separate
+   choices.
 9. After one clear provider-access confirmation, opens the project in GitHub
    Copilot, Claude, Codex, or Grok with an EAI first request prepared where the
-   provider supports it. If a workspace is missing, the installer can open only
-   that provider's fixed official installation page.
+   provider supports it. The desktop Copilot app explains that the user must
+   sign in and connect the local folder. Copilot CLI is the headless/terminal
+   option, but its first use still requires GitHub sign-in. If a workspace is
+   missing, the installer opens only that provider's fixed official page and
+   provides a **Check again** action after installation.
 
 ## Download the installer
 

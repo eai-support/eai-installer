@@ -100,19 +100,21 @@
 
         <section class="wizard-panel" data-panel="5" aria-labelledby="complete-title" hidden>
           <div class="panel-icon success" aria-hidden="true">OK</div>
-          <h2 id="complete-title">Start building with EAI</h2>
-          <p class="lead" id="complete-message">Your app is ready. Open its folder or choose where you want to work with AI.</p>
+          <h2 id="complete-title">Choose how to work with AI</h2>
+          <p class="lead" id="complete-message">Your EAI app is ready. Choose an AI workspace, then follow the short sign-in step it shows.</p>
           <div class="completion-location" id="complete-location" hidden></div>
           <div id="ai-surface-status" class="callout"><strong>Finding your AI workspaces</strong><p>EAI is checking this computer. No provider account or project content is read.</p></div>
           <fieldset id="ai-surface-field" class="surface-field" hidden>
-            <legend>AI workspace</legend>
+            <legend>Choose an AI workspace</legend>
             <div id="ai-surface-options" class="surface-options"></div>
           </fieldset>
-          <p id="ai-surface-consent" class="quiet" hidden>Starting your chosen workspace lets that provider read this project and may use your provider account. You can review the prepared first request before it is sent.</p>
+          <p id="ai-surface-next" class="surface-next" hidden></p>
+          <p id="ai-surface-consent" class="quiet" hidden>The selected provider can read this project and use your provider account. EAI does not see or store that account.</p>
           <div class="panel-actions end">
             <button class="secondary" id="open-project" data-action="open-project" hidden>Open project folder</button>
+            <button class="secondary" id="refresh-ai" data-action="refresh-ai" hidden>Check again</button>
             <button class="secondary" data-action="finish">Close setup</button>
-            <button class="primary" id="start-ai" data-action="start-ai" hidden>Start EAI</button>
+            <button class="primary" id="start-ai" data-action="start-ai" hidden>Open AI workspace</button>
           </div>
         </section>
 

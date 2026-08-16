@@ -53,14 +53,19 @@ commands.
 - The first use asks the user which ready AI workspace to use. Later uses may
   preselect the last workspace that opened successfully, while still allowing
   the user to switch.
+- The GitHub Copilot app, GitHub Copilot CLI, and GitHub Copilot in VS Code are
+  separate choices. The app requires the user to sign in and connect the local
+  project; the CLI is the terminal/headless installation option but still
+  requires first-use GitHub sign-in; VS Code requires the Copilot extension.
 - GitHub Copilot in VS Code is the default recommendation when no supported
   workspace is installed. Claude, Codex, and Grok remain explicit choices.
 - EAI Setup opens a fixed official provider installation page only after the
   user requests it. It does not accept provider credentials, agree to provider
   terms, or silently install commercial software.
-- Starting a workspace clearly states that the selected provider may read the
-  project and use the user's provider account. The installer stays open until
-  the handoff succeeds or fails.
+- After a provider install, the user can select **Check again**. Starting a
+  workspace clearly states the next provider-specific action, including when
+  sign-in or local-folder connection is required. The installer stays open
+  until the handoff succeeds or fails.
 - The prepared first request starts with the business outcome, teaches EAI as
   it becomes relevant, keeps internal stage names hidden, and pauses once for
   approval of the business specification.
