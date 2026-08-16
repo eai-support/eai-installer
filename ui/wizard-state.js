@@ -33,9 +33,9 @@
     }
     if (/spawn EINVAL|npm\.cmd/i.test(cleanMessage) && platform === "windows") {
       return {
-        title: "Windows needs the latest EAI CLI",
-        detail: "The project files were created, but Windows could not start npm to install its dependencies. Update EAI Setup, then choose Try again. Your project folder is safe to reuse.",
-        next: "Close and reopen EAI Setup so it can update the EAI CLI, then retry.",
+        title: "Windows dependency setup needs attention",
+        detail: `The project files were created, but Windows returned a process error while installing the app packages. Your project folder is safe to reuse. Diagnostic: ${cleanMessage}`,
+        next: "Choose Try again. If it still fails, check the network connection and the project folder, then retry.",
       };
     }
     return {

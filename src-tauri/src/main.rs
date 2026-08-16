@@ -106,6 +106,17 @@ struct AiLaunchResult {
     message: String,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct E2eConfiguration {
+    enabled: bool,
+    project_name: Option<String>,
+    directory: Option<String>,
+    company_tenant_id: Option<String>,
+    app_key: Option<String>,
+    receipt_file: Option<String>,
+}
+
 const EAI_SIGNUP_URL: &str = "https://www.enterpriseaigroup.com/signup/developer";
 
 // This is the minimum CLI version known to be compatible with this installer
@@ -259,6 +270,27 @@ fn run_program(program: &str, args: &[&str]) -> Result<(String, String), String>
     run_program_in_directory(program, args, None)
 }
 
+fn npm_cli_script() -> Option<PathBuf> {
+    let node_path = PathBuf::from(executable("node"));
+    let node_dir = node_path.parent()?;
+    let script = node_dir.join("node_modules/npm/bin/npm-cli.js");
+    script.is_file().then_some(script)
+}
+
+fn run_npm_in_directory(args: &[&str], directory: Option<&Path>) -> Result<(String, String), String> {
+    // npm.cmd is a Windows shell shim. Calling npm's JavaScript entry point
+    // through the resolved Node executable avoids CreateProcess and shell
+    // quoting differences across Windows editions and user install paths.
+    if let Some(script) = npm_cli_script() {
+        let script = script.to_string_lossy().to_string();
+        let mut node_args = Vec::with_capacity(args.len() + 1);
+        node_args.push(script.as_str());
+        node_args.extend(args.iter().copied());
+        return run_program_in_directory("node", &node_args, directory);
+    }
+    run_program_in_directory("npm", args, directory)
+}
+
 #[cfg(target_os = "windows")]
 fn windows_shell_arg(value: &str) -> String {
     if value.is_empty() || value.chars().any(|character| character.is_whitespace() || matches!(character, '&' | '|' | '<' | '>' | '^' | '(' | ')' | '"')) {
@@ -358,7 +390,12 @@ fn run_program_in_directory(program: &str, args: &[&str], directory: Option<&Pat
     if output.status.success() {
         Ok((stdout, stderr))
     } else {
-        Err(if stderr.is_empty() { stdout } else { stderr })
+        Err(match (stdout.is_empty(), stderr.is_empty()) {
+            (false, false) => format!("{stderr}\n{stdout}"),
+            (false, true) => stdout,
+            (true, false) => stderr,
+            (true, true) => format!("{program} exited unsuccessfully"),
+        })
     }
 }
 
@@ -623,6 +660,41 @@ fn list_company_tenants() -> Result<Vec<CompanyTenant>, String> {
 #[tauri::command]
 fn get_company_tenants() -> Result<Vec<CompanyTenant>, String> {
     list_company_tenants()
+}
+
+#[tauri::command]
+fn get_e2e_configuration() -> E2eConfiguration {
+    E2eConfiguration {
+        enabled: env::var("EAI_SETUP_E2E").ok().as_deref() == Some("1"),
+        project_name: env::var("EAI_SETUP_E2E_PROJECT_NAME").ok(),
+        directory: env::var("EAI_SETUP_E2E_DIRECTORY").ok(),
+        company_tenant_id: env::var("EAI_SETUP_E2E_COMPANY_TENANT").ok(),
+        app_key: env::var("EAI_SETUP_E2E_APP_KEY").ok(),
+        receipt_file: env::var("EAI_SETUP_E2E_RECEIPT_FILE").ok(),
+    }
+}
+
+#[tauri::command]
+fn verify_e2e_auth() -> Result<(), String> {
+    run_program("eai", &["whoami"])
+        .map(|_| ())
+        .map_err(|error| format!("The saved EAI sign-in could not be verified: {error}"))
+}
+
+#[tauri::command]
+fn write_e2e_receipt(receipt_file: String, receipt: serde_json::Value) -> Result<(), String> {
+    if env::var("EAI_SETUP_E2E").ok().as_deref() != Some("1") {
+        return Err("E2E receipt writing is only available in the release test mode.".to_string());
+    }
+    let path = PathBuf::from(receipt_file);
+    if path.as_os_str().is_empty() {
+        return Err("The E2E receipt path is empty.".to_string());
+    }
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    }
+    let content = serde_json::to_string_pretty(&receipt).map_err(|error| error.to_string())?;
+    fs::write(path, format!("{content}\n")).map_err(|error| error.to_string())
 }
 
 fn project_directory(parent: &Path, project_name: &str) -> PathBuf {
@@ -1079,11 +1151,11 @@ fn run_bootstrap_sync(app: AppHandle, step: String, project_name: Option<String>
             let install_result = if let Some(prefix) = prefix.as_ref() {
                 let prefix_string = prefix.to_string_lossy().to_string();
                 match fs::create_dir_all(prefix) {
-                    Ok(()) => run_program("npm", &["install", "--global", "--prefix", &prefix_string, "@enterpriseai/cli"]),
+                    Ok(()) => run_npm_in_directory(&["install", "--global", "--prefix", &prefix_string, "@enterpriseai/cli"], None),
                     Err(error) => Err(error.to_string()),
                 }
             } else {
-                run_program("npm", &["install", "--global", "@enterpriseai/cli"])
+                run_npm_in_directory(&["install", "--global", "@enterpriseai/cli"], None)
             };
             match install_result {
                 Ok((stdout, stderr)) => {
@@ -1149,8 +1221,7 @@ fn run_bootstrap_sync(app: AppHandle, step: String, project_name: Option<String>
                         Some(90),
                         Some(90),
                     );
-                    let npm_result = run_program_in_directory(
-                        "npm",
+                    let npm_result = run_npm_in_directory(
                         &["install", "--no-audit", "--no-fund"],
                         Some(&directory),
                     );
@@ -1162,7 +1233,7 @@ fn run_bootstrap_sync(app: AppHandle, step: String, project_name: Option<String>
                                 false,
                                 &format!("The app was created, but its dependencies could not be installed: {error}"),
                                 Some("Open the project folder and run npm install, then retry the setup."),
-                                Some(format!("{stdout}\n{stderr}")),
+                                Some(format!("{stdout}\n{stderr}\n{error}")),
                                 true,
                             );
                         }
@@ -1312,7 +1383,7 @@ fn local_device_id() -> Result<String, String> {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![detect_environment, run_bootstrap, get_company_tenants, open_signup, detect_ai_surfaces, start_ai_surface, install_ai_surface, open_project, local_device_id])
+        .invoke_handler(tauri::generate_handler![detect_environment, run_bootstrap, get_company_tenants, get_e2e_configuration, verify_e2e_auth, write_e2e_receipt, open_signup, detect_ai_surfaces, start_ai_surface, install_ai_surface, open_project, local_device_id])
         .run(tauri::generate_context!())
         .expect("error while running EAI Setup");
 }

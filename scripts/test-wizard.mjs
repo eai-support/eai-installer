@@ -24,7 +24,7 @@ if (wizard.initButtonLabel(null, true) !== "Creating app..." || wizard.initButto
   throw new Error("wizard busy action labels are wrong");
 }
 const windowsFailure = wizard.describeInitFailure("\u001b[31mFailed to install app dependencies\u001b[39m: spawn EINVAL", "windows");
-if (!windowsFailure.title.includes("latest EAI CLI") || !windowsFailure.detail.includes("project files were created") || !windowsFailure.next.includes("reopen EAI Setup")) {
+if (windowsFailure.title !== "Windows dependency setup needs attention" || !windowsFailure.detail.includes("project files were created") || !windowsFailure.detail.includes("spawn EINVAL") || !windowsFailure.next.includes("Try again")) {
   throw new Error("wizard Windows npm failure guidance is missing");
 }
 const dependencyFailure = wizard.describeInitFailure("The app was created, but its dependencies could not be installed: npm failed", "windows");

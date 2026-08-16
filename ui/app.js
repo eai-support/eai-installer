@@ -50,6 +50,7 @@ let aiSurfaceInventory = null;
 let selectedAiSurfaceId = null;
 let projectPath = null;
 let initInProgress = false;
+let e2eConfig = null;
 const activityEvents = [];
 
 const stepLabels = {
@@ -433,10 +434,85 @@ async function installPrerequisites() {
 async function startSetup() {
   if (setupStarted) return;
   setupStarted = true;
+  try {
+    const config = await invoke("get_e2e_configuration");
+    e2eConfig = config?.enabled ? config : null;
+  } catch {
+    e2eConfig = null;
+  }
   setStep(1);
-  if (!await detect()) return;
+  if (!await detect()) {
+    await writeE2eReceipt("prerequisites", "The computer check could not finish.");
+    return;
+  }
   setStep(2);
-  if (await installPrerequisites()) setStep(3);
+  if (await installPrerequisites()) {
+    setStep(3);
+    if (e2eConfig) await runE2eFlow();
+  } else {
+    await writeE2eReceipt("prerequisites", "The required tools could not be installed.");
+  }
+}
+
+async function writeE2eReceipt(failedCheck, message) {
+  if (!e2eConfig?.receiptFile) return;
+  const checks = {
+    prerequisites: failedCheck === "prerequisites" ? "failed" : "passed",
+    authentication: failedCheck === "authentication" ? "failed" : "passed",
+    tenant: failedCheck === "tenant" ? "failed" : "passed",
+    app: failedCheck === "app" ? "failed" : "passed",
+    project: failedCheck === "project" ? "failed" : "passed",
+  };
+  try {
+    await invoke("write_e2e_receipt", {
+      receiptFile: e2eConfig.receiptFile,
+      receipt: {
+        status: failedCheck ? "failed" : "passed",
+        message,
+        checks,
+        appCreated: checks.app === "passed",
+      },
+    });
+  } catch (error) {
+    console.error("Could not write the E2E receipt", error);
+  }
+}
+
+async function runE2eFlow() {
+  setActivity("Checking saved sign-in", "The release test is using the pre-authenticated guest account.", null, true, "", "Checking");
+  try {
+    await invoke("verify_e2e_auth");
+  } catch (error) {
+    showOutput("Saved sign-in needs attention.", String(error));
+    setActivity("Saved sign-in failed", "The release test guest is not authenticated. Refresh its approved test snapshot, then retry.", 0, false, "", "Error");
+    await writeE2eReceipt("authentication", String(error));
+    return;
+  }
+  if (!await loadCompanyTenants()) {
+    await writeE2eReceipt("tenant", "Company workspaces could not be loaded.");
+    return;
+  }
+  const requestedTenant = e2eConfig.companyTenantId;
+  if (!requestedTenant || !companyTenants.some((tenant) => tenant.id === requestedTenant)) {
+    const message = "The configured release-test tenant is not available to the signed-in account.";
+    showOutput("Release-test tenant needs attention.", message);
+    setActivity("Release-test tenant unavailable", message, 0, false, "", "Error");
+    await writeE2eReceipt("tenant", message);
+    return;
+  }
+  selectedCompanyTenantId = requestedTenant;
+  selectedCompanyAppKey = e2eConfig.appKey || null;
+  renderCompanyTenants();
+  if (projectNameInput) projectNameInput.value = e2eConfig.projectName || "eai-release-test";
+  const directoryInput = document.querySelector("#project-directory");
+  if (directoryInput) directoryInput.value = e2eConfig.directory || "";
+  setStep(4);
+  const completed = await runInit();
+  if (!completed) {
+    await writeE2eReceipt("app", "The EAI app could not be initialised by the desktop bootstrap path.");
+    return;
+  }
+  await writeE2eReceipt(null, "The published installer completed its desktop bootstrap path.");
 }
 
 async function runLogin() {
@@ -592,18 +668,18 @@ async function runInit() {
   if (!EAIWizard.isKebabCase(name)) {
     showOutput("Use lowercase words separated by hyphens, for example customer-portal.");
     document.querySelector("#project-name").focus();
-    return;
+    return false;
   }
   if (!directory) {
     showOutput("Choose a parent folder for the app.", "Use Choose folder or enter a folder path.");
     document.querySelector("#project-directory").focus();
-    return;
+    return false;
   }
   if (!demoMode && !selectedCompanyTenantId) {
     showOutput("Choose the company workspace for this app.");
     setActivity("Choose a company workspace", "Select the company workspace that should own this app, then continue.", 100, false, "", "Waiting");
     companyTenantSelect?.focus();
-    return;
+    return false;
   }
   initInProgress = true;
   setInitButtonBusy(true);
@@ -616,7 +692,7 @@ async function runInit() {
     const failure = EAIWizard.describeInitFailure(error, environmentReport?.platform);
     showOutput(failure.title, `${failure.detail} Next: ${failure.next}`);
     setActivity(failure.title, failure.detail, 0, false, "", "Error");
-    return;
+    return false;
   } finally {
     stopActivityHeartbeat();
     activeBootstrapStep = null;
@@ -627,7 +703,7 @@ async function runInit() {
     const failure = EAIWizard.describeInitFailure(result.message, environmentReport?.platform);
     showOutput(failure.title, `Next: ${failure.next}`);
     setActivity(failure.title, failure.detail, 0, false, "", "Error");
-    return;
+    return false;
   }
   completeMessage.textContent = result.demo
     ? "Preview complete. The signed desktop app will run eai init in the selected folder."
@@ -647,6 +723,7 @@ async function runInit() {
   setActivity("Setup complete", "Your EAI app and developer tools are ready.", 100, false);
   showOutput("Setup complete.");
   await loadAiSurfaces();
+  return true;
 }
 
 function renderAiSurfaces() {

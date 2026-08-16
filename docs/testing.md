@@ -47,7 +47,12 @@ A release is incomplete until all of the following are true:
    test app has a verified cleanup receipt.
 
 The clean-machine test belongs in a controlled release environment. It should
-use a test tenant and test user, not production credentials.
+use a test tenant and test user, not production credentials. The release guest
+launches the published desktop application in a protected E2E mode. That mode
+uses a pre-authenticated test snapshot, runs the same prerequisite and project
+bootstrap commands as the visible wizard, and writes a bounded receipt. It is
+not allowed to pass merely because an older `eai` command already exists on the
+guest.
 
 The Windows NSIS bundle uses the current-user install mode. This keeps the EAI
 Setup application in the user's profile and avoids an administrator prompt for
@@ -56,12 +61,12 @@ chooses to install system-managed Git or Node.js prerequisites; that request is
 separate and is shown by the setup window as an explicit action.
 
 On Windows, EAI Setup does not rely on the CLI to launch a nested `npm.cmd`
-process. It calls `eai init --no-install` to create the scaffold, then runs the
-platform-aware npm installer from the desktop process. This keeps the setup
-flow reliable when the user's PowerShell execution policy or PATH would make a
-CLI-launched Windows script fail. A direct `eai init` still requires the CLI's
-Windows npm launcher support; if it reports `spawn EINVAL`, update the CLI
-before retrying that direct command.
+process. It calls `eai init --no-install` to create the scaffold, then invokes
+npm through the resolved Node runtime when the npm entry point is available,
+with a shell-shim fallback. This keeps the setup flow independent of the
+user's PowerShell execution policy or PATH and preserves the real npm
+diagnostic if dependency installation fails. A direct `eai init` remains a
+separate CLI workflow.
 
 The production release controller is run by release.sh publish. It cannot
 declare a release healthy from simulated installer files, simulated tenant
@@ -72,7 +77,8 @@ test-tenant ID, and approved V4 app-deprovision adapter are configured.
 release.sh diagnostic-e2e <version> is available for installer debugging. It
 uses the real published assets and real guest workflow, but deliberately does
 not delete the test app. It reports passed_with_mock_cleanup and must not be
-used to approve or publish a release.
+used to approve or publish a release. A guest timeout or a pre-existing CLI is
+not a pass; the receipt must show the desktop bootstrap path completed.
 
 release.sh publish-diagnostic <version> can publish a tagged release while
 using that same diagnostic gate. It is an explicit exception for the period
