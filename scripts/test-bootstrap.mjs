@@ -86,6 +86,10 @@ for (const value of ["get_company_tenants", "list_company_apps", "app", "tenant"
 }
 if (!rust.includes("@enterpriseai/cli")) throw new Error("Tauri adapter uses the wrong CLI package");
 if (!rust.includes("run_program_in_directory(\"eai\", &init_args_ref")) throw new Error("Tauri adapter does not run eai init non-interactively in the selected directory");
+if (!rust.includes('"--no-install".to_string()')) throw new Error("Tauri adapter must keep dependency installation outside the nested CLI init process");
+if (!rust.includes('run_program_in_directory(\n                        "npm",\n                        &["install", "--no-audit", "--no-fund"]')) {
+  throw new Error("Tauri adapter does not install generated app dependencies through its platform-aware npm path");
+}
 if (!rust.includes("\"--company-tenant\"")) throw new Error("Tauri adapter does not pass the selected company workspace to eai init");
 if (!rust.includes("command.stdin(Stdio::null())")) throw new Error("Tauri adapter does not close child stdin for GUI-launched commands");
 if (!rust.includes("run_program(\"eai\", &[\"login\"]")) throw new Error("Tauri adapter does not run eai login");
@@ -220,7 +224,7 @@ if (!app.includes("cleanText") || !app.includes("describeInitFailure")) {
   throw new Error("wizard: cross-platform app initialization diagnostics are missing");
 }
 const wizardState = await readFile(new URL("../ui/wizard-state.js", import.meta.url), "utf8");
-if (!wizardState.includes("prerequisitesReady") || !wizardState.includes("isKebabCase") || !wizardState.includes("describeInitFailure") || !wizardState.includes("Windows needs the latest EAI CLI") || !wizardState.includes("initButtonLabel")) {
+if (!wizardState.includes("prerequisitesReady") || !wizardState.includes("isKebabCase") || !wizardState.includes("describeInitFailure") || !wizardState.includes("Windows needs the latest EAI CLI") || !wizardState.includes("App dependencies need attention") || !wizardState.includes("initButtonLabel")) {
   throw new Error("wizard: state validation contract is missing");
 }
 

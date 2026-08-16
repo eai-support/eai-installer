@@ -27,6 +27,10 @@ const windowsFailure = wizard.describeInitFailure("\u001b[31mFailed to install a
 if (!windowsFailure.title.includes("latest EAI CLI") || !windowsFailure.detail.includes("project files were created") || !windowsFailure.next.includes("reopen EAI Setup")) {
   throw new Error("wizard Windows npm failure guidance is missing");
 }
+const dependencyFailure = wizard.describeInitFailure("The app was created, but its dependencies could not be installed: npm failed", "windows");
+if (dependencyFailure.title !== "App dependencies need attention" || !dependencyFailure.detail.includes("project files were created") || !dependencyFailure.next.includes("Try again")) {
+  throw new Error("wizard app dependency failure guidance is missing");
+}
 const genericFailure = wizard.describeInitFailure("folder is not writable", "macos");
 if (genericFailure.title !== "App setup failed" || !genericFailure.detail.includes("folder is not writable")) {
   throw new Error("wizard generic failure guidance is wrong");

@@ -32,7 +32,8 @@ visible.
 | LOCATION-05 | Location | Folder is empty, missing, or not writable | Initialization stops before the CLI call with a specific correction. |
 | INIT-01 | Initialize | Click Create or Use app | The button immediately changes to Creating app... or Initialising project... and becomes disabled. |
 | INIT-02 | Initialize | Double-click the initialize button | Exactly one initialization request runs. |
-| INIT-03 | Initialize | Windows npm launcher returns `spawn EINVAL` | The UI strips terminal codes, identifies the outdated Windows CLI path, and tells the user to reopen/update/retry. |
+| INIT-03 | Initialize | Windows CLI creates the scaffold | The installer invokes `eai init --no-install`, then runs the platform-aware npm installer itself so app dependencies do not depend on a nested `npm.cmd` launch. |
+| INIT-07 | Initialize | Windows npm launcher returns `spawn EINVAL` in a direct CLI run | The CLI reports the recoverable failure; the desktop installer does not use this nested dependency path. |
 | INIT-04 | Initialize | Template clone, manifest, or dependency install fails for another reason | The real failure remains visible, the project folder is described as safe to reuse when applicable, and retry is offered. |
 | INIT-05 | Initialize | Initialization leaves a partial scaffold | Retry uses the supported CLI recovery path and does not silently claim success. |
 | INIT-06 | Initialize | Initialization completes | The project path is shown and the completion screen offers Open project folder. |
