@@ -14,6 +14,23 @@ if (wizard.clampStep(-2) !== 0 || wizard.clampStep(99) !== 5) throw new Error("w
 if (!wizard.isKebabCase("my-eai-app") || wizard.isKebabCase("My App") || wizard.isKebabCase("-bad")) {
   throw new Error("wizard project-name validation is wrong");
 }
+if (wizard.cleanText("\u001b[31mFailed\u001b[39m\r\nspawn EINVAL") !== "Failed\nspawn EINVAL") {
+  throw new Error("wizard output cleaning is wrong");
+}
+if (wizard.initButtonLabel(null, false) !== "Create and initialise app" || wizard.initButtonLabel("existing-app", false) !== "Use app and initialise project") {
+  throw new Error("wizard app action labels are wrong");
+}
+if (wizard.initButtonLabel(null, true) !== "Creating app..." || wizard.initButtonLabel("existing-app", true) !== "Initialising project...") {
+  throw new Error("wizard busy action labels are wrong");
+}
+const windowsFailure = wizard.describeInitFailure("\u001b[31mFailed to install app dependencies\u001b[39m: spawn EINVAL", "windows");
+if (!windowsFailure.title.includes("latest EAI CLI") || !windowsFailure.detail.includes("project files were created") || !windowsFailure.next.includes("reopen EAI Setup")) {
+  throw new Error("wizard Windows npm failure guidance is missing");
+}
+const genericFailure = wizard.describeInitFailure("folder is not writable", "macos");
+if (genericFailure.title !== "App setup failed" || !genericFailure.detail.includes("folder is not writable")) {
+  throw new Error("wizard generic failure guidance is wrong");
+}
 
 const report = {
   platform: "macos",
