@@ -23,6 +23,18 @@ the repository, for example `0.1.4`. It publishes an unsigned prerelease with
 the tag `eai-setup-test-v0.1.4` and six native assets for Windows, macOS, and
 Ubuntu.
 
+The supported command-line equivalent is:
+
+```bash
+./release.sh publish-test 0.3.5
+```
+
+It dispatches the test-release workflow, waits for the public prerelease
+assets, downloads those assets, and runs the real guest E2E adapters. This is
+the controlled validation path while production signing is unavailable. It
+does not create a customer release and uses the existing diagnostic cleanup
+mode until the V4 app-deprovision API is available.
+
 ## Production release
 
 After the release PR is merged, run the release controller with the matching

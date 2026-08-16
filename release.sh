@@ -9,6 +9,7 @@ usage() {
 Usage:
   ./release.sh <patch|minor|major> [message]
   ./release.sh publish <version>
+  ./release.sh publish-test <version>
   ./release.sh publish-diagnostic <version>
   ./release.sh e2e <version>
   ./release.sh diagnostic-e2e <version>
@@ -22,6 +23,7 @@ Examples:
   ./release.sh patch "Improve clean-machine bootstrap"
   ./release.sh minor "Add release VM gate"
   ./release.sh publish 0.2.0
+  ./release.sh publish-test 0.3.5
   ./release.sh publish-diagnostic 0.3.0
   ./release.sh diagnostic-e2e 0.3.0
 EOF
@@ -51,6 +53,18 @@ wait_for_release_workflow() {
     sleep 5
   done
   [[ -n "$run_id" ]] || die "Could not find the release workflow for $tag"
+  gh run watch "$run_id" --repo "$REPO" --exit-status
+}
+
+wait_for_test_release_workflow() {
+  local started_at="$1"
+  local run_id=""
+  for _ in $(seq 1 60); do
+    run_id="$(gh run list --repo "$REPO" --workflow test-release.yml --event workflow_dispatch --limit 20 --json databaseId,createdAt,headBranch --jq ".[] | select(.headBranch == \"main\" and .createdAt >= \"$started_at\") | .databaseId" | head -n 1)"
+    [[ -n "$run_id" ]] && break
+    sleep 5
+  done
+  [[ -n "$run_id" ]] || die "Could not find the test release workflow run"
   gh run watch "$run_id" --repo "$REPO" --exit-status
 }
 
@@ -106,6 +120,27 @@ publish_release() {
   node scripts/release-e2e.mjs --version "$version" --repo "$REPO" --tag "$tag" --driver "${EAI_VM_DRIVER:-command}" --deprovision api
 }
 
+publish_test_release() {
+  local version="$1"
+  [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "publish-test requires MAJOR.MINOR.PATCH"
+  require_command node
+  require_command gh
+  cd "$ROOT"
+  ensure_clean_main
+  [[ "$(version_from_source)" == "$version" ]] || die "package.json is $(version_from_source), not $version"
+  npm test
+  node scripts/release-e2e.mjs --version "$version" --repo "$REPO" --tag "eai-setup-test-v$version" --driver "${EAI_VM_DRIVER:-command}" --deprovision mock --diagnostic --preflight
+
+  local started_at
+  started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  section "Publishing controlled test installers to GitHub"
+  gh workflow run test-release.yml --repo "$REPO" --ref main --field "version=$version"
+  wait_for_test_release_workflow "$started_at"
+
+  section "Running guest E2E against the published test installers"
+  node scripts/release-e2e.mjs --version "$version" --repo "$REPO" --tag "eai-setup-test-v$version" --driver "${EAI_VM_DRIVER:-command}" --deprovision mock --diagnostic
+}
+
 publish_diagnostic_release() {
   local version="$1"
   [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "publish-diagnostic requires MAJOR.MINOR.PATCH"
@@ -150,6 +185,10 @@ case "$command" in
   publish)
     [[ -n "${2:-}" ]] || { usage; exit 2; }
     publish_release "$2"
+    ;;
+  publish-test)
+    [[ -n "${2:-}" ]] || { usage; exit 2; }
+    publish_test_release "$2"
     ;;
   publish-diagnostic)
     [[ -n "${2:-}" ]] || { usage; exit 2; }
