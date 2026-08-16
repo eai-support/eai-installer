@@ -54,6 +54,25 @@ guest workflow ran, not evidence that a release is safe to publish. The
 publish command always uses the real V4 cleanup adapter and rejects this
 diagnostic mode.
 
+## Controlled downloadable test release
+
+When production signing is not yet configured, use the release controller's
+test path:
+
+```bash
+./release.sh publish-test 0.3.5
+```
+
+This command runs the local release checks, dispatches the repository's
+`test-release.yml` workflow, waits until GitHub has published the six native
+test assets, then downloads those exact assets from the GitHub prerelease
+`eai-setup-test-v<version>` and runs the real macOS, Windows, and Ubuntu guest
+adapters. The guest results are written to the normal release evidence folder.
+
+The test release is intentionally unsigned and marked as a prerelease. It is
+appropriate for controlled release validation only; it is not a customer
+installer and does not replace the signed `publish` path.
+
 ## Live VM adapter contract
 
 The controller runs one test for each of `macos`, `windows`, and `ubuntu`. The
