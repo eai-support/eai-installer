@@ -456,13 +456,12 @@ async function startSetup() {
 
 async function writeE2eReceipt(failedCheck, message) {
   if (!e2eConfig?.receiptFile) return;
-  const checks = {
-    prerequisites: failedCheck === "prerequisites" ? "failed" : "passed",
-    authentication: failedCheck === "authentication" ? "failed" : "passed",
-    tenant: failedCheck === "tenant" ? "failed" : "passed",
-    app: failedCheck === "app" ? "failed" : "passed",
-    project: failedCheck === "project" ? "failed" : "passed",
-  };
+  const checkOrder = ["prerequisites", "authentication", "tenant", "app", "project"];
+  const failedIndex = failedCheck ? checkOrder.indexOf(failedCheck) : -1;
+  const checks = Object.fromEntries(checkOrder.map((check, index) => [
+    check,
+    failedIndex < 0 ? "passed" : index < failedIndex ? "passed" : index === failedIndex ? "failed" : "not-run",
+  ]));
   try {
     await invoke("write_e2e_receipt", {
       receiptFile: e2eConfig.receiptFile,

@@ -38,6 +38,7 @@ visible.
 | INIT-04 | Initialize | Template clone, manifest, or dependency install fails for another reason | The real failure remains visible, the project folder is described as safe to reuse when applicable, and retry is offered. |
 | INIT-05 | Initialize | Initialization leaves a partial scaffold | Retry uses the supported CLI recovery path and does not silently claim success. |
 | INIT-06 | Initialize | Initialization completes | The project path is shown and the completion screen offers Open project folder. |
+| INIT-08 | Workspace | Signed-in user has a direct membership on a child company workspace | The workspace is selectable and app discovery is scoped to that workspace; root-only filtering is not applied. |
 | COMPLETE-01 | Complete | Choose Open project folder | The native file manager opens the created project. |
 | COMPLETE-02 | Complete | Choose Close setup | The wizard closes without deleting the project. |
 | AI-01 | AI handoff | No supported AI workspace is installed | The app remains complete and the official download option is shown. |

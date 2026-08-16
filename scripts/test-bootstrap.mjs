@@ -81,8 +81,11 @@ for (const step of ["homebrew", "git", "node", "eai-cli", "login", "init", "star
 for (const value of ["detect_ai_surfaces", "start_ai_surface", "install_ai_surface", "AiSurfaceInventory", "eai", "start", "--check"]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing AI workspace handoff: ${value}`);
 }
-for (const value of ["get_company_tenants", "list_company_apps", "app", "tenant", "list", "--format", "json", "directMembership", "parentId", "app_key", "--app-key"]) {
+for (const value of ["get_company_tenants", "list_company_apps", "app", "tenant", "list", "--format", "json", "directMembership", "app_key", "--app-key"]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing company workspace discovery: ${value}`);
+}
+if (rust.includes("let is_root") || rust.includes("if !is_root")) {
+  throw new Error("Tauri adapter must allow directly assigned child company workspaces");
 }
 for (const value of ["E2eConfiguration", "get_e2e_configuration", "verify_e2e_auth", "write_e2e_receipt", "EAI_SETUP_E2E", "EAI_SETUP_E2E_RECEIPT_FILE"]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing bounded release E2E support: ${value}`);
@@ -226,7 +229,7 @@ if (!app.includes("Working - no action needed") || !app.includes("Apple Software
 if (!app.includes('activity.hidden = !active && phase !== "Error"') || !app.includes("requestMacAdminPassword") || !app.includes("adminPassword")) {
   throw new Error("wizard: failed activity log is hidden instead of remaining available for diagnosis");
 }
-if (!app.includes("cleanText") || !app.includes("describeInitFailure")) {
+if (!app.includes("cleanText") || !app.includes("describeInitFailure") || !app.includes('"not-run"')) {
   throw new Error("wizard: cross-platform app initialization diagnostics are missing");
 }
 const wizardState = await readFile(new URL("../ui/wizard-state.js", import.meta.url), "utf8");

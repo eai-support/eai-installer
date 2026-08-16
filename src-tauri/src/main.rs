@@ -622,8 +622,6 @@ fn list_company_tenants() -> Result<Vec<CompanyTenant>, String> {
     let mut tenants = entries
         .iter()
         .filter_map(|entry| {
-            let parent_id = entry.get("parentId");
-            let is_root = parent_id.is_none() || parent_id.is_some_and(serde_json::Value::is_null);
             let direct_membership = entry
                 .get("directMembership")
                 .and_then(serde_json::Value::as_bool)
@@ -632,7 +630,7 @@ fn list_company_tenants() -> Result<Vec<CompanyTenant>, String> {
                 .get("isActive")
                 .and_then(serde_json::Value::as_bool)
                 .unwrap_or(true);
-            if !is_root || !direct_membership || !is_active {
+            if !direct_membership || !is_active {
                 return None;
             }
             Some(CompanyTenant {
