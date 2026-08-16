@@ -60,7 +60,7 @@ if (!dmgBackgroundSource.includes(">Install Enterprise AI harness</text>") || !d
   throw new Error("DMG background does not use the Enterprise AI harness heading");
 }
 
-const rust = await readFile(new URL("../src-tauri/src/main.rs", import.meta.url), "utf8");
+const rust = (await readFile(new URL("../src-tauri/src/main.rs", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 for (const value of ["MIN_EAI_CLI_VERSION", "@enterpriseai/cli", "eai_cli_version()", "user_npm_global_exec_dirs", "current_version >= MIN_EAI_CLI_VERSION"] ) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter does not verify the canonical EAI CLI release: ${value}`);
 }
