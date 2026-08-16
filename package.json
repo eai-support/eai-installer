@@ -1,6 +1,6 @@
 {
   "name": "@enterpriseai/setup",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "private": true,
   "description": "Cross-platform EAI Setup validation and bootstrap tooling",
   "type": "module",
