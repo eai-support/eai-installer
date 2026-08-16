@@ -259,6 +259,15 @@ fn run_program(program: &str, args: &[&str]) -> Result<(String, String), String>
     run_program_in_directory(program, args, None)
 }
 
+#[cfg(target_os = "windows")]
+fn windows_shell_arg(value: &str) -> String {
+    if value.is_empty() || value.chars().any(|character| character.is_whitespace() || matches!(character, '&' | '|' | '<' | '>' | '^' | '(' | ')' | '"')) {
+        format!("\"{}\"", value.replace('"', "\\\""))
+    } else {
+        value.to_string()
+    }
+}
+
 fn clean_process_output(value: &str) -> String {
     let mut clean = String::with_capacity(value.len());
     let mut in_escape = false;
@@ -285,8 +294,31 @@ fn clean_process_output(value: &str) -> String {
 }
 
 fn run_program_in_directory(program: &str, args: &[&str], directory: Option<&Path>) -> Result<(String, String), String> {
-    let mut command = Command::new(executable(program));
-    command.args(args);
+    let program_path = executable(program);
+    #[cfg(target_os = "windows")]
+    let mut command = if program_path.ends_with(".cmd") || program_path.ends_with(".bat") {
+        // npm and EAI installed from npm are Windows batch launchers. They
+        // must be invoked through the command interpreter, otherwise
+        // CreateProcess reports a launcher error even when the files exist.
+        let mut command = Command::new(env::var_os("ComSpec").unwrap_or_else(|| "cmd.exe".into()));
+        let mut command_line = format!("call {}", windows_shell_arg(&program_path));
+        for arg in args {
+            command_line.push(' ');
+            command_line.push_str(&windows_shell_arg(arg));
+        }
+        command.args(["/D", "/S", "/C"]).arg(command_line);
+        command
+    } else {
+        let mut command = Command::new(&program_path);
+        command.args(args);
+        command
+    };
+    #[cfg(not(target_os = "windows"))]
+    let mut command = {
+        let mut command = Command::new(&program_path);
+        command.args(args);
+        command
+    };
     // GUI-launched commands must never wait on a terminal that the installer
     // does not expose. Interactive commands receive explicit non-interactive
     // flags at their call site below.
