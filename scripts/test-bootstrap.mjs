@@ -110,7 +110,7 @@ if (!rust.includes('inventory.contract_version != "eai.ai-surfaces/v1"')) {
 for (const value of ["Homebrew.pkg", "/usr/sbin/pkgutil", "--check-signature", "with administrator privileges", "--stdinpass", "No Terminal window will open"]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing native macOS installation control: ${value}`);
 }
-for (const value of ["windows_package_bin_dirs", "ProgramFiles(x86)", "CREATE_NO_WINDOW", "creation_flags", "LOCALAPPDATA", "Windows package installation finished, but the expected command is not available yet.", "npm finished, but the eai command is not available yet."]) {
+for (const value of ["windows_package_bin_dirs", "ProgramFiles(x86)", "CREATE_NO_WINDOW", "creation_flags", "LOCALAPPDATA", "windows_shell_arg", "ComSpec", "ends_with(\".cmd\")", "command_line.push_str", "call {}", "Windows package installation finished, but the expected command is not available yet.", "npm finished, but the eai command is not available yet."]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing Windows prerequisite safety support: ${value}`);
 }
 for (const value of ["xcode-select", "full Xcode is not required", "softwareupdate", "latest_command_line_tools_label", "refresh_macos_command_line_tools_catalog", "Refreshing Apple Software Update", "with administrator privileges", "secure administrator dialog", "native administrator install", "latest_node_artifact", "nodejs.org/dist/index.json", "osx-arm64-pkg", "osx-x64-pkg", "osx-arm64-tar", "osx-x64-tar", "SHASUMS256.txt", "shasum", "uname", "--prefix", "expose_user_npm_bin", "NVM_DIR", "versions/node", "NVM_BIN", "nvm_node_bin_dirs", "macos_package_bin_dirs"]) {
