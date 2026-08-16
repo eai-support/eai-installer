@@ -34,6 +34,7 @@ visible.
 | INIT-02 | Initialize | Double-click the initialize button | Exactly one initialization request runs. |
 | INIT-03 | Initialize | Windows CLI creates the scaffold | The installer invokes `eai init --no-install`, then runs the platform-aware npm installer itself so app dependencies do not depend on a nested `npm.cmd` launch. |
 | INIT-07 | Initialize | Windows npm launcher returns `spawn EINVAL` in a direct CLI run | The desktop installer invokes npm through the resolved Node runtime where possible, preserves the diagnostic, and reports a dependency-install recovery path; it does not blame the EAI CLI. |
+| INIT-09 | Initialize | Windows Node/npm is installed in a user-managed or PATH-only location | The installer resolves the live Node and npm locations from the machine PATH, runs the npm entry point from that installation, and does not report that the EAI CLI needs an update when the CLI is already available. |
 | RELEASE-01 | Release gate | Run the published installer in a protected guest | The desktop application performs the real prerequisite, saved-auth, workspace, and initialization flow and writes a bounded receipt; an existing CLI alone cannot satisfy the gate. |
 | INIT-04 | Initialize | Template clone, manifest, or dependency install fails for another reason | The real failure remains visible, the project folder is described as safe to reuse when applicable, and retry is offered. |
 | INIT-05 | Initialize | Initialization leaves a partial scaffold | Retry uses the supported CLI recovery path and does not silently claim success. |

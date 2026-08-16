@@ -209,6 +209,23 @@ fn windows_package_bin_dirs() -> Vec<PathBuf> {
     directories
 }
 
+#[cfg(target_os = "windows")]
+fn windows_resolved_path(program: &str) -> Option<PathBuf> {
+    let filename = if matches!(program, "npm" | "eai") {
+        format!("{program}.cmd")
+    } else {
+        format!("{program}.exe")
+    };
+    let mut directories = windows_package_bin_dirs();
+    if let Some(existing) = env::var_os("PATH") {
+        directories.extend(env::split_paths(&existing));
+    }
+    directories
+        .into_iter()
+        .map(|directory| directory.join(&filename))
+        .find(|path| path.is_file())
+}
+
 fn user_npm_global_exec_dirs() -> Vec<PathBuf> {
     let Some(prefix) = user_npm_prefix() else { return Vec::new(); };
     if cfg!(target_os = "windows") {
@@ -244,24 +261,15 @@ fn executable(program: &str) -> String {
         }
     }
     if cfg!(target_os = "windows") {
-        let filename = if matches!(program, "npm" | "eai") {
+        #[cfg(target_os = "windows")]
+        if let Some(path) = windows_resolved_path(program) {
+            return path.to_string_lossy().to_string();
+        }
+        return if matches!(program, "npm" | "eai") {
             format!("{program}.cmd")
         } else {
             program.to_string()
         };
-        let mut directories = if program == "eai" {
-            user_npm_global_exec_dirs()
-        } else {
-            Vec::new()
-        };
-        directories.extend(windows_package_bin_dirs());
-        for directory in directories {
-            let path = directory.join(&filename);
-            if path.is_file() {
-                return path.to_string_lossy().to_string();
-            }
-        }
-        return filename;
     }
     program.to_string()
 }
@@ -271,10 +279,18 @@ fn run_program(program: &str, args: &[&str]) -> Result<(String, String), String>
 }
 
 fn npm_cli_script() -> Option<PathBuf> {
-    let node_path = PathBuf::from(executable("node"));
-    let node_dir = node_path.parent()?;
-    let script = node_dir.join("node_modules/npm/bin/npm-cli.js");
-    script.is_file().then_some(script)
+    let mut node_paths = vec![PathBuf::from(executable("node"))];
+    #[cfg(target_os = "windows")]
+    if let Some(path) = windows_resolved_path("node") {
+        node_paths.push(path);
+    }
+
+    #[cfg(target_os = "windows")]
+    node_paths.push(PathBuf::from(executable("npm")));
+
+    node_paths.into_iter().filter_map(|path| path.parent().map(Path::to_path_buf)).map(|directory| {
+        directory.join("node_modules/npm/bin/npm-cli.js")
+    }).find(|script| script.is_file())
 }
 
 fn run_npm_in_directory(args: &[&str], directory: Option<&Path>) -> Result<(String, String), String> {
