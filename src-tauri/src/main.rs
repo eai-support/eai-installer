@@ -109,9 +109,9 @@ struct AiLaunchResult {
 const EAI_SIGNUP_URL: &str = "https://www.enterpriseaigroup.com/signup/developer";
 
 // This is the minimum CLI version known to be compatible with this installer
-// release. The npm check below lets an older installer update to a newer CLI
-// when one is available, while this floor keeps the flow safe when npm is
-// temporarily unreachable.
+// release. The installer updates an older CLI during bootstrap, but local
+// readiness must not depend on a live npm metadata request: an offline check
+// must distinguish "not compatible yet" from "not installed" deterministically.
 const MIN_EAI_CLI_VERSION: (u64, u64, u64) = (3, 15, 2);
 
 fn emit_progress(
@@ -198,9 +198,26 @@ fn windows_package_bin_dirs() -> Vec<PathBuf> {
     directories
 }
 
+fn user_npm_global_exec_dirs() -> Vec<PathBuf> {
+    let Some(prefix) = user_npm_prefix() else { return Vec::new(); };
+    if cfg!(target_os = "windows") {
+        vec![prefix.clone(), prefix.join("bin")]
+    } else {
+        vec![prefix.join("bin")]
+    }
+}
+
 fn executable(program: &str) -> String {
     if cfg!(unix) && matches!(program, "node" | "npm" | "eai") {
-        for directory in user_node_bin_dirs() {
+        let mut directories = if program == "eai" {
+            // npm's user prefix is authoritative for the CLI. A previous
+            // Node installation can leave an older eai symlink in node/bin.
+            user_npm_global_exec_dirs()
+        } else {
+            Vec::new()
+        };
+        directories.extend(user_node_bin_dirs());
+        for directory in directories {
             let path = directory.join(program);
             if path.is_file() {
                 return path.to_string_lossy().to_string();
@@ -221,7 +238,13 @@ fn executable(program: &str) -> String {
         } else {
             program.to_string()
         };
-        for directory in windows_package_bin_dirs() {
+        let mut directories = if program == "eai" {
+            user_npm_global_exec_dirs()
+        } else {
+            Vec::new()
+        };
+        directories.extend(windows_package_bin_dirs());
+        for directory in directories {
             let path = directory.join(&filename);
             if path.is_file() {
                 return path.to_string_lossy().to_string();
@@ -364,21 +387,10 @@ fn semantic_version(value: &str) -> Option<(u64, u64, u64)> {
     ))
 }
 
-fn latest_eai_cli_requirement() -> (u64, u64, u64) {
-    let Some(value) = run_program("npm", &["view", "@enterpriseai/cli", "version", "--json"])
-        .ok()
-        .map(|(stdout, _)| stdout)
-    else {
-        return MIN_EAI_CLI_VERSION;
-    };
-    let value = value.trim().trim_matches('"');
-    semantic_version(value).unwrap_or(MIN_EAI_CLI_VERSION).max(MIN_EAI_CLI_VERSION)
-}
-
 fn eai_cli_version() -> Option<String> {
     let current = version("eai", &["--version"])?;
     let current_version = semantic_version(&current)?;
-    (current_version >= latest_eai_cli_requirement()).then_some(current)
+    (current_version >= MIN_EAI_CLI_VERSION).then_some(current)
 }
 
 fn macos_git_ready() -> bool {

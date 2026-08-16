@@ -61,8 +61,15 @@ if (!dmgBackgroundSource.includes(">Install Enterprise AI harness</text>") || !d
 }
 
 const rust = await readFile(new URL("../src-tauri/src/main.rs", import.meta.url), "utf8");
-for (const value of ["MIN_EAI_CLI_VERSION", "@enterpriseai/cli", "version\", \"--json", "eai_cli_version()", "latest_eai_cli_requirement()"] ) {
+for (const value of ["MIN_EAI_CLI_VERSION", "@enterpriseai/cli", "eai_cli_version()", "user_npm_global_exec_dirs", "current_version >= MIN_EAI_CLI_VERSION"] ) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter does not verify the canonical EAI CLI release: ${value}`);
+}
+if (rust.includes("latest_eai_cli_requirement") || rust.includes('version("npm", &["view", "@enterpriseai/cli"')) {
+  throw new Error("Tauri adapter must not use live npm metadata to decide whether the installed EAI CLI is ready");
+}
+const eaiResolver = rust.slice(rust.indexOf("fn executable"), rust.indexOf("fn run_program"));
+if (eaiResolver.indexOf("user_npm_global_exec_dirs") > eaiResolver.indexOf("user_node_bin_dirs")) {
+  throw new Error("Tauri adapter must prefer the user npm-prefix EAI launcher over stale Node-directory launchers");
 }
 const windowsIcon = await readFile(new URL("../src-tauri/icons/icon.ico", import.meta.url));
 if (windowsIcon.length < 32 || windowsIcon.readUInt16LE(2) !== 1) {
