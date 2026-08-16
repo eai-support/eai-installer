@@ -24,6 +24,13 @@
 
   function describeInitFailure(message, platform = "") {
     const cleanMessage = cleanText(message) || "The app could not be initialised.";
+    if (/the app was created, but its dependencies could not be installed/i.test(cleanMessage)) {
+      return {
+        title: "App dependencies need attention",
+        detail: "The project files were created, but the packages needed to run the app could not be installed. Your project folder is safe to reuse.",
+        next: "Choose Try again. If it still fails, open the project folder and run npm install after checking your network connection.",
+      };
+    }
     if (/spawn EINVAL|npm\.cmd/i.test(cleanMessage) && platform === "windows") {
       return {
         title: "Windows needs the latest EAI CLI",

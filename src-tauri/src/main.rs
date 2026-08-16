@@ -1100,6 +1100,7 @@ fn run_bootstrap_sync(app: AppHandle, step: String, project_name: Option<String>
                 "--current-dir".to_string(),
                 "--skip-prompts".to_string(),
                 "--no-splash".to_string(),
+                "--no-install".to_string(),
             ];
             let existing_app = app_key.as_ref().is_some_and(|value| !value.trim().is_empty());
             if let Some(app_key) = app_key.filter(|value| !value.trim().is_empty()) {
@@ -1108,26 +1109,67 @@ fn run_bootstrap_sync(app: AppHandle, step: String, project_name: Option<String>
             let init_args_ref = init_args.iter().map(String::as_str).collect::<Vec<_>>();
             match run_program_in_directory("eai", &init_args_ref, Some(&directory)) {
                 Ok((stdout, stderr)) => {
+                    emit_progress(
+                        &app,
+                        "init",
+                        "Installing app dependencies",
+                        "Installing the generated project's npm packages.",
+                        Some(90),
+                        Some(90),
+                    );
+                    let npm_result = run_program_in_directory(
+                        "npm",
+                        &["install", "--no-audit", "--no-fund"],
+                        Some(&directory),
+                    );
+                    let (npm_stdout, npm_stderr) = match npm_result {
+                        Ok(output) => output,
+                        Err(error) => {
+                            return command_result(
+                                "init",
+                                false,
+                                &format!("The app was created, but its dependencies could not be installed: {error}"),
+                                Some("Open the project folder and run npm install, then retry the setup."),
+                                Some(format!("{stdout}\n{stderr}")),
+                                true,
+                            );
+                        }
+                    };
+                    emit_progress(
+                        &app,
+                        "init",
+                        "App dependencies ready",
+                        "The generated project and its packages are ready.",
+                        Some(100),
+                        Some(0),
+                    );
                     let message = if existing_app {
-                        "The existing app was selected and the local project was initialised."
+                        "The existing app was selected and the project was initialised."
                     } else {
-                        "The app was initialised and the Gofer assets are ready."
+                        "The app was initialised and its dependencies are ready."
                     };
                     let command = if existing_app {
-                        "eai init <project-name> --app-key <app-key> --company-tenant <company-tenant-id> --current-dir --skip-prompts --no-splash"
+                        "eai init <project-name> --app-key <app-key> --company-tenant <company-tenant-id> --current-dir --skip-prompts --no-splash --no-install"
                     } else {
-                        "eai init <project-name> --company-tenant <company-tenant-id> --current-dir --skip-prompts --no-splash"
+                        "eai init <project-name> --company-tenant <company-tenant-id> --current-dir --skip-prompts --no-splash --no-install"
                     };
-                    let mut result = command_result("init", true, message, Some(command), Some(format!("{stdout}\n{stderr}")), false);
+                    let mut result = command_result(
+                        "init",
+                        true,
+                        message,
+                        Some(command),
+                        Some(format!("{stdout}\n{stderr}\n{npm_stdout}\n{npm_stderr}")),
+                        false,
+                    );
                     result.project_directory = Some(directory.to_string_lossy().to_string());
                     result.project_path = Some(directory.to_string_lossy().to_string());
                     result
                 }
                 Err(error) => {
                     let command = if existing_app {
-                        "eai init <project-name> --app-key <app-key> --company-tenant <company-tenant-id> --current-dir --skip-prompts --no-splash"
+                        "eai init <project-name> --app-key <app-key> --company-tenant <company-tenant-id> --current-dir --skip-prompts --no-splash --no-install"
                     } else {
-                        "eai init <project-name> --company-tenant <company-tenant-id> --current-dir --skip-prompts --no-splash"
+                        "eai init <project-name> --company-tenant <company-tenant-id> --current-dir --skip-prompts --no-splash --no-install"
                     };
                     command_result("init", false, &error, Some(command), None, true)
                 }

@@ -55,11 +55,13 @@ the installer itself. EAI Setup may still ask for permission when the user
 chooses to install system-managed Git or Node.js prerequisites; that request is
 separate and is shown by the setup window as an explicit action.
 
-On Windows, EAI Setup requires an EAI CLI release that launches the `npm.cmd`
-script through the Windows shell. If an older CLI reports `spawn EINVAL` while
-installing app dependencies, the project scaffold may already exist; reopen
-EAI Setup so it can update the CLI, then choose Try again. The wizard removes
-terminal formatting codes and keeps the recovery message visible.
+On Windows, EAI Setup does not rely on the CLI to launch a nested `npm.cmd`
+process. It calls `eai init --no-install` to create the scaffold, then runs the
+platform-aware npm installer from the desktop process. This keeps the setup
+flow reliable when the user's PowerShell execution policy or PATH would make a
+CLI-launched Windows script fail. A direct `eai init` still requires the CLI's
+Windows npm launcher support; if it reports `spawn EINVAL`, update the CLI
+before retrying that direct command.
 
 The production release controller is run by release.sh publish. It cannot
 declare a release healthy from simulated installer files, simulated tenant

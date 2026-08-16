@@ -24,8 +24,10 @@ hands control to the normal EAI CLI flow.
 6. Lets the user choose an existing folder or a new project folder. Tenant
    selection remains part of the normal EAI CLI prompts, where the platform can
    show only tenants the signed-in user may access.
-7. Runs `eai init`, which fetches the supported Gofer assets and EAI app
-   template through the existing CLI contract.
+7. Runs `eai init --no-install`, which fetches the supported Gofer assets and
+   EAI app template through the existing CLI contract, then installs the
+   generated app dependencies from the setup process itself. This avoids a
+   second Windows shell launcher inside the CLI.
 8. Detects supported AI workspaces without reading provider accounts or project
    files. It remembers the last successfully opened workspace and recommends
    GitHub Copilot in VS Code when the user needs to choose one.
