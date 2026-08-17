@@ -98,4 +98,22 @@ if (wizard.chooseAiSurface(surfaceInventory) !== "claude-desktop") throw new Err
 surfaceInventory.surfaces[1].installed = false;
 if (wizard.chooseAiSurface(surfaceInventory) !== "vscode-copilot") throw new Error("wizard does not fall back from a stale AI surface preference");
 
+const expectedRecommendationScores = {
+  "vscode-copilot": 4,
+  "copilot-cli": 3,
+  "copilot-desktop": 2,
+  "claude-desktop": 2,
+  "claude-cli": 3,
+  "codex-desktop": 3,
+  "codex-cli": 3,
+  "grok-cli": 1,
+};
+for (const [surfaceId, score] of Object.entries(expectedRecommendationScores)) {
+  const recommendation = wizard.aiSurfaceRecommendation(surfaceId);
+  if (recommendation.score !== score || recommendation.maximum !== 4 || !recommendation.label) {
+    throw new Error(`wizard AI surface recommendation is wrong for ${surfaceId}`);
+  }
+}
+if (wizard.aiSurfaceRecommendation("unknown").score !== 0) throw new Error("wizard unknown AI surface must not receive a recommendation score");
+
 console.log("wizard state tests ok");

@@ -34,6 +34,9 @@ const aiSurfaceNext = document.querySelector("#ai-surface-next");
 const aiSurfaceConsent = document.querySelector("#ai-surface-consent");
 const refreshAiButton = document.querySelector("#refresh-ai");
 const startAiButton = document.querySelector("#start-ai");
+const recommendationHelp = document.querySelector("#recommendation-help");
+const recommendationDialog = document.querySelector("#recommendation-dialog");
+const recommendationClose = document.querySelector("#recommendation-close");
 
 const wizard = EAIWizard.createState();
 let environmentReport = null;
@@ -110,6 +113,20 @@ function updateAiSurfaceControls(surface) {
     aiSurfaceNext.hidden = false;
     aiSurfaceNext.textContent = surface.installed ? copy.ready : copy.notInstalled;
   }
+}
+
+function createHarveyBall(surface) {
+  const recommendation = EAIWizard.aiSurfaceRecommendation(surface.id);
+  const wrapper = document.createElement("span");
+  wrapper.className = "harvey-ball-label";
+  wrapper.setAttribute("aria-label", `Recommendation: ${recommendation.score} of ${recommendation.maximum}, ${recommendation.label}`);
+  wrapper.title = `${recommendation.label}: ${recommendation.score} of ${recommendation.maximum}`;
+  const ball = document.createElement("span");
+  ball.className = "harvey-ball";
+  ball.style.setProperty("--recommendation-score", recommendation.score);
+  ball.setAttribute("aria-hidden", "true");
+  wrapper.append(ball);
+  return { element: wrapper, recommendation };
 }
 
 function formatEta(seconds) {
@@ -862,7 +879,12 @@ function renderAiSurfaces() {
     copy.append(name, detail);
     const badge = document.createElement("span");
     badge.className = "surface-badge";
-    badge.textContent = surface.recommended ? "Recommended" : surface.installed ? "Ready" : "Official download";
+    const { element: harveyBall, recommendation } = createHarveyBall(surface);
+    const badgeText = document.createElement("span");
+    badgeText.textContent = recommendation.score === recommendation.maximum
+      ? "Recommended"
+      : surface.installed ? "Ready" : "Official download";
+    badge.append(harveyBall, badgeText);
     row.append(input, copy, badge);
     aiSurfaceOptions.append(row);
   }
@@ -878,6 +900,12 @@ function renderAiSurfaces() {
     : "<strong>Choose an AI workspace</strong><p>GitHub Copilot, Claude, Codex, and Grok can work with your EAI project. Install one only if you need it.</p>";
 }
 
+recommendationHelp?.addEventListener("click", () => recommendationDialog?.showModal());
+recommendationClose?.addEventListener("click", () => recommendationDialog?.close());
+recommendationDialog?.addEventListener("click", (event) => {
+  if (event.target === recommendationDialog) recommendationDialog.close();
+});
+
 async function loadAiSurfaces() {
   if (!createdProjectDirectory) return false;
   try {
@@ -891,7 +919,9 @@ async function loadAiSurfaces() {
           { id: "copilot-cli", name: "GitHub Copilot CLI", provider: "GitHub", launchSupport: "project-and-prompt", installed: false, recommended: false },
           { id: "copilot-desktop", name: "GitHub Copilot app", provider: "GitHub", launchSupport: "manual-project", installed: false, recommended: false },
           { id: "claude-desktop", name: "Claude Desktop", provider: "Anthropic", launchSupport: "manual-project", installed: false, recommended: false },
+          { id: "claude-cli", name: "Claude Code", provider: "Anthropic", launchSupport: "project-and-prompt", installed: false, recommended: false },
           { id: "codex-desktop", name: "Codex Desktop", provider: "OpenAI", launchSupport: "project-only", installed: false, recommended: false },
+          { id: "codex-cli", name: "Codex CLI", provider: "OpenAI", launchSupport: "project-and-prompt", installed: false, recommended: false },
           { id: "grok-cli", name: "Grok Build", provider: "xAI", launchSupport: "project-and-prompt", installed: false, recommended: false },
         ],
       };

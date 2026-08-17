@@ -146,6 +146,23 @@
     return inventory.surfaces.find((surface) => surface.installed)?.id || inventory.surfaces[0]?.id || null;
   }
 
+  const aiSurfaceRecommendationScores = Object.freeze({
+    "vscode-copilot": 4,
+    "copilot-cli": 3,
+    "copilot-desktop": 2,
+    "claude-desktop": 2,
+    "claude-cli": 3,
+    "codex-desktop": 3,
+    "codex-cli": 3,
+    "grok-cli": 1,
+  });
+
+  function aiSurfaceRecommendation(surfaceId) {
+    const score = aiSurfaceRecommendationScores[surfaceId] ?? 0;
+    const labels = ["Not scored", "Basic handoff", "Supported", "Strong fit", "Best fit"];
+    return { score, maximum: 4, label: labels[score] };
+  }
+
   root.EAIWizard = {
     clampStep,
     cleanText,
@@ -157,6 +174,7 @@
     isKebabCase,
     prerequisitesReady,
     chooseAiSurface,
+    aiSurfaceRecommendation,
     retryActionLabel,
     resolveTenantSelection,
     workspaceRetryCanContinue,
