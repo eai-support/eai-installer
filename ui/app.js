@@ -48,6 +48,7 @@ let pendingAdminPassword = null;
 let companyTenants = [];
 let selectedCompanyTenantId = null;
 let selectedCompanyAppKey = null;
+let failedAppTenantId = null;
 let createdProjectDirectory = null;
 let aiSurfaceInventory = null;
 let selectedAiSurfaceId = null;
@@ -665,12 +666,14 @@ async function loadCompanyApps(tenantId) {
   try {
     tenant.apps = await invoke("get_company_apps", { tenantId });
     tenant.appsLoaded = true;
+    failedAppTenantId = null;
     renderCompanyApps();
     recordActivityEvent("Apps ready", `Apps for ${tenant.displayName} are ready.`, "Ready");
     return true;
   } catch (error) {
-    const failure = EAIWizard.describeWorkspaceFailure(error);
-    showOutput(failure.detail, `${failure.next} Diagnostic: ${failure.diagnostic}`);
+    failedAppTenantId = tenantId;
+    const failure = EAIWizard.describeAppFailure(error);
+    showOutput(failure.title, `${failure.detail} ${failure.next} Diagnostic: ${failure.diagnostic}`);
     setActivity(failure.title, `${failure.detail} ${failure.next}`, 0, false, "", "Error");
     if (retryWorkspaces) retryWorkspaces.hidden = !failure.retryable;
     return false;
@@ -706,6 +709,7 @@ function selectCompanyApp() {
 
 async function loadCompanyTenants() {
   if (demoMode) return true;
+  failedAppTenantId = null;
   if (retryWorkspaces) retryWorkspaces.hidden = true;
   setActivity("Checking company workspaces", "Finding where your new app can be created.", null, true, "", "Checking");
   try {
@@ -726,7 +730,7 @@ async function loadCompanyTenants() {
     return true;
   } catch (error) {
     const failure = EAIWizard.describeWorkspaceFailure(error);
-    showOutput(failure.detail, `${failure.next} Diagnostic: ${failure.diagnostic}`);
+    showOutput(failure.title, `${failure.detail} ${failure.next} Diagnostic: ${failure.diagnostic}`);
     setActivity(failure.title, `${failure.detail} ${failure.next}`, 0, false, "", "Error");
     if (retryWorkspaces) retryWorkspaces.hidden = !failure.retryable;
     return false;
@@ -934,9 +938,12 @@ async function runAction(action) {
   if (action === "install-all") return installPrerequisites();
   if (action === "login") return runLogin();
   if (action === "retry-workspaces") {
-    if (await loadCompanyTenants()) {
+    const ready = failedAppTenantId
+      ? await loadCompanyApps(failedAppTenantId)
+      : await loadCompanyTenants();
+    if (ready) {
       if (retryWorkspaces) retryWorkspaces.hidden = true;
-      setActivity("Company workspaces ready", "Choose where this app should be created.", 100, false, "", "Ready");
+      setActivity("EAI is ready", "Continue setting up your app.", 100, false, "", "Ready");
       setStep(4);
     }
     return;

@@ -47,6 +47,14 @@ const accessWorkspaceFailure = wizard.describeWorkspaceFailure("403 Forbidden");
 if (accessWorkspaceFailure.title === "EAI is temporarily unavailable") {
   throw new Error("wizard must not classify an access denial as a temporary platform outage");
 }
+const temporaryAppFailure = wizard.describeAppFailure("502 Bad Gateway");
+if (temporaryAppFailure.title !== "EAI is temporarily unavailable" || !temporaryAppFailure.detail.includes("company workspace is ready") || !temporaryAppFailure.next.includes("Try again")) {
+  throw new Error("wizard temporary app failure guidance is wrong");
+}
+const deniedAppFailure = wizard.describeAppFailure("403 Forbidden");
+if (deniedAppFailure.title !== "Apps need attention" || deniedAppFailure.detail.includes("company workspaces after")) {
+  throw new Error("wizard app failure guidance is misleading");
+}
 
 const report = {
   platform: "macos",

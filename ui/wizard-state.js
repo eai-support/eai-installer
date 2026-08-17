@@ -83,6 +83,35 @@
     };
   }
 
+  function describeAppFailure(message) {
+    const diagnostic = cleanText(message) || "Apps could not be loaded.";
+    if (/\b(502|503|504)\b|bad gateway|service unavailable|gateway timeout|request_error|temporarily unavailable/i.test(diagnostic)) {
+      return {
+        title: "EAI is temporarily unavailable",
+        detail: "Your sign-in is complete and your company workspace is ready. EAI could not load the apps after several attempts.",
+        next: "Wait a moment, then choose Try again.",
+        diagnostic,
+        retryable: true,
+      };
+    }
+    if (/\b(401|token expired|not authenticated|sign-in)\b/i.test(diagnostic)) {
+      return {
+        title: "Sign-in needs refreshing",
+        detail: "EAI could not confirm the current browser sign-in while loading apps.",
+        next: "Return to sign-in and refresh your session.",
+        diagnostic,
+        retryable: false,
+      };
+    }
+    return {
+      title: "Apps need attention",
+      detail: "EAI could not load the apps for this company workspace.",
+      next: "Review Recent activity, then choose Try again.",
+      diagnostic,
+      retryable: true,
+    };
+  }
+
   function createState() {
     return { step: 0, prerequisitesReady: false, projectName: "" };
   }
@@ -105,6 +134,7 @@
     clampStep,
     cleanText,
     createState,
+    describeAppFailure,
     describeInitFailure,
     describeWorkspaceFailure,
     initButtonLabel,

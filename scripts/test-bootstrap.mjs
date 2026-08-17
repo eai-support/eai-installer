@@ -172,6 +172,12 @@ if (rust.includes("Command::new(user") || rust.includes("shell = user")) {
 console.log("bootstrap safety checks ok");
 
 const wizard = await readFile(new URL("../ui/index.html", import.meta.url), "utf8");
+const activityStart = wizard.indexOf('class="activity"');
+const firstPanelStart = wizard.indexOf('class="wizard-panel');
+const retryWorkspaceControl = wizard.indexOf('id="retry-workspaces"');
+if (retryWorkspaceControl < activityStart || retryWorkspaceControl > firstPanelStart) {
+  throw new Error("wizard: workspace retry must remain visible independently of the current panel");
+}
 const brandLogo = await readFile(new URL("../ui/assets/eai-square-man-logo.png", import.meta.url));
 if (brandLogo.length < 1024) throw new Error("wizard: Enterprise AI logo asset is missing or unexpectedly small");
 for (const brandElement of ["Enterprise AI Setup", "assets/eai-square-man-logo.png", "class=\"brand-logo\"", "class=\"panel-logo\""]) {
