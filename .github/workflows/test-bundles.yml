@@ -113,6 +113,13 @@ jobs:
           }
           $installed | Select-Object FullName, Length
           if ($installed.Count -eq 0) { throw "Windows installer did not create an executable in the expected install roots" }
+          $appExecutable = $installed | Where-Object { $_.Name -ieq 'eai-setup.exe' } | Select-Object -First 1
+          if (-not $appExecutable) { throw "Windows installer did not install eai-setup.exe" }
+          $binary = [IO.File]::ReadAllBytes($appExecutable.FullName)
+          $manifestText = [Text.Encoding]::UTF8.GetString($binary) + [Text.Encoding]::Unicode.GetString($binary)
+          if ($manifestText -notmatch 'requestedExecutionLevel' -or $manifestText -notmatch 'asInvoker') {
+            throw "Installed Windows app does not contain the standard-user execution manifest"
+          }
 
       - name: Smoke-test macOS disk image
         if: runner.os == 'macOS'

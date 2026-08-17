@@ -75,6 +75,17 @@ const windowsIcon = await readFile(new URL("../src-tauri/icons/icon.ico", import
 if (windowsIcon.length < 32 || windowsIcon.readUInt16LE(2) !== 1) {
   throw new Error("Tauri Windows icon resource is missing or invalid");
 }
+const windowsBuild = await readFile(new URL("../src-tauri/build.rs", import.meta.url), "utf8");
+const windowsManifest = await readFile(new URL("../src-tauri/windows-app-manifest.xml", import.meta.url), "utf8");
+if (!windowsBuild.includes('app_manifest(include_str!("windows-app-manifest.xml"))')) {
+  throw new Error("Tauri build does not embed the Windows application manifest");
+}
+if (!windowsManifest.includes('requestedExecutionLevel level="asInvoker" uiAccess="false"')) {
+  throw new Error("Windows app must run as the signed-in user and request elevation only for individual package operations");
+}
+if (!windowsManifest.includes('name="Microsoft.Windows.Common-Controls"') || !windowsManifest.includes('version="6.0.0.0"')) {
+  throw new Error("Windows app manifest must preserve native Common Controls v6 support");
+}
 for (const step of ["homebrew", "git", "node", "eai-cli", "login", "init", "start"]) {
   if (!rust.includes(`\"${step}\"`)) throw new Error(`Tauri adapter is missing ${step}`);
 }
