@@ -346,6 +346,21 @@ fn run_npm_in_directory(args: &[&str], directory: Option<&Path>) -> Result<(Stri
     run_program_in_directory("npm", args, directory)
 }
 
+fn npm_version() -> Option<String> {
+    version("npm", &["--version"]).or_else(|| {
+        #[cfg(target_os = "windows")]
+        {
+            return run_npm_in_directory(&["--version"], None)
+                .ok()
+                .map(|(stdout, stderr)| if stdout.is_empty() { stderr } else { stdout });
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            None
+        }
+    })
+}
+
 #[cfg(target_os = "windows")]
 fn windows_shell_arg(value: &str) -> String {
     if value.is_empty() || value.chars().any(|character| character.is_whitespace() || matches!(character, '&' | '|' | '<' | '>' | '^' | '(' | ')' | '"')) {
@@ -800,7 +815,7 @@ fn detect_environment() -> EnvironmentReport {
         tools: vec![
             ToolState { command: "git".to_string(), version: git_version() },
             ToolState { command: "node".to_string(), version: version("node", &["--version"]) },
-            ToolState { command: "npm".to_string(), version: version("npm", &["--version"]) },
+            ToolState { command: "npm".to_string(), version: npm_version() },
             ToolState { command: "eai".to_string(), version: eai_cli_version() },
         ],
         package_manager,
@@ -879,7 +894,7 @@ fn package_ready(package: &str) -> bool {
     if package == "git" {
         git_version().is_some()
     } else {
-        version("node", &["--version"]).is_some() && version("npm", &["--version"]).is_some()
+        version("node", &["--version"]).is_some() && npm_version().is_some()
     }
 }
 
@@ -1575,5 +1590,13 @@ mod tests {
         assert_eq!(tenants.len(), 1);
         assert_eq!(tenants[0].id, "child-1");
         assert!(tenants[0].apps.is_empty());
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn windows_node_and_npm_readiness_uses_the_native_installation() {
+        assert!(version("node", &["--version"]).is_some());
+        assert!(npm_version().is_some());
+        assert!(package_ready("node"));
     }
 }

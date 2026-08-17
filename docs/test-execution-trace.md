@@ -25,7 +25,7 @@ The `Test installer bundles` workflow runs for every pull request.
 
 | Platform | Architectures | Checks performed |
 | --- | --- | --- |
-| Windows 10/11 family | x64, ARM64 | Build NSIS installer, run silent current-user installation, and confirm an installed executable exists. |
+| Windows 10/11 family | x64, ARM64 | Run the native Windows prerequisite unit test, build the NSIS installer, run silent current-user installation, and confirm an installed executable exists. |
 | macOS | Apple Silicon, Intel | Build DMG, validate the image, mount it, find the app executable, copy and ad-hoc sign a disposable development app, then launch it. |
 | Ubuntu | x64, ARM64 | Build DEB, confirm it contains `/usr/bin/eai-setup`, install it, verify package state and executable, then uninstall it. |
 | Download verification | All six files | Download the workflow artifacts again, require all architectures, validate package structure, and record SHA-256 hashes. |

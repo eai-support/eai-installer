@@ -73,6 +73,10 @@ jobs:
       - name: Validate source
         run: npm test
 
+      - name: Test native Windows prerequisite detection
+        if: matrix.label == 'Windows installer'
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+
       - name: Build unsigned test bundle
         uses: tauri-apps/tauri-action@v1
         with:
