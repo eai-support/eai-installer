@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 function parseArgs(argv) {
-  const result = { vms: ["macos", "windows", "ubuntu"] };
+  const result = {};
   for (let index = 0; index < argv.length; index += 1) {
     const value = argv[index];
     if (value === "--help") {
