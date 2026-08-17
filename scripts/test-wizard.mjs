@@ -35,6 +35,42 @@ const genericFailure = wizard.describeInitFailure("folder is not writable", "mac
 if (genericFailure.title !== "App setup failed" || !genericFailure.detail.includes("folder is not writable")) {
   throw new Error("wizard generic failure guidance is wrong");
 }
+const temporaryWorkspaceFailure = wizard.describeWorkspaceFailure("503 Service Unavailable");
+if (temporaryWorkspaceFailure.title !== "EAI is temporarily unavailable" || !temporaryWorkspaceFailure.detail.includes("sign-in is complete") || !temporaryWorkspaceFailure.next.includes("Try workspace check again") || temporaryWorkspaceFailure.retryable !== true) {
+  throw new Error("wizard temporary workspace failure guidance is wrong");
+}
+const missingWorkspaceFailure = wizard.describeWorkspaceFailure("No active company workspaces are available for this account.");
+if (missingWorkspaceFailure.title !== "No company workspace is available" || !missingWorkspaceFailure.next.includes("company administrator")) {
+  throw new Error("wizard missing workspace guidance is wrong");
+}
+const accessWorkspaceFailure = wizard.describeWorkspaceFailure("403 Forbidden");
+if (accessWorkspaceFailure.title === "EAI is temporarily unavailable") {
+  throw new Error("wizard must not classify an access denial as a temporary platform outage");
+}
+const temporaryAppFailure = wizard.describeAppFailure("502 Bad Gateway");
+if (temporaryAppFailure.title !== "EAI is temporarily unavailable" || !temporaryAppFailure.detail.includes("company workspace is ready") || !temporaryAppFailure.next.includes("Try again")) {
+  throw new Error("wizard temporary app failure guidance is wrong");
+}
+const deniedAppFailure = wizard.describeAppFailure("403 Forbidden");
+if (deniedAppFailure.title !== "Apps need attention" || deniedAppFailure.detail.includes("company workspaces after")) {
+  throw new Error("wizard app failure guidance is misleading");
+}
+if (wizard.retryActionLabel("workspace") !== "Try workspace check again" || wizard.retryActionLabel("app") !== "Try again") {
+  throw new Error("wizard retry labels do not match the failed action");
+}
+if (wizard.workspaceRetryCanContinue(false, 2, null) || !wizard.workspaceRetryCanContinue(false, 1, "only") || !wizard.workspaceRetryCanContinue(true, 2, "selected")) {
+  throw new Error("wizard workspace retry skips a required multi-workspace choice");
+}
+const companyTenants = [{ id: "first" }, { id: "requested" }];
+if (wizard.resolveTenantSelection(companyTenants, "requested") !== "requested") {
+  throw new Error("wizard clears a valid release-test tenant when multiple workspaces are available");
+}
+if (wizard.resolveTenantSelection(companyTenants, "missing") !== null) {
+  throw new Error("wizard keeps a tenant selection that is no longer available");
+}
+if (wizard.resolveTenantSelection([{ id: "only" }], null) !== "only") {
+  throw new Error("wizard does not automatically select the only company workspace");
+}
 
 const report = {
   platform: "macos",

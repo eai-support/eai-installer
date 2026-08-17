@@ -13,6 +13,9 @@ cancel/selection, prerequisite failures, duplicate clicks, and Windows npm
 launcher failures. Deterministic behavior is checked locally; native bundle
 and guest-machine behavior is checked by the platform workflows below.
 
+The exact test execution trace, including what each gate proves and what it
+does not prove, is in [`docs/test-execution-trace.md`](./test-execution-trace.md).
+
 The bootstrap contract tests also verify that Homebrew is optional on macOS,
 that missing Git uses Apple's Command Line Tools rather than full Xcode, and
 that a missing Software Update listing triggers Apple's native catalog refresh

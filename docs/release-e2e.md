@@ -164,7 +164,8 @@ step failed:
     "authentication": "passed",
     "tenant": "passed",
     "app": "passed",
-    "project": "passed"
+    "project": "passed",
+    "aiHandoff": "passed"
   }
 }
 ```

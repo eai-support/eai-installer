@@ -27,7 +27,7 @@ struct EnvironmentReport {
     package_manager: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct CompanyApp {
     key: String,
@@ -35,7 +35,7 @@ struct CompanyApp {
     status: String,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct CompanyTenant {
     id: String,
@@ -55,6 +55,7 @@ struct BootstrapResult {
     project_path: Option<String>,
     requires_user_action: bool,
     project_directory: Option<String>,
+    app_created: bool,
 }
 
 #[derive(Clone, Serialize)]
@@ -194,7 +195,7 @@ fn macos_package_bin_dirs() -> Vec<PathBuf> {
 fn windows_package_bin_dirs() -> Vec<PathBuf> {
     if !cfg!(target_os = "windows") { return Vec::new(); }
     let mut directories = Vec::new();
-    for variable in ["ProgramFiles", "ProgramFiles(x86)", "LOCALAPPDATA", "APPDATA"] {
+    for variable in ["ProgramW6432", "ProgramFiles", "ProgramFiles(Arm)", "ProgramFiles(x86)", "LOCALAPPDATA", "APPDATA"] {
         if let Some(root) = env::var_os(variable) {
             let root = PathBuf::from(root);
             directories.push(root.join("nodejs"));
@@ -278,6 +279,47 @@ fn run_program(program: &str, args: &[&str]) -> Result<(String, String), String>
     run_program_in_directory(program, args, None)
 }
 
+fn is_transient_platform_error(message: &str) -> bool {
+    let message = message.to_ascii_lowercase();
+    let has_transient_status = message
+        .split(|character: char| !character.is_ascii_digit())
+        .any(|token| matches!(token, "502" | "503" | "504"));
+
+    has_transient_status
+        || [
+            "bad gateway",
+            "service unavailable",
+            "gateway timeout",
+            "request_error",
+            "temporarily unavailable",
+        ]
+        .iter()
+        .any(|value| message.contains(value))
+}
+
+fn with_transient_retries<T, F>(attempts: usize, delay: Duration, mut operation: F) -> Result<T, String>
+where
+    F: FnMut() -> Result<T, String>,
+{
+    let attempts = attempts.max(1);
+    for attempt in 0..attempts {
+        match operation() {
+            Ok(value) => return Ok(value),
+            Err(error) if attempt + 1 < attempts && is_transient_platform_error(&error) => {
+                if !delay.is_zero() {
+                    thread::sleep(delay);
+                }
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    unreachable!("the retry loop always returns on its final attempt")
+}
+
+fn run_eai_with_retries(args: &[&str]) -> Result<(String, String), String> {
+    with_transient_retries(3, Duration::from_secs(1), || run_program("eai", args))
+}
+
 fn npm_cli_script() -> Option<PathBuf> {
     let mut node_paths = vec![PathBuf::from(executable("node"))];
     #[cfg(target_os = "windows")]
@@ -293,7 +335,11 @@ fn npm_cli_script() -> Option<PathBuf> {
     }).find(|script| script.is_file())
 }
 
-fn run_npm_in_directory(args: &[&str], directory: Option<&Path>) -> Result<(String, String), String> {
+fn run_npm_in_directory_with_env(
+    args: &[&str],
+    directory: Option<&Path>,
+    environment: &[(&str, &str)],
+) -> Result<(String, String), String> {
     // npm.cmd is a Windows shell shim. Calling npm's JavaScript entry point
     // through the resolved Node executable avoids CreateProcess and shell
     // quoting differences across Windows editions and user install paths.
@@ -302,9 +348,31 @@ fn run_npm_in_directory(args: &[&str], directory: Option<&Path>) -> Result<(Stri
         let mut node_args = Vec::with_capacity(args.len() + 1);
         node_args.push(script.as_str());
         node_args.extend(args.iter().copied());
-        return run_program_in_directory("node", &node_args, directory);
+        return run_program_in_directory_with_env("node", &node_args, directory, environment);
     }
-    run_program_in_directory("npm", args, directory)
+    run_program_in_directory_with_env("npm", args, directory, environment)
+}
+
+fn run_npm_in_directory(
+    args: &[&str],
+    directory: Option<&Path>,
+) -> Result<(String, String), String> {
+    run_npm_in_directory_with_env(args, directory, &[])
+}
+
+fn npm_version() -> Option<String> {
+    version("npm", &["--version"]).or_else(|| {
+        #[cfg(target_os = "windows")]
+        {
+            return run_npm_in_directory(&["--version"], None)
+                .ok()
+                .map(|(stdout, stderr)| if stdout.is_empty() { stderr } else { stdout });
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            None
+        }
+    })
 }
 
 #[cfg(target_os = "windows")]
@@ -341,7 +409,29 @@ fn clean_process_output(value: &str) -> String {
     clean.trim().to_string()
 }
 
-fn run_program_in_directory(program: &str, args: &[&str], directory: Option<&Path>) -> Result<(String, String), String> {
+fn run_program_in_directory_with_env(
+    program: &str,
+    args: &[&str],
+    directory: Option<&Path>,
+    environment: &[(&str, &str)],
+) -> Result<(String, String), String> {
+    // npm exposes `eai` as a shell wrapper. Running the package entry point
+    // through Node avoids Windows batch quoting and stale-process PATH issues,
+    // including user profiles whose paths contain spaces.
+    if program == "eai" {
+        if let Some(script) = eai_cli_script() {
+            let script = script.to_string_lossy().to_string();
+            let mut node_args = Vec::with_capacity(args.len() + 1);
+            node_args.push(script.as_str());
+            node_args.extend(args.iter().copied());
+            return run_program_in_directory_with_env(
+                "node",
+                &node_args,
+                directory,
+                environment,
+            );
+        }
+    }
     let program_path = executable(program);
     #[cfg(target_os = "windows")]
     let mut command = if program_path.ends_with(".cmd") || program_path.ends_with(".bat") {
@@ -398,6 +488,7 @@ fn run_program_in_directory(program: &str, args: &[&str], directory: Option<&Pat
     if let Some(directory) = directory {
         command.current_dir(directory);
     }
+    command.envs(environment.iter().copied());
     let output = command
         .output()
         .map_err(|error| format!("could not start {program}: {error}"))?;
@@ -413,6 +504,14 @@ fn run_program_in_directory(program: &str, args: &[&str], directory: Option<&Pat
             (true, true) => format!("{program} exited unsuccessfully"),
         })
     }
+}
+
+fn run_program_in_directory(
+    program: &str,
+    args: &[&str],
+    directory: Option<&Path>,
+) -> Result<(String, String), String> {
+    run_program_in_directory_with_env(program, args, directory, &[])
 }
 
 fn shell_quote(value: &str) -> String {
@@ -431,12 +530,25 @@ fn applescript_quote(value: &str) -> String {
 
 fn user_npm_prefix() -> Option<PathBuf> {
     if cfg!(target_os = "windows") {
-        env::var_os("LOCALAPPDATA").map(|root| Path::new(&root).join("EAI Setup/npm-global"))
+        // The official Node.js installer places npm's standard per-user
+        // location on PATH. Installing there makes `eai` available to the
+        // desktop app and to newly opened command windows.
+        env::var_os("APPDATA").map(|root| Path::new(&root).join("npm"))
     } else if cfg!(unix) {
         env::var_os("HOME").map(|home| Path::new(&home).join(".eai-setup/npm-global"))
     } else {
         None
     }
+}
+
+fn eai_cli_script() -> Option<PathBuf> {
+    let prefix = user_npm_prefix()?;
+    [
+        prefix.join("node_modules/@enterpriseai/cli/dist/index.js"),
+        prefix.join("lib/node_modules/@enterpriseai/cli/dist/index.js"),
+    ]
+    .into_iter()
+    .find(|script| script.is_file())
 }
 
 fn expose_user_npm_bin() -> Result<(), String> {
@@ -579,14 +691,19 @@ fn command_result(step: &str, ok: bool, message: &str, command: Option<&str>, ou
         project_path: None,
         requires_user_action,
         project_directory: None,
+        app_created: false,
     }
 }
 
 fn list_company_apps(tenant_id: &str) -> Result<Vec<CompanyApp>, String> {
-    let (stdout, stderr) = run_program(
-        "eai",
-        &["app", "list", "--tenant-id", tenant_id, "--format", "json"],
-    )?;
+    let (stdout, stderr) = run_eai_with_retries(&[
+        "app",
+        "list",
+        "--tenant-id",
+        tenant_id,
+        "--format",
+        "json",
+    ])?;
     let payload: serde_json::Value = serde_json::from_str(&stdout).map_err(|error| {
         if stderr.is_empty() {
             format!("The EAI CLI returned invalid app data: {error}")
@@ -622,7 +739,11 @@ fn list_company_apps(tenant_id: &str) -> Result<Vec<CompanyApp>, String> {
 }
 
 fn list_company_tenants() -> Result<Vec<CompanyTenant>, String> {
-    let (stdout, stderr) = run_program("eai", &["tenant", "list", "--format", "json"])?;
+    let (stdout, stderr) = run_eai_with_retries(&["tenant", "list", "--format", "json"])?;
+    parse_company_tenants(&stdout, &stderr)
+}
+
+fn parse_company_tenants(stdout: &str, stderr: &str) -> Result<Vec<CompanyTenant>, String> {
     let payload: serde_json::Value = serde_json::from_str(&stdout).map_err(|error| {
         if stderr.is_empty() {
             format!("The EAI CLI returned invalid company workspace data: {error}")
@@ -665,15 +786,20 @@ fn list_company_tenants() -> Result<Vec<CompanyTenant>, String> {
     if tenants.is_empty() {
         return Err("No active company workspaces are available for this account. Ask a company administrator to add you, then sign in again.".to_string());
     }
-    for tenant in &mut tenants {
-        tenant.apps = list_company_apps(&tenant.id)?;
-    }
     Ok(tenants)
 }
 
 #[tauri::command]
 fn get_company_tenants() -> Result<Vec<CompanyTenant>, String> {
     list_company_tenants()
+}
+
+#[tauri::command]
+fn get_company_apps(tenant_id: String) -> Result<Vec<CompanyApp>, String> {
+    if tenant_id.trim().is_empty() {
+        return Err("Choose a company workspace before loading its apps.".to_string());
+    }
+    list_company_apps(&tenant_id)
 }
 
 #[tauri::command]
@@ -748,7 +874,7 @@ fn detect_environment() -> EnvironmentReport {
         tools: vec![
             ToolState { command: "git".to_string(), version: git_version() },
             ToolState { command: "node".to_string(), version: version("node", &["--version"]) },
-            ToolState { command: "npm".to_string(), version: version("npm", &["--version"]) },
+            ToolState { command: "npm".to_string(), version: npm_version() },
             ToolState { command: "eai".to_string(), version: eai_cli_version() },
         ],
         package_manager,
@@ -762,22 +888,10 @@ fn package_install_step(app: &AppHandle, step: &str, package: &str, message: &st
             return command_result(step, false, "WinGet is not available in this Windows session.", Some("Install or enable App Installer, then rerun EAI Setup."), None, true);
         }
         let package_id = if package == "git" { "Git.Git" } else { "OpenJS.NodeJS.LTS" };
-        return match run_program("winget", &["install", "--id", package_id, "-e", "--source", "winget", "--accept-source-agreements", "--accept-package-agreements"]) {
-            Ok((stdout, stderr)) => {
-                emit_progress(app, step, &format!("{package} installed"), "Verifying the installation.", Some(90), Some(5));
-                let ready = if package == "git" {
-                    version("git", &["--version"]).is_some()
-                } else {
-                    version("node", &["--version"]).is_some() && version("npm", &["--version"]).is_some()
-                };
-                if ready {
-                    command_result(step, true, message, Some("winget install (fixed package identifier)"), Some(format!("{stdout}\n{stderr}")), false)
-                } else {
-                    command_result(step, false, "Windows package installation finished, but the expected command is not available yet.", Some("Restart EAI Setup to reload the Windows PATH, then retry."), Some(format!("{stdout}\n{stderr}")), true)
-                }
-            }
-            Err(error) => command_result(step, false, &error, Some("winget install (fixed package identifier)"), None, true),
-        };
+        let install_result = run_program("winget", &["install", "--id", package_id, "-e", "--source", "winget", "--accept-source-agreements", "--accept-package-agreements", "--disable-interactivity"]);
+        emit_progress(app, step, &format!("Checking {package}"), "Confirming the installed commands are ready.", Some(90), Some(5));
+        let ready = wait_for_package_ready(package, 5);
+        return windows_package_install_result(step, package, message, install_result, ready);
     }
 
     if cfg!(target_os = "macos") {
@@ -833,6 +947,71 @@ fn package_install_step(app: &AppHandle, step: &str, package: &str, message: &st
     }
 
     command_result(step, false, "No supported Linux package manager was found.", Some("Use your distribution's signed package manager, then retry."), None, true)
+}
+
+fn package_ready(package: &str) -> bool {
+    if package == "git" {
+        git_version().is_some()
+    } else {
+        version("node", &["--version"]).is_some() && npm_version().is_some()
+    }
+}
+
+fn wait_for_package_ready(package: &str, attempts: usize) -> bool {
+    let attempts = attempts.max(1);
+    for attempt in 0..attempts {
+        if package_ready(package) {
+            return true;
+        }
+        if attempt + 1 < attempts {
+            thread::sleep(Duration::from_secs(1));
+        }
+    }
+    false
+}
+
+fn windows_package_install_result(
+    step: &str,
+    package: &str,
+    success_message: &str,
+    install_result: Result<(String, String), String>,
+    ready: bool,
+) -> BootstrapResult {
+    let command = Some("winget install (fixed package identifier)");
+    match (install_result, ready) {
+        (Ok((stdout, stderr)), true) => command_result(
+            step,
+            true,
+            success_message,
+            command,
+            Some(format!("{stdout}\n{stderr}")),
+            false,
+        ),
+        (Err(error), true) => command_result(
+            step,
+            true,
+            if package == "git" { "Git is already installed and ready." } else { "Node.js and npm are already installed and ready." },
+            command,
+            Some(error),
+            false,
+        ),
+        (Ok((stdout, stderr)), false) => command_result(
+            step,
+            false,
+            "Windows finished the package step, but the required commands are not available yet.",
+            Some("Restart EAI Setup to reload the Windows command paths, then choose Try again."),
+            Some(format!("{stdout}\n{stderr}")),
+            true,
+        ),
+        (Err(error), false) => command_result(
+            step,
+            false,
+            &error,
+            Some("Repair or reinstall the signed Windows package, then choose Try again."),
+            None,
+            true,
+        ),
+    }
 }
 
 fn command_line_tools_install_step(app: &AppHandle, admin_password: Option<&str>) -> BootstrapResult {
@@ -1178,10 +1357,10 @@ fn run_bootstrap_sync(app: AppHandle, step: String, project_name: Option<String>
                     }
                     emit_progress(&app, "eai-cli", "EAI CLI ready", "Verifying the eai command.", Some(90), Some(5));
                     if version("eai", &["--version"]).is_none() {
-                        return command_result("eai-cli", false, "npm finished, but the eai command is not available yet.", Some("Restart EAI Setup to reload the Windows PATH, then retry."), Some(format!("{stdout}\n{stderr}")), true);
+                        return command_result("eai-cli", false, "npm finished, but the installed EAI CLI could not be started.", Some("Choose Try again. If the problem continues, repair Node.js and rerun setup."), Some(format!("{stdout}\n{stderr}")), true);
                     }
                     let command = if cfg!(target_os = "windows") {
-                        "npm install --global --prefix %LOCALAPPDATA%\\EAI Setup\\npm-global @enterpriseai/cli"
+                        "npm install --global --prefix %APPDATA%\\npm @enterpriseai/cli"
                     } else {
                         "npm install --global --prefix ~/.eai-setup/npm-global @enterpriseai/cli"
                     };
@@ -1235,14 +1414,15 @@ fn run_bootstrap_sync(app: AppHandle, step: String, project_name: Option<String>
                         Some(90),
                         Some(90),
                     );
-                    let npm_result = run_npm_in_directory(
+                    let npm_result = run_npm_in_directory_with_env(
                         &["install", "--no-audit", "--no-fund"],
                         Some(&directory),
+                        &[("HUSKY", "0")],
                     );
                     let (npm_stdout, npm_stderr) = match npm_result {
                         Ok(output) => output,
                         Err(error) => {
-                            return command_result(
+                            let mut result = command_result(
                                 "init",
                                 false,
                                 &format!("The app was created, but its dependencies could not be installed: {error}"),
@@ -1250,6 +1430,10 @@ fn run_bootstrap_sync(app: AppHandle, step: String, project_name: Option<String>
                                 Some(format!("{stdout}\n{stderr}\n{error}")),
                                 true,
                             );
+                            result.project_directory = Some(directory.to_string_lossy().to_string());
+                            result.project_path = Some(directory.to_string_lossy().to_string());
+                            result.app_created = !existing_app;
+                            return result;
                         }
                     };
                     emit_progress(
@@ -1280,6 +1464,7 @@ fn run_bootstrap_sync(app: AppHandle, step: String, project_name: Option<String>
                     );
                     result.project_directory = Some(directory.to_string_lossy().to_string());
                     result.project_path = Some(directory.to_string_lossy().to_string());
+                    result.app_created = !existing_app;
                     result
                 }
                 Err(error) => {
@@ -1397,7 +1582,96 @@ fn local_device_id() -> Result<String, String> {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![detect_environment, run_bootstrap, get_company_tenants, get_e2e_configuration, verify_e2e_auth, write_e2e_receipt, open_signup, detect_ai_surfaces, start_ai_surface, install_ai_surface, open_project, local_device_id])
+        .invoke_handler(tauri::generate_handler![detect_environment, run_bootstrap, get_company_tenants, get_company_apps, get_e2e_configuration, verify_e2e_auth, write_e2e_receipt, open_signup, detect_ai_surfaces, start_ai_surface, install_ai_surface, open_project, local_device_id])
         .run(tauri::generate_context!())
         .expect("error while running EAI Setup");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::Cell;
+
+    #[test]
+    fn winget_already_current_is_success_when_commands_are_ready() {
+        let result = windows_package_install_result(
+            "node",
+            "node",
+            "Node.js installation completed.",
+            Err("Found an existing package already installed. No available upgrade found.".to_string()),
+            true,
+        );
+        assert!(result.ok);
+        assert_eq!(result.message, "Node.js and npm are already installed and ready.");
+        assert!(!result.requires_user_action);
+    }
+
+    #[test]
+    fn winget_failure_remains_failure_when_commands_are_missing() {
+        let result = windows_package_install_result(
+            "node",
+            "node",
+            "Node.js installation completed.",
+            Err("No available upgrade found.".to_string()),
+            false,
+        );
+        assert!(!result.ok);
+        assert!(result.requires_user_action);
+    }
+
+    #[test]
+    fn transient_platform_failures_retry_but_access_failures_do_not() {
+        let attempts = Cell::new(0);
+        let result = with_transient_retries(3, Duration::ZERO, || {
+            attempts.set(attempts.get() + 1);
+            if attempts.get() < 3 {
+                Err("503 Service Unavailable".to_string())
+            } else {
+                Ok("ready")
+            }
+        });
+        assert_eq!(result, Ok("ready"));
+        assert_eq!(attempts.get(), 3);
+
+        let access_attempts = Cell::new(0);
+        let denied: Result<&str, String> = with_transient_retries(3, Duration::ZERO, || {
+            access_attempts.set(access_attempts.get() + 1);
+            Err("403 Forbidden".to_string())
+        });
+        assert_eq!(denied, Err("403 Forbidden".to_string()));
+        assert_eq!(access_attempts.get(), 1);
+
+        let unrelated_attempts = Cell::new(0);
+        let unrelated: Result<&str, String> = with_transient_retries(3, Duration::ZERO, || {
+            unrelated_attempts.set(unrelated_attempts.get() + 1);
+            Err("Reference 1502 could not be found".to_string())
+        });
+        assert_eq!(unrelated, Err("Reference 1502 could not be found".to_string()));
+        assert_eq!(unrelated_attempts.get(), 1);
+    }
+
+    #[test]
+    fn company_workspace_parsing_keeps_direct_active_children_without_loading_apps() {
+        let payload = r#"{
+          "tenants": [
+            {"id":"child-1","displayName":"Child Workspace","slug":"child-workspace","directMembership":true,"isActive":true,"active":true},
+            {"id":"inherited","displayName":"Inherited","slug":"inherited","directMembership":false,"isActive":true,"active":false},
+            {"id":"disabled","displayName":"Disabled","slug":"disabled","directMembership":true,"isActive":false,"active":false}
+          ]
+        }"#;
+        let tenants = parse_company_tenants(payload, "").expect("direct active workspace should parse");
+        assert_eq!(tenants.len(), 1);
+        assert_eq!(tenants[0].id, "child-1");
+        assert!(tenants[0].apps.is_empty());
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn windows_node_and_npm_readiness_uses_the_native_installation() {
+        if version("node", &["--version"]).is_none() {
+            return;
+        }
+        assert!(npm_version().is_some());
+        assert!(package_ready("node"));
+    }
 }

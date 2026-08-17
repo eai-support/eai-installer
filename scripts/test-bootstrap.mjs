@@ -61,7 +61,7 @@ if (!dmgBackgroundSource.includes(">Install Enterprise AI harness</text>") || !d
 }
 
 const rust = (await readFile(new URL("../src-tauri/src/main.rs", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
-for (const value of ["MIN_EAI_CLI_VERSION", "@enterpriseai/cli", "eai_cli_version()", "user_npm_global_exec_dirs", "current_version >= MIN_EAI_CLI_VERSION"] ) {
+for (const value of ["MIN_EAI_CLI_VERSION", "@enterpriseai/cli", "eai_cli_version()", "user_npm_global_exec_dirs", "current_version >= MIN_EAI_CLI_VERSION", "fn eai_cli_script", "APPDATA", "run_program_in_directory_with_env(\"node\", &node_args, directory, environment)"] ) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter does not verify the canonical EAI CLI release: ${value}`);
 }
 if (rust.includes("latest_eai_cli_requirement") || rust.includes('version("npm", &["view", "@enterpriseai/cli"')) {
@@ -75,14 +75,32 @@ const windowsIcon = await readFile(new URL("../src-tauri/icons/icon.ico", import
 if (windowsIcon.length < 32 || windowsIcon.readUInt16LE(2) !== 1) {
   throw new Error("Tauri Windows icon resource is missing or invalid");
 }
+const windowsBuild = await readFile(new URL("../src-tauri/build.rs", import.meta.url), "utf8");
+const windowsManifest = await readFile(new URL("../src-tauri/windows-app-manifest.xml", import.meta.url), "utf8");
+if (!windowsBuild.includes('app_manifest(include_str!("windows-app-manifest.xml"))')) {
+  throw new Error("Tauri build does not embed the Windows application manifest");
+}
+if (!windowsManifest.includes('requestedExecutionLevel level="asInvoker" uiAccess="false"')) {
+  throw new Error("Windows app must run as the signed-in user and request elevation only for individual package operations");
+}
+if (!windowsManifest.includes('name="Microsoft.Windows.Common-Controls"') || !windowsManifest.includes('version="6.0.0.0"')) {
+  throw new Error("Windows app manifest must preserve native Common Controls v6 support");
+}
 for (const step of ["homebrew", "git", "node", "eai-cli", "login", "init", "start"]) {
   if (!rust.includes(`\"${step}\"`)) throw new Error(`Tauri adapter is missing ${step}`);
 }
 for (const value of ["detect_ai_surfaces", "start_ai_surface", "install_ai_surface", "AiSurfaceInventory", "eai", "start", "--check"]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing AI workspace handoff: ${value}`);
 }
-for (const value of ["get_company_tenants", "list_company_apps", "app", "tenant", "list", "--format", "json", "directMembership", "app_key", "--app-key"]) {
+for (const value of ["get_company_tenants", "get_company_apps", "list_company_apps", "app", "tenant", "list", "--format", "json", "directMembership", "app_key", "--app-key"]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing company workspace discovery: ${value}`);
+}
+const tenantListSource = rust.slice(rust.indexOf("fn list_company_tenants"), rust.indexOf("fn parse_company_tenants"));
+if (tenantListSource.includes("list_company_apps")) {
+  throw new Error("Tauri adapter must not load every workspace's apps during workspace discovery");
+}
+for (const value of ["run_eai_with_retries", "with_transient_retries", "is_transient_platform_error"]) {
+  if (!rust.includes(value)) throw new Error(`Tauri adapter is missing bounded platform retry support: ${value}`);
 }
 if (rust.includes("let is_root") || rust.includes("if !is_root")) {
   throw new Error("Tauri adapter must allow directly assigned child company workspaces");
@@ -96,8 +114,14 @@ if (!rust.includes('"--no-install".to_string()')) throw new Error("Tauri adapter
 if (!rust.includes("fn npm_cli_script") || !rust.includes("fn run_npm_in_directory") || !rust.includes("node_modules/npm/bin/npm-cli.js")) {
   throw new Error("Tauri adapter does not provide a direct Node/npm launcher for Windows");
 }
-if (!rust.includes('run_npm_in_directory(\n                        &["install", "--no-audit", "--no-fund"]')) {
+if (!rust.includes('run_npm_in_directory_with_env(\n                        &["install", "--no-audit", "--no-fund"]')) {
   throw new Error("Tauri adapter does not install generated app dependencies through its platform-aware npm path");
+}
+if (!rust.includes('&[("HUSKY", "0")]')) {
+  throw new Error("Tauri adapter must skip Git-hook setup during unattended app dependency installation");
+}
+for (const value of ["app_created: bool", "result.app_created = !existing_app", "result.project_directory = Some", "result.project_path = Some"]) {
+  if (!rust.includes(value)) throw new Error(`Tauri adapter does not preserve partial app creation evidence: ${value}`);
 }
 if (!rust.includes("\"--company-tenant\"")) throw new Error("Tauri adapter does not pass the selected company workspace to eai init");
 if (!rust.includes("command.stdin(Stdio::null())")) throw new Error("Tauri adapter does not close child stdin for GUI-launched commands");
@@ -113,13 +137,18 @@ if (!rust.includes("fn project_directory") || !rust.includes("fs::create_dir_all
 if (!rust.includes("project_directory: Option<String>") || !rust.includes("result.project_directory = Some")) {
   throw new Error("Tauri adapter does not return the exact created project directory to the AI workspace handoff");
 }
+
+const appSource = await readFile(new URL("../ui/app.js", import.meta.url), "utf8");
+for (const value of ["let e2eAppCreated = false", "e2eAppCreated = Boolean(result?.app_created)", "appCreated: e2eAppCreated", 'e2eAppCreated ? "project" : "app"']) {
+  if (!appSource.includes(value)) throw new Error(`Desktop release receipt does not preserve app creation evidence: ${value}`);
+}
 if (!rust.includes('inventory.contract_version != "eai.ai-surfaces/v1"')) {
   throw new Error("Tauri adapter does not enforce the versioned AI surface contract");
 }
 for (const value of ["Homebrew.pkg", "/usr/sbin/pkgutil", "--check-signature", "with administrator privileges", "--stdinpass", "No Terminal window will open"]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing native macOS installation control: ${value}`);
 }
-for (const value of ["windows_package_bin_dirs", "windows_resolved_path", "env::split_paths", "ProgramFiles(x86)", "CREATE_NO_WINDOW", "creation_flags", "LOCALAPPDATA", "windows_shell_arg", "ComSpec", "ends_with(\".cmd\")", "command_line.push_str", "call {}", "Windows package installation finished, but the expected command is not available yet.", "npm finished, but the eai command is not available yet."]) {
+for (const value of ["windows_package_bin_dirs", "windows_resolved_path", "env::split_paths", "ProgramW6432", "ProgramFiles(Arm)", "ProgramFiles(x86)", "CREATE_NO_WINDOW", "creation_flags", "APPDATA", "windows_shell_arg", "ComSpec", "ends_with(\".cmd\")", "command_line.push_str", "call {}", "windows_package_install_result", "npm_version", "run_npm_in_directory(&[\"--version\"], None)", "Node.js and npm are already installed and ready.", "installed EAI CLI could not be started."]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing Windows prerequisite safety support: ${value}`);
 }
 for (const value of ["xcode-select", "full Xcode is not required", "softwareupdate", "latest_command_line_tools_label", "refresh_macos_command_line_tools_catalog", "Refreshing Apple Software Update", "with administrator privileges", "secure administrator dialog", "native administrator install", "latest_node_artifact", "nodejs.org/dist/index.json", "osx-arm64-pkg", "osx-x64-pkg", "osx-arm64-tar", "osx-x64-tar", "SHASUMS256.txt", "shasum", "uname", "--prefix", "expose_user_npm_bin", "NVM_DIR", "versions/node", "NVM_BIN", "nvm_node_bin_dirs", "macos_package_bin_dirs"]) {
@@ -165,6 +194,12 @@ if (rust.includes("Command::new(user") || rust.includes("shell = user")) {
 console.log("bootstrap safety checks ok");
 
 const wizard = await readFile(new URL("../ui/index.html", import.meta.url), "utf8");
+const activityStart = wizard.indexOf('class="activity"');
+const firstPanelStart = wizard.indexOf('class="wizard-panel');
+const retryWorkspaceControl = wizard.indexOf('id="retry-workspaces"');
+if (retryWorkspaceControl < activityStart || retryWorkspaceControl > firstPanelStart) {
+  throw new Error("wizard: workspace retry must remain visible independently of the current panel");
+}
 const brandLogo = await readFile(new URL("../ui/assets/eai-square-man-logo.png", import.meta.url));
 if (brandLogo.length < 1024) throw new Error("wizard: Enterprise AI logo asset is missing or unexpectedly small");
 for (const brandElement of ["Enterprise AI Setup", "assets/eai-square-man-logo.png", "class=\"brand-logo\"", "class=\"panel-logo\""]) {
@@ -179,7 +214,7 @@ for (const color of ["#123d5b", "#83d8ef"]) {
 for (const panel of ["0", "3", "4", "5"]) {
   if (!wizard.includes(`data-panel="${panel}"`)) throw new Error(`wizard: missing panel ${panel}`);
 }
-for (const control of ["data-action=\"start\"", "data-action=\"login\"", "data-action=\"signup\"", "data-action=\"choose-folder\"", "data-action=\"init\"", "data-action=\"start-ai\"", "data-action=\"finish\""]) {
+for (const control of ["data-action=\"start\"", "data-action=\"login\"", "data-action=\"signup\"", "data-action=\"retry-workspaces\"", "data-action=\"choose-folder\"", "data-action=\"init\"", "data-action=\"start-ai\"", "data-action=\"finish\""]) {
   if (!wizard.includes(control)) throw new Error(`wizard: missing control ${control}`);
 }
 for (const value of ["id=\"ai-surface-status\"", "id=\"ai-surface-options\"", "id=\"ai-surface-next\"", "id=\"ai-surface-consent\"", "id=\"refresh-ai\"", "Choose how to work with AI", "Check again", "provider account"]) {
@@ -205,13 +240,17 @@ for (const obsolete of ["progress-area", "Step 3 of 6", "Step ${index + 1} of ${
   if (wizard.includes(obsolete)) throw new Error(`wizard: unnecessary user step remains: ${obsolete}`);
 }
 if (!wizard.includes('id="retry-install"')) throw new Error("wizard: failed installation has no retry control");
+if (!wizard.includes('id="retry-install" data-action="install-all" type="button"')) throw new Error("wizard: install retry control can accidentally submit a form");
 for (const control of ["id=\"activity\"", "id=\"activity-title\"", "id=\"activity-detail\"", "id=\"activity-eta\"", "id=\"activity-heartbeat\"", "id=\"activity-log\"", "id=\"install-items\"", "id=\"admin-password\"", "id=\"admin-password-submit\""]) {
   if (!wizard.includes(control)) throw new Error(`wizard: missing activity status: ${control}`);
 }
 if (!wizard.includes("Recent activity")) throw new Error("wizard: recent activity heading is missing");
 const app = await readFile(new URL("../ui/app.js", import.meta.url), "utf8");
+if (!app.includes('writeE2eReceipt("app", "Apps could not be loaded for the release-test workspace.")')) throw new Error("wizard: release evidence misclassifies app discovery as a tenant failure");
+if (!app.includes("EAIWizard.resolveTenantSelection(companyTenants, selectedCompanyTenantId)")) throw new Error("wizard: rendering can clear a valid release-test tenant selection");
+if (!/if \(tenant\.appsLoaded\) \{\s+if \(retryWorkspaces\) \{\s+retryWorkspaces\.hidden = true;/.test(app)) throw new Error("wizard: cached app recovery leaves a stale retry action visible");
 if (app.includes('steps.push("homebrew")')) throw new Error("wizard: Homebrew must not be a required setup step");
-if (!app.includes("setActivity") || !app.includes("Installation complete") || !app.includes("listenForBootstrapProgress") || !app.includes("eventApi.listen") || !app.includes("renderInstallItems") || !app.includes("setDetectionState") || !app.includes("phaseForTitle") || !app.includes("async function startSetup") || !app.includes("window.setTimeout(() => startSetup(), 250)") || !app.includes("setStep(4)") || !app.includes("async function runSignup") || !app.includes("open_signup") || !app.includes("dialog.open") || !app.includes("choose-folder") || !app.includes("get_company_tenants") || !app.includes("companyTenantId") || !app.includes("appKey") || !app.includes("renderCompanyApps") || !app.includes("open_project") || !app.includes("projectPath") || !app.includes("initInProgress") || !app.includes("setInitButtonBusy") || !app.includes("aria-busy") || !app.includes("describeInitFailure")) {
+if (!app.includes("setActivity") || !app.includes("Installation complete") || !app.includes("listenForBootstrapProgress") || !app.includes("eventApi.listen") || !app.includes("renderInstallItems") || !app.includes("setDetectionState") || !app.includes("phaseForTitle") || !app.includes("async function startSetup") || !app.includes("window.setTimeout(() => startSetup(), 250)") || !app.includes("setStep(4)") || !app.includes("async function runSignup") || !app.includes("open_signup") || !app.includes("dialog.open") || !app.includes("choose-folder") || !app.includes("get_company_tenants") || !app.includes("get_company_apps") || !app.includes("loadCompanyApps") || !app.includes("describeWorkspaceFailure") || !app.includes("companyTenantId") || !app.includes("appKey") || !app.includes("renderCompanyApps") || !app.includes("open_project") || !app.includes("projectPath") || !app.includes("initInProgress") || !app.includes("setInitButtonBusy") || !app.includes("aria-busy") || !app.includes("describeInitFailure")) {
   throw new Error("wizard: live activity status updates are missing");
 }
 for (const value of ["loadAiSurfaces", "renderAiSurfaces", "startAiSurface", "refreshAiSurfaces", "updateAiSurfaceControls", "aiSurfaceGuidance", "GitHub Copilot app", "GitHub Copilot CLI", "copilot-desktop", "copilot-cli", "detect_ai_surfaces", "start_ai_surface", "install_ai_surface"]) {

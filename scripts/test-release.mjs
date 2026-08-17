@@ -47,7 +47,7 @@ assert.match(runnerSource, /receipt\.operationId/);
 assert.match(runnerSource, /receipt\.deletedRecords/);
 assert.match(runnerSource, /EAI_DEPROVISION_APP_CREATED/);
 assert.match(runnerSource, /receipt\.appCreated !== appCreated/);
-assert.match(runnerSource, /requiredChecks = \["download", "installer", "prerequisites", "authentication", "tenant", "app", "project"\]/);
+assert.match(runnerSource, /requiredChecks = \["download", "installer", "prerequisites", "authentication", "tenant", "app", "project", "aiHandoff"\]/);
 assert.match(releaseWorkflow, /name: Install Linux build dependencies/);
 for (const dependency of [
   "build-essential",

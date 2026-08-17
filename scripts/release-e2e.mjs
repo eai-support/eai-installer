@@ -161,7 +161,7 @@ async function runVm({ driver, vm, asset, output, release, appName, runId, tenan
   if (!fs.existsSync(resultPath)) throw new Error(`${vm} VM test did not write ${resultPath}`);
   const payload = JSON.parse(fs.readFileSync(resultPath, "utf8"));
   if (payload.status !== "passed") throw new Error(`${vm} VM result was not passed`);
-  const requiredChecks = ["download", "installer", "prerequisites", "authentication", "tenant", "app", "project"];
+  const requiredChecks = ["download", "installer", "prerequisites", "authentication", "tenant", "app", "project", "aiHandoff"];
   const checks = payload.checks && typeof payload.checks === "object" ? payload.checks : {};
   const missingChecks = requiredChecks.filter((check) => checks[check] !== "passed");
   if (missingChecks.length > 0) {
