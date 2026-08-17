@@ -81,8 +81,15 @@ for (const step of ["homebrew", "git", "node", "eai-cli", "login", "init", "star
 for (const value of ["detect_ai_surfaces", "start_ai_surface", "install_ai_surface", "AiSurfaceInventory", "eai", "start", "--check"]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing AI workspace handoff: ${value}`);
 }
-for (const value of ["get_company_tenants", "list_company_apps", "app", "tenant", "list", "--format", "json", "directMembership", "app_key", "--app-key"]) {
+for (const value of ["get_company_tenants", "get_company_apps", "list_company_apps", "app", "tenant", "list", "--format", "json", "directMembership", "app_key", "--app-key"]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing company workspace discovery: ${value}`);
+}
+const tenantListSource = rust.slice(rust.indexOf("fn list_company_tenants"), rust.indexOf("fn parse_company_tenants"));
+if (tenantListSource.includes("list_company_apps")) {
+  throw new Error("Tauri adapter must not load every workspace's apps during workspace discovery");
+}
+for (const value of ["run_eai_with_retries", "with_transient_retries", "is_transient_platform_error"]) {
+  if (!rust.includes(value)) throw new Error(`Tauri adapter is missing bounded platform retry support: ${value}`);
 }
 if (rust.includes("let is_root") || rust.includes("if !is_root")) {
   throw new Error("Tauri adapter must allow directly assigned child company workspaces");
@@ -119,7 +126,7 @@ if (!rust.includes('inventory.contract_version != "eai.ai-surfaces/v1"')) {
 for (const value of ["Homebrew.pkg", "/usr/sbin/pkgutil", "--check-signature", "with administrator privileges", "--stdinpass", "No Terminal window will open"]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing native macOS installation control: ${value}`);
 }
-for (const value of ["windows_package_bin_dirs", "windows_resolved_path", "env::split_paths", "ProgramFiles(x86)", "CREATE_NO_WINDOW", "creation_flags", "LOCALAPPDATA", "windows_shell_arg", "ComSpec", "ends_with(\".cmd\")", "command_line.push_str", "call {}", "Windows package installation finished, but the expected command is not available yet.", "npm finished, but the eai command is not available yet."]) {
+for (const value of ["windows_package_bin_dirs", "windows_resolved_path", "env::split_paths", "ProgramW6432", "ProgramFiles(Arm)", "ProgramFiles(x86)", "CREATE_NO_WINDOW", "creation_flags", "LOCALAPPDATA", "windows_shell_arg", "ComSpec", "ends_with(\".cmd\")", "command_line.push_str", "call {}", "windows_package_install_result", "Node.js and npm are already installed and ready.", "npm finished, but the eai command is not available yet."]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing Windows prerequisite safety support: ${value}`);
 }
 for (const value of ["xcode-select", "full Xcode is not required", "softwareupdate", "latest_command_line_tools_label", "refresh_macos_command_line_tools_catalog", "Refreshing Apple Software Update", "with administrator privileges", "secure administrator dialog", "native administrator install", "latest_node_artifact", "nodejs.org/dist/index.json", "osx-arm64-pkg", "osx-x64-pkg", "osx-arm64-tar", "osx-x64-tar", "SHASUMS256.txt", "shasum", "uname", "--prefix", "expose_user_npm_bin", "NVM_DIR", "versions/node", "NVM_BIN", "nvm_node_bin_dirs", "macos_package_bin_dirs"]) {
@@ -179,7 +186,7 @@ for (const color of ["#123d5b", "#83d8ef"]) {
 for (const panel of ["0", "3", "4", "5"]) {
   if (!wizard.includes(`data-panel="${panel}"`)) throw new Error(`wizard: missing panel ${panel}`);
 }
-for (const control of ["data-action=\"start\"", "data-action=\"login\"", "data-action=\"signup\"", "data-action=\"choose-folder\"", "data-action=\"init\"", "data-action=\"start-ai\"", "data-action=\"finish\""]) {
+for (const control of ["data-action=\"start\"", "data-action=\"login\"", "data-action=\"signup\"", "data-action=\"retry-workspaces\"", "data-action=\"choose-folder\"", "data-action=\"init\"", "data-action=\"start-ai\"", "data-action=\"finish\""]) {
   if (!wizard.includes(control)) throw new Error(`wizard: missing control ${control}`);
 }
 for (const value of ["id=\"ai-surface-status\"", "id=\"ai-surface-options\"", "id=\"ai-surface-next\"", "id=\"ai-surface-consent\"", "id=\"refresh-ai\"", "Choose how to work with AI", "Check again", "provider account"]) {
@@ -211,7 +218,7 @@ for (const control of ["id=\"activity\"", "id=\"activity-title\"", "id=\"activit
 if (!wizard.includes("Recent activity")) throw new Error("wizard: recent activity heading is missing");
 const app = await readFile(new URL("../ui/app.js", import.meta.url), "utf8");
 if (app.includes('steps.push("homebrew")')) throw new Error("wizard: Homebrew must not be a required setup step");
-if (!app.includes("setActivity") || !app.includes("Installation complete") || !app.includes("listenForBootstrapProgress") || !app.includes("eventApi.listen") || !app.includes("renderInstallItems") || !app.includes("setDetectionState") || !app.includes("phaseForTitle") || !app.includes("async function startSetup") || !app.includes("window.setTimeout(() => startSetup(), 250)") || !app.includes("setStep(4)") || !app.includes("async function runSignup") || !app.includes("open_signup") || !app.includes("dialog.open") || !app.includes("choose-folder") || !app.includes("get_company_tenants") || !app.includes("companyTenantId") || !app.includes("appKey") || !app.includes("renderCompanyApps") || !app.includes("open_project") || !app.includes("projectPath") || !app.includes("initInProgress") || !app.includes("setInitButtonBusy") || !app.includes("aria-busy") || !app.includes("describeInitFailure")) {
+if (!app.includes("setActivity") || !app.includes("Installation complete") || !app.includes("listenForBootstrapProgress") || !app.includes("eventApi.listen") || !app.includes("renderInstallItems") || !app.includes("setDetectionState") || !app.includes("phaseForTitle") || !app.includes("async function startSetup") || !app.includes("window.setTimeout(() => startSetup(), 250)") || !app.includes("setStep(4)") || !app.includes("async function runSignup") || !app.includes("open_signup") || !app.includes("dialog.open") || !app.includes("choose-folder") || !app.includes("get_company_tenants") || !app.includes("get_company_apps") || !app.includes("loadCompanyApps") || !app.includes("describeWorkspaceFailure") || !app.includes("companyTenantId") || !app.includes("appKey") || !app.includes("renderCompanyApps") || !app.includes("open_project") || !app.includes("projectPath") || !app.includes("initInProgress") || !app.includes("setInitButtonBusy") || !app.includes("aria-busy") || !app.includes("describeInitFailure")) {
   throw new Error("wizard: live activity status updates are missing");
 }
 for (const value of ["loadAiSurfaces", "renderAiSurfaces", "startAiSurface", "refreshAiSurfaces", "updateAiSurfaceControls", "aiSurfaceGuidance", "GitHub Copilot app", "GitHub Copilot CLI", "copilot-desktop", "copilot-cli", "detect_ai_surfaces", "start_ai_surface", "install_ai_surface"]) {

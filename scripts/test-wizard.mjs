@@ -35,6 +35,18 @@ const genericFailure = wizard.describeInitFailure("folder is not writable", "mac
 if (genericFailure.title !== "App setup failed" || !genericFailure.detail.includes("folder is not writable")) {
   throw new Error("wizard generic failure guidance is wrong");
 }
+const temporaryWorkspaceFailure = wizard.describeWorkspaceFailure("503 Service Unavailable");
+if (temporaryWorkspaceFailure.title !== "EAI is temporarily unavailable" || !temporaryWorkspaceFailure.detail.includes("sign-in is complete") || !temporaryWorkspaceFailure.next.includes("Try workspace check again") || temporaryWorkspaceFailure.retryable !== true) {
+  throw new Error("wizard temporary workspace failure guidance is wrong");
+}
+const missingWorkspaceFailure = wizard.describeWorkspaceFailure("No active company workspaces are available for this account.");
+if (missingWorkspaceFailure.title !== "No company workspace is available" || !missingWorkspaceFailure.next.includes("company administrator")) {
+  throw new Error("wizard missing workspace guidance is wrong");
+}
+const accessWorkspaceFailure = wizard.describeWorkspaceFailure("403 Forbidden");
+if (accessWorkspaceFailure.title === "EAI is temporarily unavailable") {
+  throw new Error("wizard must not classify an access denial as a temporary platform outage");
+}
 
 const report = {
   platform: "macos",

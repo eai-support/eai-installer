@@ -45,6 +45,44 @@
     };
   }
 
+  function describeWorkspaceFailure(message) {
+    const diagnostic = cleanText(message) || "Company workspaces could not be loaded.";
+    if (/\b(502|503|504)\b|bad gateway|service unavailable|gateway timeout|request_error|temporarily unavailable/i.test(diagnostic)) {
+      return {
+        title: "EAI is temporarily unavailable",
+        detail: "Your sign-in is complete. EAI could not load your company workspaces after several attempts.",
+        next: "Wait a moment, then choose Try workspace check again. You do not need to sign in again.",
+        diagnostic,
+        retryable: true,
+      };
+    }
+    if (/no active company workspaces|no company workspaces are available/i.test(diagnostic)) {
+      return {
+        title: "No company workspace is available",
+        detail: "Your account is signed in, but it cannot create an app until a company workspace is assigned.",
+        next: "Ask your company administrator to add you to a workspace, then try the workspace check again.",
+        diagnostic,
+        retryable: true,
+      };
+    }
+    if (/\b(401|token expired|not authenticated|sign-in)\b/i.test(diagnostic)) {
+      return {
+        title: "Sign-in needs refreshing",
+        detail: "EAI could not confirm the current browser sign-in.",
+        next: "Choose Sign in with browser, then continue setup.",
+        diagnostic,
+        retryable: false,
+      };
+    }
+    return {
+      title: "Company workspaces need attention",
+      detail: "EAI could not confirm where this app should be created.",
+      next: "Review Recent activity, then try the workspace check again.",
+      diagnostic,
+      retryable: true,
+    };
+  }
+
   function createState() {
     return { step: 0, prerequisitesReady: false, projectName: "" };
   }
@@ -68,6 +106,7 @@
     cleanText,
     createState,
     describeInitFailure,
+    describeWorkspaceFailure,
     initButtonLabel,
     isKebabCase,
     prerequisitesReady,

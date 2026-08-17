@@ -16,6 +16,7 @@ const installItems = document.querySelector("#install-items");
 const activityLog = document.querySelector("#activity-log");
 const activityLogStatus = document.querySelector("#activity-log-status");
 const retryInstall = document.querySelector("#retry-install");
+const retryWorkspaces = document.querySelector("#retry-workspaces");
 const adminPasswordPanel = document.querySelector("#admin-password-panel");
 const adminPasswordInput = document.querySelector("#admin-password");
 const adminPasswordSubmit = document.querySelector("#admin-password-submit");
@@ -498,7 +499,7 @@ async function startSetup() {
 
 async function writeE2eReceipt(failedCheck, message) {
   if (!e2eConfig?.receiptFile) return;
-  const checkOrder = ["prerequisites", "authentication", "tenant", "app", "project"];
+  const checkOrder = ["prerequisites", "authentication", "tenant", "app", "project", "aiHandoff"];
   const failedIndex = failedCheck ? checkOrder.indexOf(failedCheck) : -1;
   const checks = Object.fromEntries(checkOrder.map((check, index) => [
     check,
@@ -542,8 +543,13 @@ async function runE2eFlow() {
     return;
   }
   selectedCompanyTenantId = requestedTenant;
-  selectedCompanyAppKey = e2eConfig.appKey || null;
   renderCompanyTenants();
+  if (!await loadCompanyApps(requestedTenant)) {
+    await writeE2eReceipt("tenant", "Apps could not be loaded for the release-test workspace.");
+    return;
+  }
+  selectedCompanyAppKey = e2eConfig.appKey || null;
+  if (appSelection && selectedCompanyAppKey) appSelection.value = selectedCompanyAppKey;
   if (projectNameInput) projectNameInput.value = e2eConfig.projectName || "eai-release-test";
   const directoryInput = document.querySelector("#project-directory");
   if (directoryInput) directoryInput.value = e2eConfig.directory || "";
@@ -551,6 +557,18 @@ async function runE2eFlow() {
   const completed = await runInit();
   if (!completed) {
     await writeE2eReceipt("app", "The EAI app could not be initialised by the desktop bootstrap path.");
+    return;
+  }
+  const surface = aiSurfaceInventory?.surfaces?.find((item) => item.id === selectedAiSurfaceId && item.installed)
+    || aiSurfaceInventory?.surfaces?.find((item) => item.installed);
+  if (!surface) {
+    await writeE2eReceipt("aiHandoff", "No installed AI workspace was available for the release-test handoff.");
+    return;
+  }
+  try {
+    await invoke("start_ai_surface", { directory: createdProjectDirectory, surfaceId: surface.id });
+  } catch (error) {
+    await writeE2eReceipt("aiHandoff", `The AI workspace could not be opened: ${String(error)}`);
     return;
   }
   await writeE2eReceipt(null, "The published installer completed its desktop bootstrap path.");
@@ -576,7 +594,7 @@ function renderCompanyTenants() {
   if (companyTenants.length === 1) {
     selectedCompanyTenantId = companyTenants[0].id;
     companyTenantField.hidden = true;
-    renderCompanyApps();
+    if (appSelectionField) appSelectionField.hidden = true;
     return;
   }
 
@@ -595,7 +613,7 @@ function renderCompanyTenants() {
     companyTenantSelect.append(option);
   }
   companyTenantField.hidden = false;
-  renderCompanyApps();
+  if (appSelectionField) appSelectionField.hidden = true;
 }
 
 function selectedCompanyTenant() {
@@ -635,6 +653,30 @@ function renderCompanyApps() {
   setInitButtonBusy(false);
 }
 
+async function loadCompanyApps(tenantId) {
+  if (!tenantId) return true;
+  const tenant = companyTenants.find((item) => item.id === tenantId);
+  if (!tenant) return false;
+  if (tenant.appsLoaded) {
+    renderCompanyApps();
+    return true;
+  }
+  setActivity("Checking apps", `Loading apps for ${tenant.displayName}.`, null, true, "", "Checking");
+  try {
+    tenant.apps = await invoke("get_company_apps", { tenantId });
+    tenant.appsLoaded = true;
+    renderCompanyApps();
+    recordActivityEvent("Apps ready", `Apps for ${tenant.displayName} are ready.`, "Ready");
+    return true;
+  } catch (error) {
+    const failure = EAIWizard.describeWorkspaceFailure(error);
+    showOutput(failure.detail, `${failure.next} Diagnostic: ${failure.diagnostic}`);
+    setActivity(failure.title, `${failure.detail} ${failure.next}`, 0, false, "", "Error");
+    if (retryWorkspaces) retryWorkspaces.hidden = !failure.retryable;
+    return false;
+  }
+}
+
 function selectCompanyApp() {
   selectedCompanyAppKey = appSelection?.value || null;
   if (selectedCompanyAppKey) {
@@ -664,6 +706,7 @@ function selectCompanyApp() {
 
 async function loadCompanyTenants() {
   if (demoMode) return true;
+  if (retryWorkspaces) retryWorkspaces.hidden = true;
   setActivity("Checking company workspaces", "Finding where your new app can be created.", null, true, "", "Checking");
   try {
     companyTenants = await invoke("get_company_tenants");
@@ -671,6 +714,9 @@ async function loadCompanyTenants() {
       throw new Error("No company workspaces are available for this account.");
     }
     renderCompanyTenants();
+    if (selectedCompanyTenantId && !await loadCompanyApps(selectedCompanyTenantId)) {
+      return false;
+    }
     if (companyTenants.length === 1) {
       recordActivityEvent("Workspace ready", `Using ${companyTenants[0].displayName} for this app.`, "Ready");
       return true;
@@ -679,8 +725,10 @@ async function loadCompanyTenants() {
     setActivity("Choose a company workspace", "Select the company workspace that should own this app, then continue.", 100, false, "", "Waiting");
     return true;
   } catch (error) {
-    showOutput("Company workspaces could not be loaded.", String(error));
-    setActivity("Company workspaces need attention", "The app cannot be created until a company workspace is available. Try signing in again.", 0, false, "", "Error");
+    const failure = EAIWizard.describeWorkspaceFailure(error);
+    showOutput(failure.detail, `${failure.next} Diagnostic: ${failure.diagnostic}`);
+    setActivity(failure.title, `${failure.detail} ${failure.next}`, 0, false, "", "Error");
+    if (retryWorkspaces) retryWorkspaces.hidden = !failure.retryable;
     return false;
   }
 }
@@ -885,6 +933,14 @@ async function runAction(action) {
   if (action === "detect") return detect();
   if (action === "install-all") return installPrerequisites();
   if (action === "login") return runLogin();
+  if (action === "retry-workspaces") {
+    if (await loadCompanyTenants()) {
+      if (retryWorkspaces) retryWorkspaces.hidden = true;
+      setActivity("Company workspaces ready", "Choose where this app should be created.", 100, false, "", "Ready");
+      setStep(4);
+    }
+    return;
+  }
   if (action === "signup") return runSignup();
   if (action === "choose-folder") {
     const dialog = window.__TAURI__?.dialog;
@@ -907,9 +963,9 @@ async function runAction(action) {
   }
   if (action === "select-company-tenant") {
     selectedCompanyTenantId = companyTenantSelect?.value || null;
-    renderCompanyApps();
     if (selectedCompanyTenantId) {
       const tenant = companyTenants.find((item) => item.id === selectedCompanyTenantId);
+      if (!await loadCompanyApps(selectedCompanyTenantId)) return;
       setActivity("Company workspace selected", `${tenant?.displayName || "Company workspace"} will own this app.`, 100, false, "", "Ready");
     }
     return;

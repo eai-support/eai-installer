@@ -27,7 +27,7 @@ struct EnvironmentReport {
     package_manager: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct CompanyApp {
     key: String,
@@ -35,7 +35,7 @@ struct CompanyApp {
     status: String,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct CompanyTenant {
     id: String,
@@ -194,7 +194,7 @@ fn macos_package_bin_dirs() -> Vec<PathBuf> {
 fn windows_package_bin_dirs() -> Vec<PathBuf> {
     if !cfg!(target_os = "windows") { return Vec::new(); }
     let mut directories = Vec::new();
-    for variable in ["ProgramFiles", "ProgramFiles(x86)", "LOCALAPPDATA", "APPDATA"] {
+    for variable in ["ProgramW6432", "ProgramFiles", "ProgramFiles(Arm)", "ProgramFiles(x86)", "LOCALAPPDATA", "APPDATA"] {
         if let Some(root) = env::var_os(variable) {
             let root = PathBuf::from(root);
             directories.push(root.join("nodejs"));
@@ -276,6 +276,45 @@ fn executable(program: &str) -> String {
 
 fn run_program(program: &str, args: &[&str]) -> Result<(String, String), String> {
     run_program_in_directory(program, args, None)
+}
+
+fn is_transient_platform_error(message: &str) -> bool {
+    let message = message.to_ascii_lowercase();
+    [
+        "502",
+        "503",
+        "504",
+        "bad gateway",
+        "service unavailable",
+        "gateway timeout",
+        "request_error",
+        "temporarily unavailable",
+    ]
+    .iter()
+    .any(|value| message.contains(value))
+}
+
+fn with_transient_retries<T, F>(attempts: usize, delay: Duration, mut operation: F) -> Result<T, String>
+where
+    F: FnMut() -> Result<T, String>,
+{
+    let attempts = attempts.max(1);
+    for attempt in 0..attempts {
+        match operation() {
+            Ok(value) => return Ok(value),
+            Err(error) if attempt + 1 < attempts && is_transient_platform_error(&error) => {
+                if !delay.is_zero() {
+                    thread::sleep(delay);
+                }
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    unreachable!("the retry loop always returns on its final attempt")
+}
+
+fn run_eai_with_retries(args: &[&str]) -> Result<(String, String), String> {
+    with_transient_retries(3, Duration::from_secs(1), || run_program("eai", args))
 }
 
 fn npm_cli_script() -> Option<PathBuf> {
@@ -583,10 +622,14 @@ fn command_result(step: &str, ok: bool, message: &str, command: Option<&str>, ou
 }
 
 fn list_company_apps(tenant_id: &str) -> Result<Vec<CompanyApp>, String> {
-    let (stdout, stderr) = run_program(
-        "eai",
-        &["app", "list", "--tenant-id", tenant_id, "--format", "json"],
-    )?;
+    let (stdout, stderr) = run_eai_with_retries(&[
+        "app",
+        "list",
+        "--tenant-id",
+        tenant_id,
+        "--format",
+        "json",
+    ])?;
     let payload: serde_json::Value = serde_json::from_str(&stdout).map_err(|error| {
         if stderr.is_empty() {
             format!("The EAI CLI returned invalid app data: {error}")
@@ -622,7 +665,11 @@ fn list_company_apps(tenant_id: &str) -> Result<Vec<CompanyApp>, String> {
 }
 
 fn list_company_tenants() -> Result<Vec<CompanyTenant>, String> {
-    let (stdout, stderr) = run_program("eai", &["tenant", "list", "--format", "json"])?;
+    let (stdout, stderr) = run_eai_with_retries(&["tenant", "list", "--format", "json"])?;
+    parse_company_tenants(&stdout, &stderr)
+}
+
+fn parse_company_tenants(stdout: &str, stderr: &str) -> Result<Vec<CompanyTenant>, String> {
     let payload: serde_json::Value = serde_json::from_str(&stdout).map_err(|error| {
         if stderr.is_empty() {
             format!("The EAI CLI returned invalid company workspace data: {error}")
@@ -665,15 +712,20 @@ fn list_company_tenants() -> Result<Vec<CompanyTenant>, String> {
     if tenants.is_empty() {
         return Err("No active company workspaces are available for this account. Ask a company administrator to add you, then sign in again.".to_string());
     }
-    for tenant in &mut tenants {
-        tenant.apps = list_company_apps(&tenant.id)?;
-    }
     Ok(tenants)
 }
 
 #[tauri::command]
 fn get_company_tenants() -> Result<Vec<CompanyTenant>, String> {
     list_company_tenants()
+}
+
+#[tauri::command]
+fn get_company_apps(tenant_id: String) -> Result<Vec<CompanyApp>, String> {
+    if tenant_id.trim().is_empty() {
+        return Err("Choose a company workspace before loading its apps.".to_string());
+    }
+    list_company_apps(&tenant_id)
 }
 
 #[tauri::command]
@@ -762,22 +814,10 @@ fn package_install_step(app: &AppHandle, step: &str, package: &str, message: &st
             return command_result(step, false, "WinGet is not available in this Windows session.", Some("Install or enable App Installer, then rerun EAI Setup."), None, true);
         }
         let package_id = if package == "git" { "Git.Git" } else { "OpenJS.NodeJS.LTS" };
-        return match run_program("winget", &["install", "--id", package_id, "-e", "--source", "winget", "--accept-source-agreements", "--accept-package-agreements"]) {
-            Ok((stdout, stderr)) => {
-                emit_progress(app, step, &format!("{package} installed"), "Verifying the installation.", Some(90), Some(5));
-                let ready = if package == "git" {
-                    version("git", &["--version"]).is_some()
-                } else {
-                    version("node", &["--version"]).is_some() && version("npm", &["--version"]).is_some()
-                };
-                if ready {
-                    command_result(step, true, message, Some("winget install (fixed package identifier)"), Some(format!("{stdout}\n{stderr}")), false)
-                } else {
-                    command_result(step, false, "Windows package installation finished, but the expected command is not available yet.", Some("Restart EAI Setup to reload the Windows PATH, then retry."), Some(format!("{stdout}\n{stderr}")), true)
-                }
-            }
-            Err(error) => command_result(step, false, &error, Some("winget install (fixed package identifier)"), None, true),
-        };
+        let install_result = run_program("winget", &["install", "--id", package_id, "-e", "--source", "winget", "--accept-source-agreements", "--accept-package-agreements", "--disable-interactivity"]);
+        emit_progress(app, step, &format!("Checking {package}"), "Confirming the installed commands are ready.", Some(90), Some(5));
+        let ready = wait_for_package_ready(package, 5);
+        return windows_package_install_result(step, package, message, install_result, ready);
     }
 
     if cfg!(target_os = "macos") {
@@ -833,6 +873,71 @@ fn package_install_step(app: &AppHandle, step: &str, package: &str, message: &st
     }
 
     command_result(step, false, "No supported Linux package manager was found.", Some("Use your distribution's signed package manager, then retry."), None, true)
+}
+
+fn package_ready(package: &str) -> bool {
+    if package == "git" {
+        git_version().is_some()
+    } else {
+        version("node", &["--version"]).is_some() && version("npm", &["--version"]).is_some()
+    }
+}
+
+fn wait_for_package_ready(package: &str, attempts: usize) -> bool {
+    let attempts = attempts.max(1);
+    for attempt in 0..attempts {
+        if package_ready(package) {
+            return true;
+        }
+        if attempt + 1 < attempts {
+            thread::sleep(Duration::from_secs(1));
+        }
+    }
+    false
+}
+
+fn windows_package_install_result(
+    step: &str,
+    package: &str,
+    success_message: &str,
+    install_result: Result<(String, String), String>,
+    ready: bool,
+) -> BootstrapResult {
+    let command = Some("winget install (fixed package identifier)");
+    match (install_result, ready) {
+        (Ok((stdout, stderr)), true) => command_result(
+            step,
+            true,
+            success_message,
+            command,
+            Some(format!("{stdout}\n{stderr}")),
+            false,
+        ),
+        (Err(error), true) => command_result(
+            step,
+            true,
+            if package == "git" { "Git is already installed and ready." } else { "Node.js and npm are already installed and ready." },
+            command,
+            Some(error),
+            false,
+        ),
+        (Ok((stdout, stderr)), false) => command_result(
+            step,
+            false,
+            "Windows finished the package step, but the required commands are not available yet.",
+            Some("Restart EAI Setup to reload the Windows command paths, then choose Try again."),
+            Some(format!("{stdout}\n{stderr}")),
+            true,
+        ),
+        (Err(error), false) => command_result(
+            step,
+            false,
+            &error,
+            Some("Repair or reinstall the signed Windows package, then choose Try again."),
+            None,
+            true,
+        ),
+    }
 }
 
 fn command_line_tools_install_step(app: &AppHandle, admin_password: Option<&str>) -> BootstrapResult {
@@ -1397,7 +1502,78 @@ fn local_device_id() -> Result<String, String> {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![detect_environment, run_bootstrap, get_company_tenants, get_e2e_configuration, verify_e2e_auth, write_e2e_receipt, open_signup, detect_ai_surfaces, start_ai_surface, install_ai_surface, open_project, local_device_id])
+        .invoke_handler(tauri::generate_handler![detect_environment, run_bootstrap, get_company_tenants, get_company_apps, get_e2e_configuration, verify_e2e_auth, write_e2e_receipt, open_signup, detect_ai_surfaces, start_ai_surface, install_ai_surface, open_project, local_device_id])
         .run(tauri::generate_context!())
         .expect("error while running EAI Setup");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::Cell;
+
+    #[test]
+    fn winget_already_current_is_success_when_commands_are_ready() {
+        let result = windows_package_install_result(
+            "node",
+            "node",
+            "Node.js installation completed.",
+            Err("Found an existing package already installed. No available upgrade found.".to_string()),
+            true,
+        );
+        assert!(result.ok);
+        assert_eq!(result.message, "Node.js and npm are already installed and ready.");
+        assert!(!result.requires_user_action);
+    }
+
+    #[test]
+    fn winget_failure_remains_failure_when_commands_are_missing() {
+        let result = windows_package_install_result(
+            "node",
+            "node",
+            "Node.js installation completed.",
+            Err("No available upgrade found.".to_string()),
+            false,
+        );
+        assert!(!result.ok);
+        assert!(result.requires_user_action);
+    }
+
+    #[test]
+    fn transient_platform_failures_retry_but_access_failures_do_not() {
+        let attempts = Cell::new(0);
+        let result = with_transient_retries(3, Duration::ZERO, || {
+            attempts.set(attempts.get() + 1);
+            if attempts.get() < 3 {
+                Err("503 Service Unavailable".to_string())
+            } else {
+                Ok("ready")
+            }
+        });
+        assert_eq!(result, Ok("ready"));
+        assert_eq!(attempts.get(), 3);
+
+        let access_attempts = Cell::new(0);
+        let denied: Result<&str, String> = with_transient_retries(3, Duration::ZERO, || {
+            access_attempts.set(access_attempts.get() + 1);
+            Err("403 Forbidden".to_string())
+        });
+        assert_eq!(denied, Err("403 Forbidden".to_string()));
+        assert_eq!(access_attempts.get(), 1);
+    }
+
+    #[test]
+    fn company_workspace_parsing_keeps_direct_active_children_without_loading_apps() {
+        let payload = r#"{
+          "tenants": [
+            {"id":"child-1","displayName":"Child Workspace","slug":"child-workspace","directMembership":true,"isActive":true,"active":true},
+            {"id":"inherited","displayName":"Inherited","slug":"inherited","directMembership":false,"isActive":true,"active":false},
+            {"id":"disabled","displayName":"Disabled","slug":"disabled","directMembership":true,"isActive":false,"active":false}
+          ]
+        }"#;
+        let tenants = parse_company_tenants(payload, "").expect("direct active workspace should parse");
+        assert_eq!(tenants.len(), 1);
+        assert_eq!(tenants[0].id, "child-1");
+        assert!(tenants[0].apps.is_empty());
+    }
 }
