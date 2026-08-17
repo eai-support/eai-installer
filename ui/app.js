@@ -55,6 +55,7 @@ let selectedAiSurfaceId = null;
 let projectPath = null;
 let initInProgress = false;
 let e2eConfig = null;
+let e2eAppCreated = false;
 const activityEvents = [];
 
 const stepLabels = {
@@ -513,7 +514,7 @@ async function writeE2eReceipt(failedCheck, message) {
         status: failedCheck ? "failed" : "passed",
         message,
         checks,
-        appCreated: checks.app === "passed",
+        appCreated: e2eAppCreated,
       },
     });
   } catch (error) {
@@ -557,7 +558,7 @@ async function runE2eFlow() {
   setStep(4);
   const completed = await runInit();
   if (!completed) {
-    await writeE2eReceipt("app", "The EAI app could not be initialised by the desktop bootstrap path.");
+    await writeE2eReceipt(e2eAppCreated ? "project" : "app", "The EAI app could not be initialised by the desktop bootstrap path.");
     return;
   }
   const surface = aiSurfaceInventory?.surfaces?.find((item) => item.id === selectedAiSurfaceId && item.installed)
@@ -798,6 +799,11 @@ async function runInit() {
     activeBootstrapStep = null;
     initInProgress = false;
     setInitButtonBusy(false);
+  }
+  e2eAppCreated = Boolean(result?.app_created);
+  if (result?.project_directory) {
+    createdProjectDirectory = result.project_directory;
+    projectPath = result.project_path || result.project_directory;
   }
   if (!result.ok && !result.demo) {
     const failure = EAIWizard.describeInitFailure(result.message, environmentReport?.platform);

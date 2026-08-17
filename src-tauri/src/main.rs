@@ -55,6 +55,7 @@ struct BootstrapResult {
     project_path: Option<String>,
     requires_user_action: bool,
     project_directory: Option<String>,
+    app_created: bool,
 }
 
 #[derive(Clone, Serialize)]
@@ -334,7 +335,11 @@ fn npm_cli_script() -> Option<PathBuf> {
     }).find(|script| script.is_file())
 }
 
-fn run_npm_in_directory(args: &[&str], directory: Option<&Path>) -> Result<(String, String), String> {
+fn run_npm_in_directory_with_env(
+    args: &[&str],
+    directory: Option<&Path>,
+    environment: &[(&str, &str)],
+) -> Result<(String, String), String> {
     // npm.cmd is a Windows shell shim. Calling npm's JavaScript entry point
     // through the resolved Node executable avoids CreateProcess and shell
     // quoting differences across Windows editions and user install paths.
@@ -343,9 +348,16 @@ fn run_npm_in_directory(args: &[&str], directory: Option<&Path>) -> Result<(Stri
         let mut node_args = Vec::with_capacity(args.len() + 1);
         node_args.push(script.as_str());
         node_args.extend(args.iter().copied());
-        return run_program_in_directory("node", &node_args, directory);
+        return run_program_in_directory_with_env("node", &node_args, directory, environment);
     }
-    run_program_in_directory("npm", args, directory)
+    run_program_in_directory_with_env("npm", args, directory, environment)
+}
+
+fn run_npm_in_directory(
+    args: &[&str],
+    directory: Option<&Path>,
+) -> Result<(String, String), String> {
+    run_npm_in_directory_with_env(args, directory, &[])
 }
 
 fn npm_version() -> Option<String> {
@@ -397,7 +409,12 @@ fn clean_process_output(value: &str) -> String {
     clean.trim().to_string()
 }
 
-fn run_program_in_directory(program: &str, args: &[&str], directory: Option<&Path>) -> Result<(String, String), String> {
+fn run_program_in_directory_with_env(
+    program: &str,
+    args: &[&str],
+    directory: Option<&Path>,
+    environment: &[(&str, &str)],
+) -> Result<(String, String), String> {
     // npm exposes `eai` as a shell wrapper. Running the package entry point
     // through Node avoids Windows batch quoting and stale-process PATH issues,
     // including user profiles whose paths contain spaces.
@@ -407,7 +424,12 @@ fn run_program_in_directory(program: &str, args: &[&str], directory: Option<&Pat
             let mut node_args = Vec::with_capacity(args.len() + 1);
             node_args.push(script.as_str());
             node_args.extend(args.iter().copied());
-            return run_program_in_directory("node", &node_args, directory);
+            return run_program_in_directory_with_env(
+                "node",
+                &node_args,
+                directory,
+                environment,
+            );
         }
     }
     let program_path = executable(program);
@@ -466,6 +488,7 @@ fn run_program_in_directory(program: &str, args: &[&str], directory: Option<&Pat
     if let Some(directory) = directory {
         command.current_dir(directory);
     }
+    command.envs(environment.iter().copied());
     let output = command
         .output()
         .map_err(|error| format!("could not start {program}: {error}"))?;
@@ -481,6 +504,14 @@ fn run_program_in_directory(program: &str, args: &[&str], directory: Option<&Pat
             (true, true) => format!("{program} exited unsuccessfully"),
         })
     }
+}
+
+fn run_program_in_directory(
+    program: &str,
+    args: &[&str],
+    directory: Option<&Path>,
+) -> Result<(String, String), String> {
+    run_program_in_directory_with_env(program, args, directory, &[])
 }
 
 fn shell_quote(value: &str) -> String {
@@ -660,6 +691,7 @@ fn command_result(step: &str, ok: bool, message: &str, command: Option<&str>, ou
         project_path: None,
         requires_user_action,
         project_directory: None,
+        app_created: false,
     }
 }
 
@@ -1382,14 +1414,15 @@ fn run_bootstrap_sync(app: AppHandle, step: String, project_name: Option<String>
                         Some(90),
                         Some(90),
                     );
-                    let npm_result = run_npm_in_directory(
+                    let npm_result = run_npm_in_directory_with_env(
                         &["install", "--no-audit", "--no-fund"],
                         Some(&directory),
+                        &[("HUSKY", "0")],
                     );
                     let (npm_stdout, npm_stderr) = match npm_result {
                         Ok(output) => output,
                         Err(error) => {
-                            return command_result(
+                            let mut result = command_result(
                                 "init",
                                 false,
                                 &format!("The app was created, but its dependencies could not be installed: {error}"),
@@ -1397,6 +1430,10 @@ fn run_bootstrap_sync(app: AppHandle, step: String, project_name: Option<String>
                                 Some(format!("{stdout}\n{stderr}\n{error}")),
                                 true,
                             );
+                            result.project_directory = Some(directory.to_string_lossy().to_string());
+                            result.project_path = Some(directory.to_string_lossy().to_string());
+                            result.app_created = !existing_app;
+                            return result;
                         }
                     };
                     emit_progress(
@@ -1427,6 +1464,7 @@ fn run_bootstrap_sync(app: AppHandle, step: String, project_name: Option<String>
                     );
                     result.project_directory = Some(directory.to_string_lossy().to_string());
                     result.project_path = Some(directory.to_string_lossy().to_string());
+                    result.app_created = !existing_app;
                     result
                 }
                 Err(error) => {

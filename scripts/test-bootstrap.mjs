@@ -61,7 +61,7 @@ if (!dmgBackgroundSource.includes(">Install Enterprise AI harness</text>") || !d
 }
 
 const rust = (await readFile(new URL("../src-tauri/src/main.rs", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
-for (const value of ["MIN_EAI_CLI_VERSION", "@enterpriseai/cli", "eai_cli_version()", "user_npm_global_exec_dirs", "current_version >= MIN_EAI_CLI_VERSION", "fn eai_cli_script", "APPDATA", "run_program_in_directory(\"node\", &node_args, directory)"] ) {
+for (const value of ["MIN_EAI_CLI_VERSION", "@enterpriseai/cli", "eai_cli_version()", "user_npm_global_exec_dirs", "current_version >= MIN_EAI_CLI_VERSION", "fn eai_cli_script", "APPDATA", "run_program_in_directory_with_env(\"node\", &node_args, directory, environment)"] ) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter does not verify the canonical EAI CLI release: ${value}`);
 }
 if (rust.includes("latest_eai_cli_requirement") || rust.includes('version("npm", &["view", "@enterpriseai/cli"')) {
@@ -103,8 +103,14 @@ if (!rust.includes('"--no-install".to_string()')) throw new Error("Tauri adapter
 if (!rust.includes("fn npm_cli_script") || !rust.includes("fn run_npm_in_directory") || !rust.includes("node_modules/npm/bin/npm-cli.js")) {
   throw new Error("Tauri adapter does not provide a direct Node/npm launcher for Windows");
 }
-if (!rust.includes('run_npm_in_directory(\n                        &["install", "--no-audit", "--no-fund"]')) {
+if (!rust.includes('run_npm_in_directory_with_env(\n                        &["install", "--no-audit", "--no-fund"]')) {
   throw new Error("Tauri adapter does not install generated app dependencies through its platform-aware npm path");
+}
+if (!rust.includes('&[("HUSKY", "0")]')) {
+  throw new Error("Tauri adapter must skip Git-hook setup during unattended app dependency installation");
+}
+for (const value of ["app_created: bool", "result.app_created = !existing_app", "result.project_directory = Some", "result.project_path = Some"]) {
+  if (!rust.includes(value)) throw new Error(`Tauri adapter does not preserve partial app creation evidence: ${value}`);
 }
 if (!rust.includes("\"--company-tenant\"")) throw new Error("Tauri adapter does not pass the selected company workspace to eai init");
 if (!rust.includes("command.stdin(Stdio::null())")) throw new Error("Tauri adapter does not close child stdin for GUI-launched commands");
@@ -119,6 +125,11 @@ if (!rust.includes("fn project_directory") || !rust.includes("fs::create_dir_all
 }
 if (!rust.includes("project_directory: Option<String>") || !rust.includes("result.project_directory = Some")) {
   throw new Error("Tauri adapter does not return the exact created project directory to the AI workspace handoff");
+}
+
+const appSource = await readFile(new URL("../ui/app.js", import.meta.url), "utf8");
+for (const value of ["let e2eAppCreated = false", "e2eAppCreated = Boolean(result?.app_created)", "appCreated: e2eAppCreated", 'e2eAppCreated ? "project" : "app"']) {
+  if (!appSource.includes(value)) throw new Error(`Desktop release receipt does not preserve app creation evidence: ${value}`);
 }
 if (!rust.includes('inventory.contract_version != "eai.ai-surfaces/v1"')) {
   throw new Error("Tauri adapter does not enforce the versioned AI surface contract");
