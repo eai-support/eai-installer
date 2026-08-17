@@ -138,4 +138,5 @@ release` workflow when a direct, native test download is needed.
 - [Testing and release gates](docs/testing.md)
 - [Releasing and semantic versioning](docs/releasing.md)
 - [Release end-to-end gate](docs/release-e2e.md)
+- [Signing and distribution setup](docs/signing-and-distribution.md)
 - [Security policy](SECURITY.md)
