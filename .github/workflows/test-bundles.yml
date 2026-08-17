@@ -74,7 +74,7 @@ jobs:
         run: npm test
 
       - name: Test native Windows prerequisite detection
-        if: matrix.label == 'Windows installer'
+        if: matrix.label == 'Windows'
         run: cargo test --manifest-path src-tauri/Cargo.toml
 
       - name: Build unsigned test bundle
