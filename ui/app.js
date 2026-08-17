@@ -546,7 +546,7 @@ async function runE2eFlow() {
   selectedCompanyTenantId = requestedTenant;
   renderCompanyTenants();
   if (!await loadCompanyApps(requestedTenant)) {
-    await writeE2eReceipt("tenant", "Apps could not be loaded for the release-test workspace.");
+    await writeE2eReceipt("app", "Apps could not be loaded for the release-test workspace.");
     return;
   }
   selectedCompanyAppKey = e2eConfig.appKey || null;

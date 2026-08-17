@@ -218,11 +218,13 @@ for (const obsolete of ["progress-area", "Step 3 of 6", "Step ${index + 1} of ${
   if (wizard.includes(obsolete)) throw new Error(`wizard: unnecessary user step remains: ${obsolete}`);
 }
 if (!wizard.includes('id="retry-install"')) throw new Error("wizard: failed installation has no retry control");
+if (!wizard.includes('id="retry-install" data-action="install-all" type="button"')) throw new Error("wizard: install retry control can accidentally submit a form");
 for (const control of ["id=\"activity\"", "id=\"activity-title\"", "id=\"activity-detail\"", "id=\"activity-eta\"", "id=\"activity-heartbeat\"", "id=\"activity-log\"", "id=\"install-items\"", "id=\"admin-password\"", "id=\"admin-password-submit\""]) {
   if (!wizard.includes(control)) throw new Error(`wizard: missing activity status: ${control}`);
 }
 if (!wizard.includes("Recent activity")) throw new Error("wizard: recent activity heading is missing");
 const app = await readFile(new URL("../ui/app.js", import.meta.url), "utf8");
+if (!app.includes('writeE2eReceipt("app", "Apps could not be loaded for the release-test workspace.")')) throw new Error("wizard: release evidence misclassifies app discovery as a tenant failure");
 if (app.includes('steps.push("homebrew")')) throw new Error("wizard: Homebrew must not be a required setup step");
 if (!app.includes("setActivity") || !app.includes("Installation complete") || !app.includes("listenForBootstrapProgress") || !app.includes("eventApi.listen") || !app.includes("renderInstallItems") || !app.includes("setDetectionState") || !app.includes("phaseForTitle") || !app.includes("async function startSetup") || !app.includes("window.setTimeout(() => startSetup(), 250)") || !app.includes("setStep(4)") || !app.includes("async function runSignup") || !app.includes("open_signup") || !app.includes("dialog.open") || !app.includes("choose-folder") || !app.includes("get_company_tenants") || !app.includes("get_company_apps") || !app.includes("loadCompanyApps") || !app.includes("describeWorkspaceFailure") || !app.includes("companyTenantId") || !app.includes("appKey") || !app.includes("renderCompanyApps") || !app.includes("open_project") || !app.includes("projectPath") || !app.includes("initInProgress") || !app.includes("setInitButtonBusy") || !app.includes("aria-busy") || !app.includes("describeInitFailure")) {
   throw new Error("wizard: live activity status updates are missing");
