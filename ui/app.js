@@ -659,6 +659,10 @@ async function loadCompanyApps(tenantId) {
   const tenant = companyTenants.find((item) => item.id === tenantId);
   if (!tenant) return false;
   if (tenant.appsLoaded) {
+    if (retryWorkspaces) {
+      retryWorkspaces.hidden = true;
+      retryWorkspaces.textContent = EAIWizard.retryActionLabel("app");
+    }
     renderCompanyApps();
     return true;
   }
