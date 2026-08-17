@@ -11,8 +11,4 @@ else
   exit 1
 fi
 
-if [ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ]; then
-  echo "TAURI_SIGNING_PRIVATE_KEY is required in the release environment." >&2
-  exit 1
-fi
-echo "release preflight passed"
+echo "release preflight passed; native signing is verified by the release workflow"

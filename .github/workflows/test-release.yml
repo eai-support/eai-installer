@@ -57,11 +57,12 @@ jobs:
             asset: eai-setup-ubuntu-arm64.deb
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version: 24
+          package-manager-cache: false
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -83,7 +84,7 @@ jobs:
         run: npm test
 
       - name: Build unsigned test bundle
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@v1
         with:
           projectPath: src-tauri
           args: --ci --target ${{ matrix.target }} --bundles ${{ matrix.bundle }}
@@ -155,7 +156,7 @@ jobs:
           cp "$source" "release-asset/${{ matrix.asset }}"
 
       - name: Upload normalized release asset
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.artifact }}
           path: release-asset/*
@@ -167,9 +168,13 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
       - name: Download normalized assets
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           path: release-assets
           merge-multiple: true

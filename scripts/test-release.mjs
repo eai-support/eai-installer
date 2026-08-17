@@ -24,6 +24,7 @@ assert.match(releaseShell, /publish-diagnostic/);
 assert.match(releaseShell, /publish-test/);
 const publishSection = releaseShell.slice(releaseShell.indexOf("publish_release"), releaseShell.indexOf("publish_diagnostic_release"));
 assert.match(publishSection, /--deprovision api/);
+assert.match(publishSection, /gh release edit "\$tag"[\s\S]*--draft=false/);
 assert.doesNotMatch(publishSection, /EAI_DEPROVISION_MODE/);
 const diagnosticPublishSection = releaseShell.slice(releaseShell.indexOf("publish_diagnostic_release"), releaseShell.indexOf("run_e2e"));
 assert.match(diagnosticPublishSection, /--deprovision mock --diagnostic/);
@@ -60,7 +61,12 @@ for (const dependency of [
 ]) {
   assert.match(releaseWorkflow, new RegExp(`\\b${dependency.replaceAll(".", "\\.")}\\b`));
 }
-assert.match(releaseWorkflow, /name: Require release signing configuration[\s\S]*name: Check Rust target/);
+assert.match(releaseWorkflow, /name: Require release signing configuration[\s\S]*WINDOWS_CERTIFICATE_PASSWORD/);
+assert.match(releaseWorkflow, /Missing release secret WINDOWS_CERTIFICATE/);
+assert.match(releaseWorkflow, /Missing release secret APPLE_CERTIFICATE/);
+assert.match(releaseWorkflow, /name: Verify Authenticode signature/);
+assert.match(releaseWorkflow, /releaseDraft: true/);
+assert.doesNotMatch(releaseWorkflow, /TAURI_SIGNING_PRIVATE_KEY/);
 assert.equal(tauriConfig.bundle?.windows?.nsis?.installMode, "currentUser");
 
 const dryRun = execFileSync(process.execPath, [runner, "--version", "0.2.0", "--dry-run"], {

@@ -46,7 +46,13 @@ version:
 
 It creates and pushes the matching tag. The release workflow validates that
 the tag and all source versions match, then requires the configured signing and
-notarization credentials before publishing the customer release.
+notarization credentials. It builds the customer assets into a draft release;
+`release.sh` publishes that draft only after the exact assets pass the real
+guest E2E and cleanup gate.
+
+Complete [Signing and distribution setup](signing-and-distribution.md) before
+attempting a production release. Missing credentials are a deliberate release
+blocker, not a reason to bypass signing.
 
 ## End-to-end release gate
 

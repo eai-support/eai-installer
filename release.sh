@@ -118,6 +118,9 @@ publish_release() {
   git push origin "$tag"
   wait_for_release_workflow "$tag"
   node scripts/release-e2e.mjs --version "$version" --repo "$REPO" --tag "$tag" --driver "${EAI_VM_DRIVER:-command}" --deprovision api
+  section "Publishing the verified customer release"
+  gh release edit "$tag" --repo "$REPO" --draft=false --latest
+  echo "Customer release published: https://github.com/$REPO/releases/tag/$tag"
 }
 
 publish_test_release() {

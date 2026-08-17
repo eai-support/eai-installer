@@ -47,13 +47,14 @@ jobs:
     runs-on: ${{ matrix.os }}
     environment: release
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version: 24
+          package-manager-cache: false
       - name: Install Linux build dependencies
         if: startsWith(matrix.os, 'ubuntu-')
         shell: bash
@@ -91,9 +92,10 @@ jobs:
       - name: Require release signing configuration
         shell: bash
         env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
@@ -102,13 +104,24 @@ jobs:
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
         run: |
-          test -n "$TAURI_SIGNING_PRIVATE_KEY"
-          test -n "$WINDOWS_CERTIFICATE" || test "${{ matrix.os }}" != "windows-latest"
-          test -n "$APPLE_CERTIFICATE" || test "${{ matrix.os }}" != "macos-latest"
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            test -n "$WINDOWS_CERTIFICATE" || { echo "Missing release secret WINDOWS_CERTIFICATE (base64 PFX)." >&2; exit 1; }
+            test -n "$WINDOWS_CERTIFICATE_PASSWORD" || { echo "Missing release secret WINDOWS_CERTIFICATE_PASSWORD." >&2; exit 1; }
+          fi
           if [ "${{ matrix.os }}" = "macos-latest" ]; then
-            test -n "$APPLE_SIGNING_IDENTITY"
-            test -n "$APPLE_ID" -a -n "$APPLE_PASSWORD" -a -n "$APPLE_TEAM_ID" \
-              || test -n "$APPLE_API_ISSUER" -a -n "$APPLE_API_KEY" -a -n "$APPLE_API_PRIVATE_KEY"
+            test -n "$APPLE_CERTIFICATE" || { echo "Missing release secret APPLE_CERTIFICATE (base64 Developer ID Application .p12)." >&2; exit 1; }
+            test -n "$APPLE_CERTIFICATE_PASSWORD" || { echo "Missing release secret APPLE_CERTIFICATE_PASSWORD." >&2; exit 1; }
+          fi
+          if [ "${{ matrix.os }}" = "macos-latest" ]; then
+            test -n "$APPLE_SIGNING_IDENTITY" || { echo "Missing release secret APPLE_SIGNING_IDENTITY." >&2; exit 1; }
+            apple_id_ready=0
+            api_key_ready=0
+            if [ -n "$APPLE_ID" ] && [ -n "$APPLE_PASSWORD" ] && [ -n "$APPLE_TEAM_ID" ]; then apple_id_ready=1; fi
+            if [ -n "$APPLE_API_ISSUER" ] && [ -n "$APPLE_API_KEY" ] && [ -n "$APPLE_API_PRIVATE_KEY" ]; then api_key_ready=1; fi
+            if [ "$apple_id_ready" -ne 1 ] && [ "$api_key_ready" -ne 1 ]; then
+              echo "Configure Apple notarization with either APPLE_ID/APPLE_PASSWORD/APPLE_TEAM_ID or APPLE_API_ISSUER/APPLE_API_KEY/APPLE_API_PRIVATE_KEY." >&2
+              exit 1
+            fi
           fi
       - name: Check Rust target
         run: cargo check --manifest-path src-tauri/Cargo.toml --target ${{ matrix.target }}
@@ -125,11 +138,9 @@ jobs:
             echo "APPLE_API_KEY_PATH=$RUNNER_TEMP/AuthKey_${APPLE_API_KEY}.p8" >> "$GITHUB_ENV"
           fi
       - name: Build signed bundle
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
           WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
@@ -161,6 +172,19 @@ jobs:
           codesign --verify --deep --strict --verbose=2 "$app"
           spctl --assess --type execute --verbose=4 "$app"
           xcrun stapler validate "$dmg"
+      - name: Verify Authenticode signature
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem "src-tauri/target" -Recurse -Filter *.exe |
+            Where-Object { $_.FullName -match '\\bundle\\nsis\\' } |
+            Select-Object -First 1
+          if (-not $installer) { throw "Windows installer was not produced" }
+          $signature = Get-AuthenticodeSignature -FilePath $installer.FullName
+          if ($signature.Status -ne 'Valid') {
+            throw "Windows installer signature status is $($signature.Status): $($signature.StatusMessage)"
+          }
+          Write-Host "Authenticode publisher: $($signature.SignerCertificate.Subject)"
       - name: Add stable direct-download assets
         shell: bash
         env:
