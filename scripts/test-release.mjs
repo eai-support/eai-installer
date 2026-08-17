@@ -120,6 +120,22 @@ assert.equal(diagnosticPreflight.status, 0);
 assert.match(diagnosticPreflight.stdout, /"deprovision": "mock"/);
 assert.match(diagnosticPreflight.stdout, /"diagnostic": true/);
 
+const selectedVmEnvironment = {
+  ...cleanEnvironment,
+  EAI_HARNESS_TENANT_ID: "00000000-0000-4000-8000-000000000000",
+  EAI_HARNESS_USER_EMAIL: "release-test@example.invalid",
+  EAI_RELEASE_VMS: "windows",
+  EAI_VM_WINDOWS_COMMAND: "true",
+};
+const selectedVmPreflight = spawnSync(process.execPath, [runner, "--version", "0.2.0", "--output", path.join(output, "selected-vm"), "--deprovision", "mock", "--diagnostic", "--preflight"], {
+  cwd: root,
+  encoding: "utf8",
+  env: selectedVmEnvironment,
+});
+assert.equal(selectedVmPreflight.status, 0, selectedVmPreflight.stderr);
+assert.match(selectedVmPreflight.stdout, /"vms": \[\s*"windows"\s*\]/);
+assert.doesNotMatch(selectedVmPreflight.stdout, /"macos"|"ubuntu"/);
+
 const diagnosticWithApi = spawnSync(process.execPath, [runner, "--version", "0.2.0", "--output", path.join(output, "diagnostic-with-api"), "--deprovision", "api", "--diagnostic", "--preflight"], {
   cwd: root,
   encoding: "utf8",
