@@ -72,6 +72,7 @@ assert.equal(tauriConfig.bundle?.windows?.nsis?.installMode, "currentUser");
 const dryRun = execFileSync(process.execPath, [runner, "--version", "0.2.0", "--dry-run"], {
   cwd: root,
   encoding: "utf8",
+  env: { ...process.env, EAI_RELEASE_VMS: "" },
 });
 assert.match(dryRun, /eai-setup-macos-arm64\.dmg/);
 assert.match(dryRun, /eai-setup-windows-arm64\.exe/);
@@ -85,6 +86,7 @@ for (const key of [
   "EAI_VM_WINDOWS_COMMAND",
   "EAI_VM_UBUNTU_COMMAND",
   "EAI_VM_TEST_COMMAND",
+  "EAI_RELEASE_VMS",
 ]) delete cleanEnvironment[key];
 const blocked = spawnSync(process.execPath, [runner, "--version", "0.2.0", "--output", path.join(output, "blocked"), "--preflight"], {
   cwd: root,
