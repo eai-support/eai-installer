@@ -18,6 +18,7 @@ Run with `npm test` on every pull request and release build.
 | 5 | `test-scenarios.mjs` | Every scenario ID in the user journey has a documented expected outcome. | Traceability check; scenario presence alone is not runtime proof. |
 | 6 | `test-release.mjs` | Release commands fail closed without real VM adapters, real test identity details, and verified V4 cleanup. | Does not run the VMs during normal pull-request CI. |
 | 7 | Rust unit tests | WinGet “already current” is accepted only when Node/npm actually run; transient platform failures retry; access denials do not retry; direct active child workspaces parse without eager app calls. | Native command execution is simulated through pure decision inputs. |
+| 8 | Windows CLI launcher contract | The CLI uses Windows' standard per-user npm location and the desktop app invokes the installed JavaScript entry point through Node, avoiding stale PATH state and batch-wrapper quoting. | The exact packaged path is replayed in the protected Windows guest before release. |
 
 ## 2. Native build and package checks
 

@@ -398,6 +398,18 @@ fn clean_process_output(value: &str) -> String {
 }
 
 fn run_program_in_directory(program: &str, args: &[&str], directory: Option<&Path>) -> Result<(String, String), String> {
+    // npm exposes `eai` as a shell wrapper. Running the package entry point
+    // through Node avoids Windows batch quoting and stale-process PATH issues,
+    // including user profiles whose paths contain spaces.
+    if program == "eai" {
+        if let Some(script) = eai_cli_script() {
+            let script = script.to_string_lossy().to_string();
+            let mut node_args = Vec::with_capacity(args.len() + 1);
+            node_args.push(script.as_str());
+            node_args.extend(args.iter().copied());
+            return run_program_in_directory("node", &node_args, directory);
+        }
+    }
     let program_path = executable(program);
     #[cfg(target_os = "windows")]
     let mut command = if program_path.ends_with(".cmd") || program_path.ends_with(".bat") {
@@ -487,12 +499,25 @@ fn applescript_quote(value: &str) -> String {
 
 fn user_npm_prefix() -> Option<PathBuf> {
     if cfg!(target_os = "windows") {
-        env::var_os("LOCALAPPDATA").map(|root| Path::new(&root).join("EAI Setup/npm-global"))
+        // The official Node.js installer places npm's standard per-user
+        // location on PATH. Installing there makes `eai` available to the
+        // desktop app and to newly opened command windows.
+        env::var_os("APPDATA").map(|root| Path::new(&root).join("npm"))
     } else if cfg!(unix) {
         env::var_os("HOME").map(|home| Path::new(&home).join(".eai-setup/npm-global"))
     } else {
         None
     }
+}
+
+fn eai_cli_script() -> Option<PathBuf> {
+    let prefix = user_npm_prefix()?;
+    [
+        prefix.join("node_modules/@enterpriseai/cli/dist/index.js"),
+        prefix.join("lib/node_modules/@enterpriseai/cli/dist/index.js"),
+    ]
+    .into_iter()
+    .find(|script| script.is_file())
 }
 
 fn expose_user_npm_bin() -> Result<(), String> {
@@ -1300,10 +1325,10 @@ fn run_bootstrap_sync(app: AppHandle, step: String, project_name: Option<String>
                     }
                     emit_progress(&app, "eai-cli", "EAI CLI ready", "Verifying the eai command.", Some(90), Some(5));
                     if version("eai", &["--version"]).is_none() {
-                        return command_result("eai-cli", false, "npm finished, but the eai command is not available yet.", Some("Restart EAI Setup to reload the Windows PATH, then retry."), Some(format!("{stdout}\n{stderr}")), true);
+                        return command_result("eai-cli", false, "npm finished, but the installed EAI CLI could not be started.", Some("Choose Try again. If the problem continues, repair Node.js and rerun setup."), Some(format!("{stdout}\n{stderr}")), true);
                     }
                     let command = if cfg!(target_os = "windows") {
-                        "npm install --global --prefix %LOCALAPPDATA%\\EAI Setup\\npm-global @enterpriseai/cli"
+                        "npm install --global --prefix %APPDATA%\\npm @enterpriseai/cli"
                     } else {
                         "npm install --global --prefix ~/.eai-setup/npm-global @enterpriseai/cli"
                     };

@@ -61,7 +61,7 @@ if (!dmgBackgroundSource.includes(">Install Enterprise AI harness</text>") || !d
 }
 
 const rust = (await readFile(new URL("../src-tauri/src/main.rs", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
-for (const value of ["MIN_EAI_CLI_VERSION", "@enterpriseai/cli", "eai_cli_version()", "user_npm_global_exec_dirs", "current_version >= MIN_EAI_CLI_VERSION"] ) {
+for (const value of ["MIN_EAI_CLI_VERSION", "@enterpriseai/cli", "eai_cli_version()", "user_npm_global_exec_dirs", "current_version >= MIN_EAI_CLI_VERSION", "fn eai_cli_script", "APPDATA", "run_program_in_directory(\"node\", &node_args, directory)"] ) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter does not verify the canonical EAI CLI release: ${value}`);
 }
 if (rust.includes("latest_eai_cli_requirement") || rust.includes('version("npm", &["view", "@enterpriseai/cli"')) {
@@ -126,7 +126,7 @@ if (!rust.includes('inventory.contract_version != "eai.ai-surfaces/v1"')) {
 for (const value of ["Homebrew.pkg", "/usr/sbin/pkgutil", "--check-signature", "with administrator privileges", "--stdinpass", "No Terminal window will open"]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing native macOS installation control: ${value}`);
 }
-for (const value of ["windows_package_bin_dirs", "windows_resolved_path", "env::split_paths", "ProgramW6432", "ProgramFiles(Arm)", "ProgramFiles(x86)", "CREATE_NO_WINDOW", "creation_flags", "LOCALAPPDATA", "windows_shell_arg", "ComSpec", "ends_with(\".cmd\")", "command_line.push_str", "call {}", "windows_package_install_result", "npm_version", "run_npm_in_directory(&[\"--version\"], None)", "Node.js and npm are already installed and ready.", "npm finished, but the eai command is not available yet."]) {
+for (const value of ["windows_package_bin_dirs", "windows_resolved_path", "env::split_paths", "ProgramW6432", "ProgramFiles(Arm)", "ProgramFiles(x86)", "CREATE_NO_WINDOW", "creation_flags", "APPDATA", "windows_shell_arg", "ComSpec", "ends_with(\".cmd\")", "command_line.push_str", "call {}", "windows_package_install_result", "npm_version", "run_npm_in_directory(&[\"--version\"], None)", "Node.js and npm are already installed and ready.", "installed EAI CLI could not be started."]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing Windows prerequisite safety support: ${value}`);
 }
 for (const value of ["xcode-select", "full Xcode is not required", "softwareupdate", "latest_command_line_tools_label", "refresh_macos_command_line_tools_catalog", "Refreshing Apple Software Update", "with administrator privileges", "secure administrator dialog", "native administrator install", "latest_node_artifact", "nodejs.org/dist/index.json", "osx-arm64-pkg", "osx-x64-pkg", "osx-arm64-tar", "osx-x64-tar", "SHASUMS256.txt", "shasum", "uname", "--prefix", "expose_user_npm_bin", "NVM_DIR", "versions/node", "NVM_BIN", "nvm_node_bin_dirs", "macos_package_bin_dirs"]) {
