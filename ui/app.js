@@ -599,18 +599,17 @@ function renderCompanyTenants() {
     return;
   }
 
-  selectedCompanyTenantId = companyTenants.find((tenant) => tenant.active)?.id || null;
+  selectedCompanyTenantId = null;
   const placeholder = document.createElement("option");
   placeholder.value = "";
   placeholder.textContent = "Choose a company workspace";
   placeholder.disabled = true;
-  placeholder.selected = !selectedCompanyTenantId;
+  placeholder.selected = true;
   companyTenantSelect.append(placeholder);
   for (const tenant of companyTenants) {
     const option = document.createElement("option");
     option.value = tenant.id;
     option.textContent = tenant.displayName;
-    option.selected = tenant.id === selectedCompanyTenantId;
     companyTenantSelect.append(option);
   }
   companyTenantField.hidden = false;
@@ -725,10 +724,8 @@ async function loadCompanyTenants() {
       throw new Error("No company workspaces are available for this account.");
     }
     renderCompanyTenants();
-    if (selectedCompanyTenantId && !await loadCompanyApps(selectedCompanyTenantId)) {
-      return false;
-    }
     if (companyTenants.length === 1) {
+      if (!await loadCompanyApps(selectedCompanyTenantId)) return false;
       recordActivityEvent("Workspace ready", `Using ${companyTenants[0].displayName} for this app.`, "Ready");
       return true;
     }
@@ -948,13 +945,19 @@ async function runAction(action) {
   if (action === "install-all") return installPrerequisites();
   if (action === "login") return runLogin();
   if (action === "retry-workspaces") {
-    const ready = failedAppTenantId
+    const retryingApps = Boolean(failedAppTenantId);
+    const ready = retryingApps
       ? await loadCompanyApps(failedAppTenantId)
       : await loadCompanyTenants();
     if (ready) {
       if (retryWorkspaces) {
         retryWorkspaces.hidden = true;
         retryWorkspaces.textContent = EAIWizard.retryActionLabel("app");
+      }
+      if (!EAIWizard.workspaceRetryCanContinue(retryingApps, companyTenants.length, selectedCompanyTenantId)) {
+        showOutput("Company workspaces are ready.", "Choose the company workspace that should own this app.");
+        setStep(4);
+        return;
       }
       setActivity("EAI is ready", "Continue setting up your app.", 100, false, "", "Ready");
       showOutput("EAI is ready.", "Continue setting up your app.");

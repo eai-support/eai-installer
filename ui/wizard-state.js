@@ -116,6 +116,10 @@
     return scope === "workspace" ? "Try workspace check again" : "Try again";
   }
 
+  function workspaceRetryCanContinue(retryingApps, tenantCount, selectedTenantId) {
+    return Boolean(retryingApps || Number(tenantCount) === 1 || selectedTenantId);
+  }
+
   function createState() {
     return { step: 0, prerequisitesReady: false, projectName: "" };
   }
@@ -146,6 +150,7 @@
     prerequisitesReady,
     chooseAiSurface,
     retryActionLabel,
+    workspaceRetryCanContinue,
     stepCount,
   };
 })(typeof window === "undefined" ? globalThis : window);

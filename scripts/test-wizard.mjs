@@ -58,6 +58,9 @@ if (deniedAppFailure.title !== "Apps need attention" || deniedAppFailure.detail.
 if (wizard.retryActionLabel("workspace") !== "Try workspace check again" || wizard.retryActionLabel("app") !== "Try again") {
   throw new Error("wizard retry labels do not match the failed action");
 }
+if (wizard.workspaceRetryCanContinue(false, 2, null) || !wizard.workspaceRetryCanContinue(false, 1, "only") || !wizard.workspaceRetryCanContinue(true, 2, "selected")) {
+  throw new Error("wizard workspace retry skips a required multi-workspace choice");
+}
 
 const report = {
   platform: "macos",
