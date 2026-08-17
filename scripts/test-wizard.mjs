@@ -61,6 +61,16 @@ if (wizard.retryActionLabel("workspace") !== "Try workspace check again" || wiza
 if (wizard.workspaceRetryCanContinue(false, 2, null) || !wizard.workspaceRetryCanContinue(false, 1, "only") || !wizard.workspaceRetryCanContinue(true, 2, "selected")) {
   throw new Error("wizard workspace retry skips a required multi-workspace choice");
 }
+const companyTenants = [{ id: "first" }, { id: "requested" }];
+if (wizard.resolveTenantSelection(companyTenants, "requested") !== "requested") {
+  throw new Error("wizard clears a valid release-test tenant when multiple workspaces are available");
+}
+if (wizard.resolveTenantSelection(companyTenants, "missing") !== null) {
+  throw new Error("wizard keeps a tenant selection that is no longer available");
+}
+if (wizard.resolveTenantSelection([{ id: "only" }], null) !== "only") {
+  throw new Error("wizard does not automatically select the only company workspace");
+}
 
 const report = {
   platform: "macos",

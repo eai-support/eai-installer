@@ -591,25 +591,25 @@ async function runLogin() {
 
 function renderCompanyTenants() {
   if (!companyTenantField || !companyTenantSelect) return;
+  selectedCompanyTenantId = EAIWizard.resolveTenantSelection(companyTenants, selectedCompanyTenantId);
   companyTenantSelect.replaceChildren();
   if (companyTenants.length === 1) {
-    selectedCompanyTenantId = companyTenants[0].id;
     companyTenantField.hidden = true;
     if (appSelectionField) appSelectionField.hidden = true;
     return;
   }
 
-  selectedCompanyTenantId = null;
   const placeholder = document.createElement("option");
   placeholder.value = "";
   placeholder.textContent = "Choose a company workspace";
   placeholder.disabled = true;
-  placeholder.selected = true;
+  placeholder.selected = !selectedCompanyTenantId;
   companyTenantSelect.append(placeholder);
   for (const tenant of companyTenants) {
     const option = document.createElement("option");
     option.value = tenant.id;
     option.textContent = tenant.displayName;
+    option.selected = tenant.id === selectedCompanyTenantId;
     companyTenantSelect.append(option);
   }
   companyTenantField.hidden = false;

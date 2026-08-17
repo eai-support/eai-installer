@@ -120,6 +120,14 @@
     return Boolean(retryingApps || Number(tenantCount) === 1 || selectedTenantId);
   }
 
+  function resolveTenantSelection(tenants, selectedTenantId) {
+    if (!Array.isArray(tenants) || tenants.length === 0) return null;
+    if (selectedTenantId && tenants.some((tenant) => tenant.id === selectedTenantId)) {
+      return selectedTenantId;
+    }
+    return tenants.length === 1 ? tenants[0].id : null;
+  }
+
   function createState() {
     return { step: 0, prerequisitesReady: false, projectName: "" };
   }
@@ -150,6 +158,7 @@
     prerequisitesReady,
     chooseAiSurface,
     retryActionLabel,
+    resolveTenantSelection,
     workspaceRetryCanContinue,
     stepCount,
   };
