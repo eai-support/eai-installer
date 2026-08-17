@@ -112,6 +112,10 @@
     };
   }
 
+  function retryActionLabel(scope) {
+    return scope === "workspace" ? "Try workspace check again" : "Try again";
+  }
+
   function createState() {
     return { step: 0, prerequisitesReady: false, projectName: "" };
   }
@@ -141,6 +145,7 @@
     isKebabCase,
     prerequisitesReady,
     chooseAiSurface,
+    retryActionLabel,
     stepCount,
   };
 })(typeof window === "undefined" ? globalThis : window);

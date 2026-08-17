@@ -667,6 +667,10 @@ async function loadCompanyApps(tenantId) {
     tenant.apps = await invoke("get_company_apps", { tenantId });
     tenant.appsLoaded = true;
     failedAppTenantId = null;
+    if (retryWorkspaces) {
+      retryWorkspaces.hidden = true;
+      retryWorkspaces.textContent = EAIWizard.retryActionLabel("app");
+    }
     renderCompanyApps();
     recordActivityEvent("Apps ready", `Apps for ${tenant.displayName} are ready.`, "Ready");
     return true;
@@ -675,7 +679,10 @@ async function loadCompanyApps(tenantId) {
     const failure = EAIWizard.describeAppFailure(error);
     showOutput(failure.title, `${failure.detail} ${failure.next} Diagnostic: ${failure.diagnostic}`);
     setActivity(failure.title, `${failure.detail} ${failure.next}`, 0, false, "", "Error");
-    if (retryWorkspaces) retryWorkspaces.hidden = !failure.retryable;
+    if (retryWorkspaces) {
+      retryWorkspaces.textContent = EAIWizard.retryActionLabel("app");
+      retryWorkspaces.hidden = !failure.retryable;
+    }
     return false;
   }
 }
@@ -732,7 +739,10 @@ async function loadCompanyTenants() {
     const failure = EAIWizard.describeWorkspaceFailure(error);
     showOutput(failure.title, `${failure.detail} ${failure.next} Diagnostic: ${failure.diagnostic}`);
     setActivity(failure.title, `${failure.detail} ${failure.next}`, 0, false, "", "Error");
-    if (retryWorkspaces) retryWorkspaces.hidden = !failure.retryable;
+    if (retryWorkspaces) {
+      retryWorkspaces.textContent = EAIWizard.retryActionLabel("workspace");
+      retryWorkspaces.hidden = !failure.retryable;
+    }
     return false;
   }
 }
@@ -942,8 +952,12 @@ async function runAction(action) {
       ? await loadCompanyApps(failedAppTenantId)
       : await loadCompanyTenants();
     if (ready) {
-      if (retryWorkspaces) retryWorkspaces.hidden = true;
+      if (retryWorkspaces) {
+        retryWorkspaces.hidden = true;
+        retryWorkspaces.textContent = EAIWizard.retryActionLabel("app");
+      }
       setActivity("EAI is ready", "Continue setting up your app.", 100, false, "", "Ready");
+      showOutput("EAI is ready.", "Continue setting up your app.");
       setStep(4);
     }
     return;

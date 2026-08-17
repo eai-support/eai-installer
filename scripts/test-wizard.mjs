@@ -55,6 +55,9 @@ const deniedAppFailure = wizard.describeAppFailure("403 Forbidden");
 if (deniedAppFailure.title !== "Apps need attention" || deniedAppFailure.detail.includes("company workspaces after")) {
   throw new Error("wizard app failure guidance is misleading");
 }
+if (wizard.retryActionLabel("workspace") !== "Try workspace check again" || wizard.retryActionLabel("app") !== "Try again") {
+  throw new Error("wizard retry labels do not match the failed action");
+}
 
 const report = {
   platform: "macos",

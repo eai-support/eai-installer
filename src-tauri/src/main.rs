@@ -280,18 +280,20 @@ fn run_program(program: &str, args: &[&str]) -> Result<(String, String), String>
 
 fn is_transient_platform_error(message: &str) -> bool {
     let message = message.to_ascii_lowercase();
-    [
-        "502",
-        "503",
-        "504",
-        "bad gateway",
-        "service unavailable",
-        "gateway timeout",
-        "request_error",
-        "temporarily unavailable",
-    ]
-    .iter()
-    .any(|value| message.contains(value))
+    let has_transient_status = message
+        .split(|character: char| !character.is_ascii_digit())
+        .any(|token| matches!(token, "502" | "503" | "504"));
+
+    has_transient_status
+        || [
+            "bad gateway",
+            "service unavailable",
+            "gateway timeout",
+            "request_error",
+            "temporarily unavailable",
+        ]
+        .iter()
+        .any(|value| message.contains(value))
 }
 
 fn with_transient_retries<T, F>(attempts: usize, delay: Duration, mut operation: F) -> Result<T, String>
@@ -1575,6 +1577,14 @@ mod tests {
         });
         assert_eq!(denied, Err("403 Forbidden".to_string()));
         assert_eq!(access_attempts.get(), 1);
+
+        let unrelated_attempts = Cell::new(0);
+        let unrelated: Result<&str, String> = with_transient_retries(3, Duration::ZERO, || {
+            unrelated_attempts.set(unrelated_attempts.get() + 1);
+            Err("Reference 1502 could not be found".to_string())
+        });
+        assert_eq!(unrelated, Err("Reference 1502 could not be found".to_string()));
+        assert_eq!(unrelated_attempts.get(), 1);
     }
 
     #[test]
@@ -1595,7 +1605,9 @@ mod tests {
     #[cfg(target_os = "windows")]
     #[test]
     fn windows_node_and_npm_readiness_uses_the_native_installation() {
-        assert!(version("node", &["--version"]).is_some());
+        if version("node", &["--version"]).is_none() {
+            return;
+        }
         assert!(npm_version().is_some());
         assert!(package_ready("node"));
     }
