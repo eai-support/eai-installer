@@ -106,6 +106,13 @@
           <div id="ai-surface-status" class="callout"><strong>Finding your AI workspaces</strong><p>EAI is checking this computer. No provider account or project content is read.</p></div>
           <fieldset id="ai-surface-field" class="surface-field" hidden>
             <legend>Choose an AI workspace</legend>
+            <div class="surface-columns">
+              <span aria-hidden="true"></span>
+              <span>AI workspace</span>
+              <button id="recommendation-help" class="column-help" type="button" aria-haspopup="dialog" aria-controls="recommendation-dialog">
+                Recommendation <span class="help-icon" aria-hidden="true">?</span>
+              </button>
+            </div>
             <div id="ai-surface-options" class="surface-options"></div>
           </fieldset>
           <p id="ai-surface-next" class="surface-next" hidden></p>
@@ -123,6 +130,29 @@
 
       <footer>EAI Setup never stores your password or API secrets.</footer>
     </main>
+    <dialog id="recommendation-dialog" class="recommendation-dialog" aria-labelledby="recommendation-title">
+      <div class="dialog-heading">
+        <div>
+          <p class="eyebrow">Recommendation</p>
+          <h2 id="recommendation-title">How the Harvey ball is scored</h2>
+        </div>
+        <button id="recommendation-close" class="dialog-close" type="button" aria-label="Close recommendation explanation">Close</button>
+      </div>
+      <p>The ball shows how complete the current EAI handoff is for a general user. One quarter is awarded for each capability:</p>
+      <ol class="recommendation-criteria">
+        <li>Opens the project automatically.</li>
+        <li>Starts with the prepared EAI first request.</li>
+        <li>Uses the repository's EAI and Gofer instructions.</li>
+        <li>Provides an integrated visual project and chat workspace.</li>
+      </ol>
+      <div class="recommendation-scale" aria-label="Harvey ball score guide">
+        <span><span class="harvey-ball" style="--recommendation-score: 4" aria-hidden="true"></span> Full: best fit</span>
+        <span><span class="harvey-ball" style="--recommendation-score: 3" aria-hidden="true"></span> Three quarters: strong fit</span>
+        <span><span class="harvey-ball" style="--recommendation-score: 2" aria-hidden="true"></span> Half: supported</span>
+        <span><span class="harvey-ball" style="--recommendation-score: 1" aria-hidden="true"></span> Quarter: basic handoff</span>
+      </div>
+      <p class="quiet">This measures EAI workflow integration, not model intelligence, price, security, or provider quality. Ready and Official download describe installation status separately.</p>
+    </dialog>
     <script src="wizard-state.js"></script>
     <script src="app.js"></script>
   </body>

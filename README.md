@@ -40,6 +40,12 @@ hands control to the normal EAI CLI flow.
    option, but its first use still requires GitHub sign-in. If a workspace is
    missing, the installer opens only that provider's fixed official page and
    provides a **Check again** action after installation.
+10. Shows a four-quarter Harvey ball beside every AI workspace. The score
+    measures the completeness of the EAI handoff for a general user: automatic
+    project opening, a prepared first request, EAI/Gofer repository support,
+    and an integrated visual project and chat workspace. The clickable
+    **Recommendation** heading explains the score and keeps it separate from
+    installation status or provider quality.
 
 ## Download the installer
 
