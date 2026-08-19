@@ -37,6 +37,8 @@ assert.match(testPublishSection, /--deprovision mock --diagnostic/);
 assert.match(runnerSource, /diagnostic-only/);
 assert.match(runnerSource, /source: "diagnostic-mock"/);
 assert.match(runnerSource, /passed_with_mock_cleanup/);
+assert.match(runnerSource, /report\.status === "failed"/);
+assert.doesNotMatch(runnerSource, /report\.status !== "passed"/);
 assert.match(runnerSource, /cleanupVerified: false/);
 assert.match(runnerSource, /EAI_HARNESS_TENANT_ID/);
 assert.match(runnerSource, /EAI_APP_DEPROVISION_COMMAND/);
