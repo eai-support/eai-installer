@@ -145,6 +145,17 @@ function renderJourneyStages() {
 
 function setJourneyStage(stageId, state, detail) {
   if (!journeyState.has(stageId)) return;
+  if (["active", "error"].includes(state)) {
+    const targetIndex = journeyStages.findIndex((stage) => stage.id === stageId);
+    for (const [otherId, otherValue] of journeyState.entries()) {
+      if (otherId === stageId || otherValue.state !== "active") continue;
+      const otherIndex = journeyStages.findIndex((stage) => stage.id === otherId);
+      journeyState.set(otherId, {
+        ...otherValue,
+        state: otherIndex < targetIndex ? "done" : "pending",
+      });
+    }
+  }
   const current = journeyState.get(stageId);
   journeyState.set(stageId, { state: state || current.state, detail: detail || current.detail });
   if (["active", "error"].includes(state)) currentJourneyStageId = stageId;
@@ -152,15 +163,7 @@ function setJourneyStage(stageId, state, detail) {
 }
 
 function journeyStageForActivity(title) {
-  const context = `${activeBootstrapStep || ""} ${title || ""}`;
-  if (/ai workspace|copilot|claude|codex|grok/i.test(context)) return "ai";
-  if (/sign[ -]?in|login|signup|account/i.test(context)) return "signin";
-  if (/company workspace|app|project|folder|tenant/i.test(context)) return "app";
-  if (/eai[ -]?cli/i.test(context)) return "eai-cli";
-  if (/node|npm/i.test(context)) return "node";
-  if (/git|command line tools/i.test(context)) return "git";
-  if (/computer|detect|required tools/i.test(context)) return "computer";
-  return null;
+  return EAIWizard.journeyStageForActivity(activeBootstrapStep, title);
 }
 
 function syncJourneyActivity(title, detail, active, phase) {

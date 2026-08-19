@@ -61,6 +61,12 @@ if (!dmgBackgroundSource.includes(">Install Enterprise AI harness</text>") || !d
 }
 
 const rust = (await readFile(new URL("../src-tauri/src/main.rs", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
+for (const value of ["fn user_home_dir", "fn usable_home_path", "getpwuid_r", "user_home_dir().map", "managed_files_never_use_root_or_relative_home_paths"]) {
+  if (!rust.includes(value)) throw new Error(`Tauri adapter does not resolve a safe signed-in user home: ${value}`);
+}
+if ((rust.match(/env::var_os\("HOME"\)/g) ?? []).length !== 1 || rust.includes('Path::new(&home).join(".eai-setup')) {
+  throw new Error("Tauri adapter must not create managed files from a raw HOME environment value");
+}
 for (const value of ["MIN_EAI_CLI_VERSION", "@enterpriseai/cli", "eai_cli_version()", "user_npm_global_exec_dirs", "current_version >= MIN_EAI_CLI_VERSION", "fn eai_cli_script", "APPDATA", "run_program_in_directory_with_env(\"node\", &node_args, directory, environment)"] ) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter does not verify the canonical EAI CLI release: ${value}`);
 }

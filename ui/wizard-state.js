@@ -38,6 +38,18 @@
     return summaries;
   }
 
+  function journeyStageForActivity(activeStep, title) {
+    const context = `${activeStep || ""} ${title || ""}`;
+    if (/ai workspace|copilot|claude|codex|grok/i.test(context)) return "ai";
+    if (/sign[ -]?in|login|signup|account/i.test(context)) return "signin";
+    if (/company workspace|\bapp\b|project|folder|tenant/i.test(context)) return "app";
+    if (/eai[ -]?cli/i.test(context)) return "eai-cli";
+    if (/node|npm/i.test(context)) return "node";
+    if (/git|command line tools/i.test(context)) return "git";
+    if (/computer|detect|required tools/i.test(context)) return "computer";
+    return null;
+  }
+
   function initButtonLabel(appKey, busy = false) {
     if (busy) return appKey ? "Initialising project..." : "Creating app...";
     return appKey ? "Use app and initialise project" : "Create and initialise app";
@@ -199,6 +211,7 @@
     retryActionLabel,
     resolveTenantSelection,
     summarizeCommandOutput,
+    journeyStageForActivity,
     workspaceRetryCanContinue,
     stepCount,
   };

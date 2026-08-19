@@ -30,6 +30,12 @@ if (!buildSummaries.includes("Downloaded the supported EAI app template.") || !b
 if (buildSummaries.some((summary) => /secret|5dd8db37|abc123/i.test(summary))) {
   throw new Error("wizard safe build summaries expose private command output");
 }
+if (wizard.journeyStageForActivity("git", "Apple Software Update is installing Git") !== "git") {
+  throw new Error("wizard mistakes Apple Software Update for the app-creation stage");
+}
+if (wizard.journeyStageForActivity(null, "Creating your EAI app") !== "app") {
+  throw new Error("wizard does not recognise the explicit app-creation stage");
+}
 if (wizard.initButtonLabel(null, false) !== "Create and initialise app" || wizard.initButtonLabel("existing-app", false) !== "Use app and initialise project") {
   throw new Error("wizard app action labels are wrong");
 }

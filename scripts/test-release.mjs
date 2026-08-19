@@ -9,8 +9,10 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const runner = path.join(root, "scripts", "release-e2e.mjs");
+const macosGuestPreparer = path.join(root, "scripts", "prepare-macos-guest-dmg.sh");
 const releaseShell = fs.readFileSync(path.join(root, "release.sh"), "utf8");
 const runnerSource = fs.readFileSync(runner, "utf8");
+const macosGuestPreparerSource = fs.readFileSync(macosGuestPreparer, "utf8");
 const releaseWorkflow = fs.readFileSync(path.join(root, ".github", "workflows", "release.yml"), "utf8");
 const tauriConfig = JSON.parse(fs.readFileSync(path.join(root, "src-tauri", "tauri.conf.json"), "utf8"));
 const output = fs.mkdtempSync(path.join(os.tmpdir(), "eai-installer-release-contract-"));
@@ -48,6 +50,18 @@ assert.match(runnerSource, /receipt\.deletedRecords/);
 assert.match(runnerSource, /EAI_DEPROVISION_APP_CREATED/);
 assert.match(runnerSource, /receipt\.appCreated !== appCreated/);
 assert.match(runnerSource, /requiredChecks = \["download", "installer", "prerequisites", "authentication", "tenant", "app", "project", "aiHandoff"\]/);
+for (const requiredSafetyCheck of [
+  /EAI_VM_DOWNLOAD_URL must be a complete HTTP or HTTPS URL/,
+  /The selected Parallels guest is not macOS/,
+  /The DMG did not reach a stable, non-zero size/,
+  /The guest DMG checksum does not match the CI artifact/,
+  /hdiutil imageinfo/,
+  /EAI_VM_ALLOW_UNSIGNED_TEST/,
+  /READY_FOR_UI/,
+]) {
+  assert.match(macosGuestPreparerSource, requiredSafetyCheck);
+}
+assert.doesNotMatch(macosGuestPreparerSource, /Users\/[^/]+\/Downloads/);
 assert.match(releaseWorkflow, /name: Install Linux build dependencies/);
 for (const dependency of [
   "build-essential",
@@ -151,5 +165,6 @@ const shellSyntax = execFileSync("bash", ["-n", path.join(root, "release.sh")], 
   encoding: "utf8",
 });
 assert.equal(shellSyntax, "");
+assert.equal(execFileSync("bash", ["-n", macosGuestPreparer], { cwd: root, encoding: "utf8" }), "");
 
 console.log("live release gate contract checks ok");

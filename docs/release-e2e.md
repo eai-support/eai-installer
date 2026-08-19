@@ -103,6 +103,16 @@ test app, and write the JSON receipts back through the shared test folder. The
 Windows adapter does the same with PowerShell and the Windows installer. The
 Ubuntu adapter does the same with a shell script and the Debian package.
 
+For controlled macOS VM testing, `scripts/prepare-macos-guest-dmg.sh` owns the
+download and mount boundary. It rejects malformed URLs, verifies the selected
+guest is macOS, waits for a stable download size, compares the guest SHA-256
+with the CI artifact, validates the DMG structure, and opens the verified mount
+in Finder. It deliberately avoids the guest Downloads folder because Parallels
+background tools do not necessarily have macOS privacy access to that folder.
+Unsigned pull-request artifacts require the explicit
+`EAI_VM_ALLOW_UNSIGNED_TEST=1` test flag; signed customer releases must not use
+that flag.
+
 The important boundary is that the work happens inside the guest. A host-side
 script that only checks whether a file exists is not a valid VM adapter. In a
 CI environment, the same contract can be implemented by an ephemeral Windows,

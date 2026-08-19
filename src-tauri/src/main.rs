@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::cmp::Reverse;
+#[cfg(unix)]
+use std::ffi::CStr;
 use std::env;
 use std::fs;
 use std::fs::OpenOptions;
@@ -133,6 +135,51 @@ const EAI_SIGNUP_URL: &str = "https://www.enterpriseaigroup.com/signup/developer
 // must distinguish "not compatible yet" from "not installed" deterministically.
 const MIN_EAI_CLI_VERSION: (u64, u64, u64) = (3, 15, 2);
 
+fn usable_home_path(path: PathBuf) -> Option<PathBuf> {
+    if path.is_absolute() && path.parent().is_some() && path != Path::new("/") {
+        Some(path)
+    } else {
+        None
+    }
+}
+
+#[cfg(unix)]
+fn system_user_home_dir() -> Option<PathBuf> {
+    let mut account: libc::passwd = unsafe { std::mem::zeroed() };
+    let mut result = std::ptr::null_mut();
+    let suggested_size = unsafe { libc::sysconf(libc::_SC_GETPW_R_SIZE_MAX) };
+    let mut buffer = vec![0_u8; if suggested_size > 0 { suggested_size as usize } else { 16_384 }];
+    let status = unsafe {
+        libc::getpwuid_r(
+            libc::geteuid(),
+            &mut account,
+            buffer.as_mut_ptr().cast(),
+            buffer.len(),
+            &mut result,
+        )
+    };
+    if status != 0 || result.is_null() || account.pw_dir.is_null() {
+        return None;
+    }
+    let home = unsafe { CStr::from_ptr(account.pw_dir) }.to_str().ok()?;
+    usable_home_path(PathBuf::from(home))
+}
+
+fn user_home_dir() -> Option<PathBuf> {
+    #[cfg(target_os = "windows")]
+    {
+        return env::var_os("USERPROFILE").and_then(|value| usable_home_path(PathBuf::from(value)));
+    }
+    #[cfg(unix)]
+    {
+        return system_user_home_dir().or_else(|| {
+            env::var_os("HOME").and_then(|value| usable_home_path(PathBuf::from(value)))
+        });
+    }
+    #[allow(unreachable_code)]
+    None
+}
+
 fn emit_progress(
     app: &AppHandle,
     step: &str,
@@ -170,10 +217,10 @@ fn nvm_version_key(path: &Path) -> (u64, u64, u64) {
 }
 
 fn nvm_node_bin_dirs() -> Vec<PathBuf> {
-    let Some(home) = env::var_os("HOME") else { return Vec::new(); };
+    let Some(home) = user_home_dir() else { return Vec::new(); };
     let nvm_root = env::var_os("NVM_DIR")
         .map(PathBuf::from)
-        .unwrap_or_else(|| Path::new(&home).join(".nvm"));
+        .unwrap_or_else(|| home.join(".nvm"));
     let versions_root = nvm_root.join("versions/node");
     let mut versions = fs::read_dir(versions_root)
         .ok()
@@ -195,8 +242,7 @@ fn nvm_node_bin_dirs() -> Vec<PathBuf> {
 
 fn user_node_bin_dirs() -> Vec<PathBuf> {
     let mut bins = Vec::new();
-    if let Some(home) = env::var_os("HOME") {
-        let home = PathBuf::from(home);
+    if let Some(home) = user_home_dir() {
         bins.push(home.join(".eai-setup/node/bin"));
         bins.push(home.join(".eai-setup/npm-global/bin"));
     }
@@ -648,7 +694,7 @@ fn user_npm_prefix() -> Option<PathBuf> {
         // desktop app and to newly opened command windows.
         env::var_os("APPDATA").map(|root| Path::new(&root).join("npm"))
     } else if cfg!(unix) {
-        env::var_os("HOME").map(|home| Path::new(&home).join(".eai-setup/npm-global"))
+        user_home_dir().map(|home| home.join(".eai-setup/npm-global"))
     } else {
         None
     }
@@ -669,9 +715,9 @@ fn expose_user_npm_bin() -> Result<(), String> {
     fs::create_dir_all(prefix.join("bin")).map_err(|error| error.to_string())?;
     let marker = "EAI_SETUP_NPM_GLOBAL";
     let line = "\n# EAI_SETUP_NPM_GLOBAL\nexport PATH=\"$HOME/.eai-setup/node/bin:$HOME/.eai-setup/npm-global/bin:$PATH\"\n";
-    let Some(home) = env::var_os("HOME") else { return Ok(()); };
+    let Some(home) = user_home_dir() else { return Ok(()); };
     for filename in [".profile", ".zprofile"] {
-        let path = Path::new(&home).join(filename);
+        let path = home.join(filename);
         let existing = fs::read_to_string(&path).unwrap_or_default();
         if !existing.contains(marker) {
             let mut file = OpenOptions::new().create(true).append(true).open(&path).map_err(|error| error.to_string())?;
@@ -1310,10 +1356,10 @@ fn node_tar_install_step(app: &AppHandle, node_version: &str, filename: &str, ur
     }
     let folder = filename.trim_end_matches(".tar.gz");
     let extracted = extract_dir.join(folder);
-    let Some(home) = env::var_os("HOME") else {
+    let Some(home) = user_home_dir() else {
         return command_result("node", false, "The user home directory is unavailable.", Some("Retry EAI Setup from a normal user session"), None, true);
     };
-    let install_root = Path::new(&home).join(".eai-setup/node");
+    let install_root = home.join(".eai-setup/node");
     if let Some(parent) = install_root.parent() {
         if let Err(error) = fs::create_dir_all(parent) {
             return command_result("node", false, &format!("The user Node.js directory could not be created: {error}"), None, None, true);
@@ -1677,12 +1723,8 @@ fn open_project(path: String) -> Result<(), String> {
 
 #[tauri::command]
 fn local_device_id() -> Result<String, String> {
-    let home = if cfg!(target_os = "windows") {
-        env::var("USERPROFILE").map_err(|_| "user profile directory is unavailable".to_string())?
-    } else {
-        env::var("HOME").map_err(|_| "home directory is unavailable".to_string())?
-    };
-    let directory = Path::new(&home).join(".eai-setup");
+    let home = user_home_dir().ok_or_else(|| "user home directory is unavailable".to_string())?;
+    let directory = home.join(".eai-setup");
     fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
     let path = directory.join("device-id");
     if let Ok(value) = fs::read_to_string(&path) {
@@ -1706,6 +1748,14 @@ fn main() {
 mod tests {
     use super::*;
     use std::cell::Cell;
+
+    #[test]
+    fn managed_files_never_use_root_or_relative_home_paths() {
+        assert_eq!(usable_home_path(PathBuf::from("/")), None);
+        assert_eq!(usable_home_path(PathBuf::from("relative/home")), None);
+        #[cfg(unix)]
+        assert_eq!(usable_home_path(PathBuf::from("/Users/example")), Some(PathBuf::from("/Users/example")));
+    }
 
     #[test]
     fn build_summaries_allow_known_milestones_and_hide_sensitive_output() {
