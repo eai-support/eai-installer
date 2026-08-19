@@ -12,6 +12,8 @@ const activityTrack = document.querySelector(".activity-track");
 const activityPhase = document.querySelector("#activity-phase");
 const activityEta = document.querySelector("#activity-eta");
 const activityHeartbeat = document.querySelector("#activity-heartbeat");
+const activityStep = document.querySelector("#activity-step");
+const setupStages = document.querySelector("#setup-stages");
 const installItems = document.querySelector("#install-items");
 const activityLog = document.querySelector("#activity-log");
 const activityLogStatus = document.querySelector("#activity-log-status");
@@ -46,7 +48,6 @@ let activeBootstrapStep = null;
 let activityTicker = null;
 let activityStartedAt = 0;
 let activityLastUpdateAt = 0;
-let activityLastHeartbeatLogAt = 0;
 let pendingAdminPassword = null;
 let companyTenants = [];
 let selectedCompanyTenantId = null;
@@ -60,6 +61,7 @@ let initInProgress = false;
 let e2eConfig = null;
 let e2eAppCreated = false;
 const activityEvents = [];
+const activitySummaryKeys = new Set();
 
 const stepLabels = {
   git: "Git",
@@ -68,6 +70,19 @@ const stepLabels = {
 };
 
 const prerequisiteSteps = ["git", "node", "eai-cli"];
+
+const journeyStages = [
+  { id: "computer", label: "Check computer", waiting: "Waiting to check this computer." },
+  { id: "git", label: "Prepare Git", waiting: "Waiting for the computer check." },
+  { id: "node", label: "Prepare Node.js and npm", waiting: "Waiting for Git." },
+  { id: "eai-cli", label: "Prepare EAI CLI", waiting: "Waiting for Node.js and npm." },
+  { id: "signin", label: "Sign in", waiting: "Waiting for the required tools." },
+  { id: "app", label: "Create app", waiting: "Waiting for sign-in." },
+  { id: "ai", label: "Open AI workspace", waiting: "Waiting for the app." },
+];
+
+const journeyState = new Map(journeyStages.map((stage) => [stage.id, { state: "pending", detail: stage.waiting }]));
+let currentJourneyStageId = "computer";
 
 const stepEstimates = {
   git: 45,
@@ -92,6 +107,85 @@ const aiSurfaceGuidance = {
     notInstalled: "Install VS Code and the GitHub Copilot extension from the official page. Return here and select Check again.",
   },
 };
+
+function journeyStatusLabel(state) {
+  return { pending: "Waiting", active: "In progress", done: "Ready", error: "Needs attention" }[state] || "Waiting";
+}
+
+function renderJourneyStages() {
+  if (!setupStages) return;
+  setupStages.replaceChildren();
+  for (const [index, stage] of journeyStages.entries()) {
+    const value = journeyState.get(stage.id);
+    const details = document.createElement("details");
+    details.className = "setup-stage";
+    details.dataset.stage = stage.id;
+    details.dataset.state = value.state;
+    details.open = stage.id === currentJourneyStageId && ["active", "error"].includes(value.state);
+    const summary = document.createElement("summary");
+    const number = document.createElement("span");
+    number.className = "setup-stage-number";
+    number.textContent = String(index + 1);
+    const name = document.createElement("span");
+    name.className = "setup-stage-name";
+    name.textContent = stage.label;
+    const status = document.createElement("span");
+    status.className = "setup-stage-status";
+    status.textContent = journeyStatusLabel(value.state);
+    const detail = document.createElement("p");
+    detail.className = "setup-stage-detail";
+    detail.textContent = value.detail;
+    summary.append(number, name, status);
+    details.append(summary, detail);
+    setupStages.append(details);
+  }
+  const currentIndex = Math.max(0, journeyStages.findIndex((stage) => stage.id === currentJourneyStageId));
+  if (activityStep) activityStep.textContent = `Step ${currentIndex + 1} of ${journeyStages.length}`;
+}
+
+function setJourneyStage(stageId, state, detail) {
+  if (!journeyState.has(stageId)) return;
+  const current = journeyState.get(stageId);
+  journeyState.set(stageId, { state: state || current.state, detail: detail || current.detail });
+  if (["active", "error"].includes(state)) currentJourneyStageId = stageId;
+  renderJourneyStages();
+}
+
+function journeyStageForActivity(title) {
+  const context = `${activeBootstrapStep || ""} ${title || ""}`;
+  if (/ai workspace|copilot|claude|codex|grok/i.test(context)) return "ai";
+  if (/sign[ -]?in|login|signup|account/i.test(context)) return "signin";
+  if (/company workspace|app|project|folder|tenant/i.test(context)) return "app";
+  if (/eai[ -]?cli/i.test(context)) return "eai-cli";
+  if (/node|npm/i.test(context)) return "node";
+  if (/git|command line tools/i.test(context)) return "git";
+  if (/computer|detect|required tools/i.test(context)) return "computer";
+  return null;
+}
+
+function syncJourneyActivity(title, detail, active, phase) {
+  const stageId = journeyStageForActivity(title);
+  if (!stageId) return;
+  if (phase === "Error") setJourneyStage(stageId, "error", detail);
+  else if (active) setJourneyStage(stageId, "active", detail);
+  else setJourneyStage(stageId, null, detail);
+}
+
+function recordSafeSummary(step, detail) {
+  const summaryKey = `${step}:${detail}`;
+  if (activitySummaryKeys.has(summaryKey)) return;
+  activitySummaryKeys.add(summaryKey);
+  const label = journeyStages.find((stage) => stage.id === (step === "init" ? "app" : step))?.label || stepLabels[step] || "Setup";
+  recordActivityEvent(label, detail, "Update");
+  const stageId = step === "init" ? "app" : step === "login" ? "signin" : step;
+  if (journeyState.has(stageId)) setJourneyStage(stageId, null, detail);
+}
+
+function recordCommandSummaries(step, commandOutput) {
+  for (const detail of EAIWizard.summarizeCommandOutput(commandOutput)) {
+    recordSafeSummary(step, detail);
+  }
+}
 
 function aiSurfaceCopy(surface) {
   return aiSurfaceGuidance[surface?.id] || {
@@ -182,6 +276,7 @@ function setActivity(title, detail, progress = null, active = true, eta = "", ph
   activity.classList.toggle("complete", progress === 100);
   activity.classList.toggle("error", phase === "Error");
   if (activityLogStatus) activityLogStatus.textContent = phase === "Error" ? "Stopped with error" : active ? "Live updates" : progress === 100 ? "Complete" : "Stopped";
+  syncJourneyActivity(title, detail, active, phase);
   recordActivityEvent(title, detail, phase);
   if (progress === null) {
     activityTrack.removeAttribute("aria-valuenow");
@@ -214,20 +309,8 @@ function refreshActivityHeartbeat() {
     ? `Elapsed ${elapsed}s · Screen updated every second · Waiting for your input`
     : `Elapsed ${elapsed}s · Screen updated every second · Last installer update ${updateAge}`;
   if (waitingForAdmin) {
-    if (elapsed >= 5 && elapsed - activityLastHeartbeatLogAt >= 5) {
-      activityLastHeartbeatLogAt = elapsed;
-      recordActivityEvent("Action needed", "Enter your Mac login password to authorize the Git installation. It is used once and never saved.", "Waiting");
-    }
     activityPhase.textContent = "Action needed";
     return;
-  }
-  if (elapsed >= 5 && elapsed - activityLastHeartbeatLogAt >= 5) {
-    activityLastHeartbeatLogAt = elapsed;
-    recordActivityEvent(
-      "Still working",
-      `${activityTitle.textContent}: ${activityDetail.textContent} (${elapsed}s elapsed; the installer is still being checked)`,
-      "In progress",
-    );
   }
   if (sinceUpdate >= 10 && !activity.classList.contains("complete") && activeBootstrapStep) {
     if (activeBootstrapStep === "git" && /installing git/i.test(activityTitle.textContent)) {
@@ -244,7 +327,6 @@ function startActivityHeartbeat(step) {
   activeBootstrapStep = step;
   activityStartedAt = Date.now();
   activityLastUpdateAt = activityStartedAt;
-  activityLastHeartbeatLogAt = 0;
   refreshActivityHeartbeat();
   activityTicker = setInterval(refreshActivityHeartbeat, 1000);
 }
@@ -319,6 +401,9 @@ function setDetectionState(report) {
   setInstallItemState("git", gitReady ? "done" : "pending", gitReady ? tools.get("git").version : "Not installed");
   setInstallItemState("node", nodeReady ? "done" : "pending", nodeReady ? `Node ${tools.get("node").version} / npm ready` : "Not installed");
   setInstallItemState("eai-cli", eaiReady ? "done" : "pending", eaiReady ? tools.get("eai").version : "Not installed");
+  setJourneyStage("git", gitReady ? "done" : "pending", gitReady ? "Git is already ready." : "Git needs to be installed.");
+  setJourneyStage("node", nodeReady ? "done" : "pending", nodeReady ? "Node.js and npm are already ready." : "Node.js and npm need to be installed.");
+  setJourneyStage("eai-cli", eaiReady ? "done" : "pending", eaiReady ? "The EAI CLI is already ready." : "The EAI CLI needs to be installed.");
 }
 
 function phaseForTitle(title) {
@@ -338,6 +423,12 @@ async function listenForBootstrapProgress() {
     setActivity(payload.title, payload.detail, payload.progress ?? null, true, formatEta(payload.estimatedSeconds), phaseForTitle(payload.title));
     setInstallItemState(payload.step, /ready|complete/i.test(payload.title) ? "done" : "active", phaseForTitle(payload.title));
   });
+  if (!window.__eaiBootstrapSummaryListener) {
+    window.__eaiBootstrapSummaryListener = await eventApi.listen("bootstrap-summary", ({ payload }) => {
+      if (!payload?.detail) return;
+      recordSafeSummary(payload.step, payload.detail);
+    });
+  }
 }
 
 function showOutput(message, detail = "") {
@@ -385,6 +476,8 @@ function showPreviewState() {
 }
 
 async function detect() {
+  const initialComputerCheck = !environmentReport;
+  if (initialComputerCheck) setJourneyStage("computer", "active", "Checking this computer and the required tools.");
   renderInstallItems(prerequisiteSteps);
   for (const step of prerequisiteSteps) setInstallItemState(step, "active", "Checking");
   setActivity("Checking this computer", "Checking the required tools.", null, true, "", "Checking");
@@ -393,6 +486,7 @@ async function detect() {
     const report = await invoke("detect_environment");
     if (report.demo) {
       showPreviewState();
+      if (initialComputerCheck) setJourneyStage("computer", "done", "Computer check complete. Preview mode made no changes.");
       setActivity("Computer check complete", "Preview mode is ready. No changes were made.", 100, false);
       return true;
     }
@@ -400,19 +494,24 @@ async function detect() {
     environmentReport = report;
     setToolState(report);
     setDetectionState(report);
+    if (initialComputerCheck) setJourneyStage("computer", "done", `${report.platform} check complete.`);
     setActivity("Computer check complete", `${report.platform} is ready. Missing items are shown below.`, 100, false, "", "Complete");
     return true;
   } catch (error) {
     showOutput("Could not inspect this computer.", String(error));
     if (retryInstall) retryInstall.hidden = false;
+    if (initialComputerCheck) setJourneyStage("computer", "error", "The computer check could not finish.");
     setActivity("Computer check failed", `The computer check could not finish: ${String(error)}`, 0, false, "", "Error");
     return false;
   } finally {
     stopActivityHeartbeat();
+    if (activeBootstrapStep === "detect") activeBootstrapStep = null;
   }
 }
 
 async function runBootstrapStep(step) {
+  const journeyStep = step === "login" ? "signin" : step;
+  if (journeyState.has(journeyStep)) setJourneyStage(journeyStep, "active", `${stepLabels[step] || "Secure sign-in"} is in progress.`);
   activeBootstrapStep = step;
   await listenForBootstrapProgress();
   startActivityHeartbeat(step);
@@ -422,30 +521,38 @@ async function runBootstrapStep(step) {
     if (step === "git" && environmentReport?.platform === "macos" && !adminPassword) {
       showOutput("Mac approval was cancelled. No tools were changed.", "Next: enter the Mac password and allow installation to retry.");
       setActivity("Git setup cancelled", "No changes were made. Enter the Mac password to retry the Apple Command Line Tools installation.", 0, false, "", "Error");
+      setJourneyStage("git", "error", "Git installation approval was cancelled.");
       return false;
     }
     result = await invoke("run_bootstrap", { step, projectName: null, directory: null, adminPassword, companyTenantId: null });
   } catch (error) {
     showOutput("This setup step could not start.", String(error));
     setActivity(`${stepLabels[step] || step} setup failed`, `The step could not finish: ${String(error)}`, 0, false, "", "Error");
+    if (journeyState.has(journeyStep)) setJourneyStage(journeyStep, "error", "This step could not finish.");
     return false;
   } finally {
     stopActivityHeartbeat();
     activeBootstrapStep = null;
   }
-  if (result.output) console.info(result.output);
+  if (result.output) {
+    recordCommandSummaries(step, result.output);
+    console.info(result.output);
+  }
   if (!result.ok && !result.demo) {
     const message = result.message || "This setup step failed.";
     showOutput(message, result.command ? `Next: ${result.command}` : "");
     setActivity(`${stepLabels[step] || step} setup failed`, message, 0, false, "", "Error");
+    if (journeyState.has(journeyStep)) setJourneyStage(journeyStep, "error", message);
     return false;
   }
+  if (journeyState.has(journeyStep)) setJourneyStage(journeyStep, "done", result.message || `${stepLabels[step] || "This step"} is ready.`);
   return true;
 }
 
 async function installPrerequisites() {
   if (demoMode) {
     showOutput("Preview only: no changes were made to this computer.");
+    for (const step of prerequisiteSteps) setJourneyStage(step, "done", `${stepLabels[step]} will be prepared by the signed installer.`);
     setActivity("Preview only", "The signed desktop app will install only what is missing.", 100, false);
     return true;
   }
@@ -462,6 +569,7 @@ async function installPrerequisites() {
     if (retryInstall) retryInstall.hidden = true;
     showOutput("All prerequisites are ready.");
     setActivity("Everything is ready", "Git, Node.js, npm, and the EAI CLI are already installed.", 100, false);
+    for (const step of prerequisiteSteps) setJourneyStage(step, "done", `${stepLabels[step]} is ready.`);
     return true;
   }
   renderInstallItems(steps);
@@ -470,6 +578,7 @@ async function installPrerequisites() {
     const name = stepLabels[step] || step;
     const start = Math.round((index / steps.length) * 100);
     setInstallItemState(step, "active", "Starting");
+    setJourneyStage(step, "active", `Installing ${name}.`);
     setActivity(`Installing ${name}`, "Downloading and installing only what is missing. The live status below will show each installer action.", start, true, formatEta(stepEstimates[step]));
     if (!await runBootstrapStep(step)) {
       setInstallItemState(step, "failed", "Needs attention");
@@ -477,6 +586,7 @@ async function installPrerequisites() {
       return false;
     }
     setInstallItemState(step, "done", "Ready");
+    setJourneyStage(step, "done", `${name} is ready.`);
     await detect();
     setActivity(`${name} installed`, "Continuing setup.", Math.round(((index + 1) / steps.length) * 100), true, formatEta(Math.max(0, steps.slice(index + 1).reduce((total, item) => total + stepEstimates[item], 0))));
   }
@@ -488,7 +598,7 @@ async function installPrerequisites() {
   } else {
     if (retryInstall) retryInstall.hidden = false;
     showOutput("Some prerequisites still need attention. Try again.");
-    setActivity("Installation needs attention", "Retry the installation step after reviewing the recent activity.", 0, false, "", "Error");
+    setActivity("Installation needs attention", "Review Build summary, then retry the installation step.", 0, false, "", "Error");
     return false;
   }
 }
@@ -594,16 +704,19 @@ async function runE2eFlow() {
 }
 
 async function runLogin() {
+  setJourneyStage("signin", "active", "Opening secure browser sign-in.");
   setActivity("Opening secure sign-in", "Your browser will handle EAI authentication. The installer does not see your password.", null);
   const result = await runBootstrapStep("login");
   if (result) {
     showOutput(demoMode ? "Preview only: the signed app will open browser sign-in." : "Browser sign-in completed.");
     if (demoMode || await loadCompanyTenants()) {
+      setJourneyStage("signin", "done", "Secure browser sign-in is complete.");
       setActivity("Sign-in complete", "Your company workspaces are ready. Continue to app setup.", 100, false, "Ready");
       setStep(4);
     }
   } else {
-    setActivity("Sign-in needs attention", "Complete browser sign-in, then try again. See recent activity for the last result.", 0, false, "", "Error");
+    setJourneyStage("signin", "error", "Browser sign-in did not complete.");
+    setActivity("Sign-in needs attention", "Complete browser sign-in, then try again. Build summary shows the last result.", 0, false, "", "Error");
   }
 }
 
@@ -684,6 +797,7 @@ async function loadCompanyApps(tenantId) {
     return true;
   }
   setActivity("Checking apps", `Loading apps for ${tenant.displayName}.`, null, true, "", "Checking");
+  setJourneyStage("app", "active", "Checking the apps available in the selected company workspace.");
   try {
     tenant.apps = await invoke("get_company_apps", { tenantId });
     tenant.appsLoaded = true;
@@ -740,6 +854,7 @@ async function loadCompanyTenants() {
   failedAppTenantId = null;
   if (retryWorkspaces) retryWorkspaces.hidden = true;
   setActivity("Checking company workspaces", "Finding where your new app can be created.", null, true, "", "Checking");
+  setJourneyStage("app", "active", "Finding where the new app can be created.");
   try {
     companyTenants = await invoke("get_company_tenants");
     if (!Array.isArray(companyTenants) || companyTenants.length === 0) {
@@ -805,7 +920,9 @@ async function runInit() {
   }
   initInProgress = true;
   setInitButtonBusy(true);
+  setJourneyStage("app", "active", `Creating ${name} and preparing its project files.`);
   setActivity("Creating your EAI app", `Initialising ${name} and fetching the supported Gofer assets.`, null);
+  await listenForBootstrapProgress();
   startActivityHeartbeat("init");
   let result;
   try {
@@ -814,12 +931,17 @@ async function runInit() {
     const failure = EAIWizard.describeInitFailure(error, environmentReport?.platform);
     showOutput(failure.title, `${failure.detail} Next: ${failure.next}`);
     setActivity(failure.title, failure.detail, 0, false, "", "Error");
+    setJourneyStage("app", "error", failure.detail);
     return false;
   } finally {
     stopActivityHeartbeat();
     activeBootstrapStep = null;
     initInProgress = false;
     setInitButtonBusy(false);
+  }
+  if (result?.output) {
+    recordCommandSummaries("init", result.output);
+    console.info(result.output);
   }
   e2eAppCreated = Boolean(result?.app_created);
   if (result?.project_directory) {
@@ -830,6 +952,7 @@ async function runInit() {
     const failure = EAIWizard.describeInitFailure(result.message, environmentReport?.platform);
     showOutput(failure.title, `Next: ${failure.next}`);
     setActivity(failure.title, failure.detail, 0, false, "", "Error");
+    setJourneyStage("app", "error", failure.detail);
     return false;
   }
   completeMessage.textContent = result.demo
@@ -846,6 +969,8 @@ async function runInit() {
     completeLocation.hidden = !projectPath;
   }
   if (openProjectButton) openProjectButton.hidden = !projectPath || demoMode;
+  setJourneyStage("app", "done", "The EAI app and its project files are ready.");
+  setJourneyStage("ai", "active", "Checking which AI workspaces can open this project.");
   setStep(5);
   setActivity("Setup complete", "Your EAI app and developer tools are ready.", 100, false);
   showOutput("Setup complete.");
@@ -927,10 +1052,13 @@ async function loadAiSurfaces() {
       };
     }
     renderAiSurfaces();
+    const readyCount = aiSurfaceInventory.surfaces.filter((surface) => surface.installed).length;
+    setJourneyStage("ai", "active", readyCount ? `${readyCount} AI workspace${readyCount === 1 ? " is" : "s are"} ready to open.` : "Choose an AI workspace to install.");
     return true;
   } catch (error) {
     aiSurfaceStatus.innerHTML = "<strong>AI workspace check needs attention</strong><p>You can close setup and run <code>eai start</code> from the project folder.</p>";
     showOutput("Your app is ready, but AI workspace detection did not finish.", String(error));
+    setJourneyStage("ai", "error", "AI workspace detection did not finish. The app remains ready.");
     return false;
   }
 }
@@ -964,6 +1092,7 @@ async function startAiSurface() {
       await invoke("install_ai_surface", { surfaceId: surface.id });
       setActivity("Official download opened", copy.notInstalled, 100, false, "", "Ready");
       showOutput(`The official ${surface.provider} page opened.`, "Install the selected workspace, return here, and choose Check again. EAI does not sign in to an AI provider for you.");
+      setJourneyStage("ai", "active", `The official ${surface.provider} download is open. Install it, then check again.`);
       return;
     }
     const result = await invoke("start_ai_surface", { directory: createdProjectDirectory, surfaceId: surface.id });
@@ -971,7 +1100,9 @@ async function startAiSurface() {
     completeMessage.textContent = `${copy.label} is open. Complete its sign-in or project connection step to start building.`;
     startAiButton.textContent = `Open ${copy.label} again`;
     showOutput(`${copy.label} opened.`, copy.ready);
+    setJourneyStage("ai", "done", `${copy.label} opened with this project.`);
   } catch (error) {
+    setJourneyStage("ai", "error", "The selected AI workspace could not be opened.");
     setActivity("AI workspace could not start", String(error), 0, false, "", "Error");
     showOutput("Your app is safe and complete.", `Run eai start from ${createdProjectDirectory} or try another workspace.`);
   } finally {
@@ -1068,6 +1199,7 @@ for (const button of document.querySelectorAll("[data-action]")) {
 companyTenantSelect?.addEventListener("change", () => runAction("select-company-tenant"));
 appSelection?.addEventListener("change", () => runAction("select-company-app"));
 
+renderJourneyStages();
 setStep(0);
 // The installer should make the first decision itself. The button remains as
 // an accessible fallback, but normal users only see the permission prompt when

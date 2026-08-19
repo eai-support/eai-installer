@@ -3,7 +3,7 @@ use std::cmp::Reverse;
 use std::env;
 use std::fs;
 use std::fs::OpenOptions;
-use std::io::Write;
+use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 #[cfg(target_os = "windows")]
@@ -66,6 +66,13 @@ struct BootstrapProgress {
     detail: String,
     progress: Option<u8>,
     estimated_seconds: Option<u64>,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BootstrapSummary {
+    step: String,
+    detail: String,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -142,6 +149,16 @@ fn emit_progress(
             detail: detail.to_string(),
             progress,
             estimated_seconds,
+        },
+    );
+}
+
+fn emit_summary(app: &AppHandle, step: &str, detail: &str) {
+    let _ = app.emit(
+        "bootstrap-summary",
+        BootstrapSummary {
+            step: step.to_string(),
+            detail: detail.to_string(),
         },
     );
 }
@@ -360,6 +377,24 @@ fn run_npm_in_directory(
     run_npm_in_directory_with_env(args, directory, &[])
 }
 
+fn run_npm_in_directory_with_progress(
+    app: &AppHandle,
+    step: &str,
+    args: &[&str],
+    directory: Option<&Path>,
+    environment: &[(&str, &str)],
+) -> Result<(String, String), String> {
+    let progress = Some((app.clone(), step.to_string()));
+    if let Some(script) = npm_cli_script() {
+        let script = script.to_string_lossy().to_string();
+        let mut node_args = Vec::with_capacity(args.len() + 1);
+        node_args.push(script.as_str());
+        node_args.extend(args.iter().copied());
+        return run_program_in_directory_with_env_and_progress("node", &node_args, directory, environment, progress);
+    }
+    run_program_in_directory_with_env_and_progress("npm", args, directory, environment, progress)
+}
+
 fn npm_version() -> Option<String> {
     version("npm", &["--version"]).or_else(|| {
         #[cfg(target_os = "windows")]
@@ -409,11 +444,66 @@ fn clean_process_output(value: &str) -> String {
     clean.trim().to_string()
 }
 
+fn safe_build_summary(value: &str) -> Option<&'static str> {
+    let line = value.to_ascii_lowercase();
+    if line.contains("cloned from") {
+        Some("Downloaded the supported EAI app template.")
+    } else if line.contains("updated package.json") {
+        Some("Updated the project settings.")
+    } else if line.contains("generated .env.local") {
+        Some("Created the local app configuration.")
+    } else if line.contains("created object types scaffold") {
+        Some("Prepared the app data model starter files.")
+    } else if line.contains("generated agents.md") || line.contains("generated claude.md") {
+        Some("Prepared the AI workspace guidance.")
+    } else if line.contains("installed gofer assets") {
+        Some("Installed the EAI delivery guidance.")
+    } else if line.contains("initialized git repository") {
+        Some("Prepared local version control.")
+    } else if (line.contains("added ") && line.contains(" package")) || line.contains("up to date") {
+        Some("Installed the required project packages.")
+    } else if line.contains("authenticated as") {
+        Some("Secure browser sign-in completed.")
+    } else {
+        None
+    }
+}
+
+fn capture_process_stream<R>(reader: R, progress: Option<(AppHandle, String)>) -> thread::JoinHandle<String>
+where
+    R: Read + Send + 'static,
+{
+    thread::spawn(move || {
+        let mut captured = Vec::new();
+        for line in BufReader::new(reader).lines().map_while(Result::ok) {
+            let clean = clean_process_output(&line);
+            if clean.is_empty() {
+                continue;
+            }
+            if let (Some((app, step)), Some(summary)) = (progress.as_ref(), safe_build_summary(&clean)) {
+                emit_summary(app, step, summary);
+            }
+            captured.push(clean);
+        }
+        captured.join("\n")
+    })
+}
+
 fn run_program_in_directory_with_env(
     program: &str,
     args: &[&str],
     directory: Option<&Path>,
     environment: &[(&str, &str)],
+) -> Result<(String, String), String> {
+    run_program_in_directory_with_env_and_progress(program, args, directory, environment, None)
+}
+
+fn run_program_in_directory_with_env_and_progress(
+    program: &str,
+    args: &[&str],
+    directory: Option<&Path>,
+    environment: &[(&str, &str)],
+    progress: Option<(AppHandle, String)>,
 ) -> Result<(String, String), String> {
     // npm exposes `eai` as a shell wrapper. Running the package entry point
     // through Node avoids Windows batch quoting and stale-process PATH issues,
@@ -424,11 +514,12 @@ fn run_program_in_directory_with_env(
             let mut node_args = Vec::with_capacity(args.len() + 1);
             node_args.push(script.as_str());
             node_args.extend(args.iter().copied());
-            return run_program_in_directory_with_env(
+            return run_program_in_directory_with_env_and_progress(
                 "node",
                 &node_args,
                 directory,
                 environment,
+                progress,
             );
         }
     }
@@ -489,12 +580,18 @@ fn run_program_in_directory_with_env(
         command.current_dir(directory);
     }
     command.envs(environment.iter().copied());
-    let output = command
-        .output()
+    command.stdout(Stdio::piped()).stderr(Stdio::piped());
+    let mut child = command
+        .spawn()
         .map_err(|error| format!("could not start {program}: {error}"))?;
-    let stdout = clean_process_output(&String::from_utf8_lossy(&output.stdout));
-    let stderr = clean_process_output(&String::from_utf8_lossy(&output.stderr));
-    if output.status.success() {
+    let stdout_reader = child.stdout.take().ok_or_else(|| format!("could not read {program} output"))?;
+    let stderr_reader = child.stderr.take().ok_or_else(|| format!("could not read {program} errors"))?;
+    let stdout_handle = capture_process_stream(stdout_reader, progress.clone());
+    let stderr_handle = capture_process_stream(stderr_reader, progress);
+    let status = child.wait().map_err(|error| format!("could not wait for {program}: {error}"))?;
+    let stdout = stdout_handle.join().map_err(|_| format!("could not collect {program} output"))?;
+    let stderr = stderr_handle.join().map_err(|_| format!("could not collect {program} errors"))?;
+    if status.success() {
         Ok((stdout, stderr))
     } else {
         Err(match (stdout.is_empty(), stderr.is_empty()) {
@@ -512,6 +609,22 @@ fn run_program_in_directory(
     directory: Option<&Path>,
 ) -> Result<(String, String), String> {
     run_program_in_directory_with_env(program, args, directory, &[])
+}
+
+fn run_program_in_directory_with_progress(
+    app: &AppHandle,
+    step: &str,
+    program: &str,
+    args: &[&str],
+    directory: Option<&Path>,
+) -> Result<(String, String), String> {
+    run_program_in_directory_with_env_and_progress(
+        program,
+        args,
+        directory,
+        &[],
+        Some((app.clone(), step.to_string())),
+    )
 }
 
 fn shell_quote(value: &str) -> String {
@@ -1344,11 +1457,11 @@ fn run_bootstrap_sync(app: AppHandle, step: String, project_name: Option<String>
             let install_result = if let Some(prefix) = prefix.as_ref() {
                 let prefix_string = prefix.to_string_lossy().to_string();
                 match fs::create_dir_all(prefix) {
-                    Ok(()) => run_npm_in_directory(&["install", "--global", "--prefix", &prefix_string, "@enterpriseai/cli"], None),
+                    Ok(()) => run_npm_in_directory_with_progress(&app, "eai-cli", &["install", "--global", "--prefix", &prefix_string, "@enterpriseai/cli"], None, &[]),
                     Err(error) => Err(error.to_string()),
                 }
             } else {
-                run_npm_in_directory(&["install", "--global", "@enterpriseai/cli"], None)
+                run_npm_in_directory_with_progress(&app, "eai-cli", &["install", "--global", "@enterpriseai/cli"], None, &[])
             };
             match install_result {
                 Ok((stdout, stderr)) => {
@@ -1369,7 +1482,7 @@ fn run_bootstrap_sync(app: AppHandle, step: String, project_name: Option<String>
                 Err(error) => command_result("eai-cli", false, &error, Some("Install the EAI CLI from npm using a user-writable prefix"), None, true),
             }
         }
-        "login" => match run_program("eai", &["login"]) {
+        "login" => match run_program_in_directory_with_progress(&app, "login", "eai", &["login"], None) {
             Ok((stdout, stderr)) => command_result("login", true, "Browser sign-in completed.", Some("eai login"), Some(format!("{stdout}\n{stderr}")), false),
             Err(error) => command_result("login", false, &error, Some("eai login"), None, true),
         },
@@ -1404,7 +1517,7 @@ fn run_bootstrap_sync(app: AppHandle, step: String, project_name: Option<String>
                 init_args.extend(["--app-key".to_string(), app_key]);
             }
             let init_args_ref = init_args.iter().map(String::as_str).collect::<Vec<_>>();
-            match run_program_in_directory("eai", &init_args_ref, Some(&directory)) {
+            match run_program_in_directory_with_progress(&app, "init", "eai", &init_args_ref, Some(&directory)) {
                 Ok((stdout, stderr)) => {
                     emit_progress(
                         &app,
@@ -1414,7 +1527,9 @@ fn run_bootstrap_sync(app: AppHandle, step: String, project_name: Option<String>
                         Some(90),
                         Some(90),
                     );
-                    let npm_result = run_npm_in_directory_with_env(
+                    let npm_result = run_npm_in_directory_with_progress(
+                        &app,
+                        "init",
                         &["install", "--no-audit", "--no-fund"],
                         Some(&directory),
                         &[("HUSKY", "0")],
@@ -1591,6 +1706,15 @@ fn main() {
 mod tests {
     use super::*;
     use std::cell::Cell;
+
+    #[test]
+    fn build_summaries_allow_known_milestones_and_hide_sensitive_output() {
+        assert_eq!(safe_build_summary("✓ Cloned from eai-support/eai-app-template@abc123"), Some("Downloaded the supported EAI app template."));
+        assert_eq!(safe_build_summary("added 225 packages in 2s"), Some("Installed the required project packages."));
+        assert_eq!(safe_build_summary("ENTRA_CLIENT_SECRET=do-not-display"), None);
+        assert_eq!(safe_build_summary("Tenant ID: 5dd8db37-0993-f01c-0487-e8f0fae6c3d7"), None);
+        assert_eq!(safe_build_summary("/Users/example/private/project"), None);
+    }
 
     #[test]
     fn winget_already_current_is_success_when_commands_are_ready() {
