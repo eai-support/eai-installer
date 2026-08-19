@@ -3,6 +3,8 @@
 set -euo pipefail
 
 vm_name="${EAI_MACOS_VM_NAME:-macOS}"
+guest_user="${EAI_VM_GUEST_USER:-}"
+guest_password="${EAI_VM_GUEST_PASSWORD:-}"
 download_url="${EAI_VM_DOWNLOAD_URL:-}"
 host_asset="${EAI_VM_ASSET:-}"
 guest_dmg="/tmp/eai-setup-under-test.dmg"
@@ -14,10 +16,12 @@ fail() {
 }
 
 guest() {
-  prlctl exec "$vm_name" "$@"
+  prlctl exec "$vm_name" --user "$guest_user" --password "$guest_password" "$@"
 }
 
 command -v prlctl >/dev/null 2>&1 || fail "Parallels prlctl is not installed."
+[[ -n "$guest_user" ]] || fail "EAI_VM_GUEST_USER is required."
+[[ -n "$guest_password" ]] || fail "EAI_VM_GUEST_PASSWORD is required and must come from the protected test environment."
 [[ -n "$download_url" ]] || fail "EAI_VM_DOWNLOAD_URL is required."
 [[ "$download_url" =~ ^https?://[^[:space:]]+$ ]] || fail "EAI_VM_DOWNLOAD_URL must be a complete HTTP or HTTPS URL."
 [[ -f "$host_asset" ]] || fail "EAI_VM_ASSET must point to the validated host-side DMG."
@@ -26,6 +30,10 @@ command -v prlctl >/dev/null 2>&1 || fail "Parallels prlctl is not installed."
 vm_status="$(prlctl status "$vm_name" 2>/dev/null || true)"
 [[ "$vm_status" == *"running"* ]] || fail "The Parallels VM '$vm_name' is not running."
 [[ "$(guest /usr/bin/uname -s)" == "Darwin" ]] || fail "The selected Parallels guest is not macOS."
+actual_user="$(guest /usr/bin/id -un)"
+actual_uid="$(guest /usr/bin/id -u)"
+[[ "$actual_user" == "$guest_user" ]] || fail "The macOS guest command is not running as the requested signed-in user."
+[[ "$actual_uid" != "0" ]] || fail "The macOS clean-machine test must not run as root."
 guest_arch="$(guest /usr/bin/uname -m)"
 [[ "$guest_arch" == "arm64" || "$guest_arch" == "x86_64" ]] || fail "Unsupported macOS guest architecture: $guest_arch"
 
@@ -64,8 +72,8 @@ guest /bin/rm -rf "$guest_mount"
 guest /bin/mkdir -p "$guest_mount"
 guest /usr/bin/hdiutil attach "$guest_dmg" -nobrowse -readonly -mountpoint "$guest_mount" >/dev/null
 
-app_count="$(guest /usr/bin/find "$guest_mount" -maxdepth 1 -name '*.app' -type d | /usr/bin/wc -l | /usr/bin/tr -d ' ')"
+app_count="$(guest /usr/bin/find "$guest_mount" -maxdepth 1 -type d | /usr/bin/grep -E '/[^/]+\.app$' | /usr/bin/wc -l | /usr/bin/tr -d ' ')"
 [[ "$app_count" == "1" ]] || fail "The mounted DMG must contain exactly one application."
 
-guest /usr/bin/open "file://$guest_mount"
-printf 'READY_FOR_UI vm=%s arch=%s bytes=%s sha256=%s\n' "$vm_name" "$guest_arch" "$stable_size" "$guest_hash"
+prlctl exec "$vm_name" /bin/launchctl asuser "$actual_uid" /usr/bin/sudo -u "$actual_user" /usr/bin/open "file://$guest_mount"
+printf 'READY_FOR_UI vm=%s user=%s arch=%s bytes=%s sha256=%s mount=%s\n' "$vm_name" "$actual_user" "$guest_arch" "$stable_size" "$guest_hash" "$guest_mount"

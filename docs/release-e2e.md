@@ -105,10 +105,15 @@ Ubuntu adapter does the same with a shell script and the Debian package.
 
 For controlled macOS VM testing, `scripts/prepare-macos-guest-dmg.sh` owns the
 download and mount boundary. It rejects malformed URLs, verifies the selected
-guest is macOS, waits for a stable download size, compares the guest SHA-256
-with the CI artifact, validates the DMG structure, and opens the verified mount
-in Finder. It deliberately avoids the guest Downloads folder because Parallels
-background tools do not necessarily have macOS privacy access to that folder.
+guest is macOS, refuses to run the test as `root`, confirms the requested
+signed-in guest account, waits for a stable download size, compares the guest
+SHA-256 with the CI artifact, validates the DMG structure, and opens the
+verified mount through the signed-in user's macOS launch session. It uses
+`launchctl asuser` and drops privileges before opening Finder; a plain
+root-owned GUI launch is explicitly forbidden. It deliberately avoids the guest Downloads folder
+because Parallels background tools do not necessarily have macOS privacy access
+to that folder. The guest username and password are protected runtime inputs;
+they must never be committed to this repository or written to test evidence.
 Unsigned pull-request artifacts require the explicit
 `EAI_VM_ALLOW_UNSIGNED_TEST=1` test flag; signed customer releases must not use
 that flag.

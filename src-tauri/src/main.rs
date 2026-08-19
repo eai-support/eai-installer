@@ -621,6 +621,10 @@ fn run_program_in_directory_with_env_and_progress(
         if let Ok(path) = env::join_paths(paths) {
             command.env("PATH", path);
         }
+        if let Some(home) = user_home_dir() {
+            command.env("HOME", &home);
+            command.env("npm_config_cache", home.join(".eai-setup/npm-cache"));
+        }
     }
     if let Some(directory) = directory {
         command.current_dir(directory);

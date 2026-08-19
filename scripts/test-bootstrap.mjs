@@ -67,6 +67,9 @@ for (const value of ["fn user_home_dir", "fn usable_home_path", "getpwuid_r", "u
 if ((rust.match(/env::var_os\("HOME"\)/g) ?? []).length !== 1 || rust.includes('Path::new(&home).join(".eai-setup')) {
   throw new Error("Tauri adapter must not create managed files from a raw HOME environment value");
 }
+for (const value of ['command.env("HOME", &home)', 'command.env("npm_config_cache", home.join(".eai-setup/npm-cache"))']) {
+  if (!rust.includes(value)) throw new Error(`Tauri adapter lets a GUI child process inherit an invalid home: ${value}`);
+}
 for (const value of ["MIN_EAI_CLI_VERSION", "@enterpriseai/cli", "eai_cli_version()", "user_npm_global_exec_dirs", "current_version >= MIN_EAI_CLI_VERSION", "fn eai_cli_script", "APPDATA", "run_program_in_directory_with_env(\"node\", &node_args, directory, environment)"] ) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter does not verify the canonical EAI CLI release: ${value}`);
 }

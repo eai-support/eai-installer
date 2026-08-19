@@ -53,6 +53,8 @@ assert.match(runnerSource, /requiredChecks = \["download", "installer", "prerequ
 for (const requiredSafetyCheck of [
   /EAI_VM_DOWNLOAD_URL must be a complete HTTP or HTTPS URL/,
   /The selected Parallels guest is not macOS/,
+  /The macOS guest command is not running as the requested signed-in user/,
+  /The macOS clean-machine test must not run as root/,
   /The DMG did not reach a stable, non-zero size/,
   /The guest DMG checksum does not match the CI artifact/,
   /hdiutil imageinfo/,
@@ -62,6 +64,12 @@ for (const requiredSafetyCheck of [
   assert.match(macosGuestPreparerSource, requiredSafetyCheck);
 }
 assert.doesNotMatch(macosGuestPreparerSource, /Users\/[^/]+\/Downloads/);
+assert.doesNotMatch(macosGuestPreparerSource, /Gubamute/);
+assert.doesNotMatch(macosGuestPreparerSource, /-name ['"]?\*\.app/);
+assert.match(macosGuestPreparerSource, /grep -E '\/\[\^\/\]\+\\\.app\$'/);
+assert.doesNotMatch(macosGuestPreparerSource, /guest \/usr\/bin\/open/);
+assert.match(macosGuestPreparerSource, /launchctl asuser "\$actual_uid" \/usr\/bin\/sudo -u "\$actual_user" \/usr\/bin\/open/);
+assert.match(macosGuestPreparerSource, /READY_FOR_UI.*mount=%s/);
 assert.match(releaseWorkflow, /name: Install Linux build dependencies/);
 for (const dependency of [
   "build-essential",
