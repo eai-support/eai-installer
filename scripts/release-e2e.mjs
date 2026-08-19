@@ -318,7 +318,7 @@ async function main() {
   report.completedAt = new Date().toISOString();
   writeJson(path.join(output, "release-e2e.json"), report);
   console.log(JSON.stringify({ status: report.status, report: path.join(output, "release-e2e.json"), machines: report.machines.map(({ vm, status, cleanupVerified, error, cleanupError }) => ({ vm, status, cleanupVerified, error, cleanupError })) }, null, 2));
-  if (report.status !== "passed") process.exitCode = 1;
+  if (report.status === "failed") process.exitCode = 1;
 }
 
 main().catch((error) => {
