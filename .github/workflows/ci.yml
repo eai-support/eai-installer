@@ -22,7 +22,9 @@ jobs:
       - run: node --check ui/app.js
 
   tauri-check:
-    runs-on: ubuntu-latest
+    # Match the supported x64 Linux release target. ubuntu-latest can move to
+    # a newer image before the installer support policy and Tauri dependencies.
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v6
       - name: Install Tauri Linux dependencies
