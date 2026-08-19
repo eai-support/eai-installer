@@ -68,7 +68,11 @@ assert.doesNotMatch(macosGuestPreparerSource, /Gubamute/);
 assert.doesNotMatch(macosGuestPreparerSource, /-name ['"]?\*\.app/);
 assert.match(macosGuestPreparerSource, /grep -E '\/\[\^\/\]\+\\\.app\$'/);
 assert.doesNotMatch(macosGuestPreparerSource, /guest \/usr\/bin\/open/);
-assert.match(macosGuestPreparerSource, /launchctl asuser "\$actual_uid" \/usr\/bin\/sudo -u "\$actual_user" \/usr\/bin\/open/);
+assert.match(macosGuestPreparerSource, /dscl \. -read "\/Users\/\$actual_user" NFSHomeDirectory/);
+assert.match(macosGuestPreparerSource, /The signed-in macOS user's home directory could not be resolved/);
+assert.match(macosGuestPreparerSource, /guest \/bin\/test -d "\$actual_home"/);
+assert.match(macosGuestPreparerSource, /launchctl asuser "\$actual_uid"[\s\\]*\/usr\/bin\/sudo -H -u "\$actual_user"/);
+assert.match(macosGuestPreparerSource, /HOME="\$actual_home" USER="\$actual_user" LOGNAME="\$actual_user"/);
 assert.match(macosGuestPreparerSource, /READY_FOR_UI.*mount=%s/);
 assert.match(releaseWorkflow, /name: Install Linux build dependencies/);
 for (const dependency of [

@@ -34,6 +34,9 @@ actual_user="$(guest /usr/bin/id -un)"
 actual_uid="$(guest /usr/bin/id -u)"
 [[ "$actual_user" == "$guest_user" ]] || fail "The macOS guest command is not running as the requested signed-in user."
 [[ "$actual_uid" != "0" ]] || fail "The macOS clean-machine test must not run as root."
+actual_home="$(guest /usr/bin/dscl . -read "/Users/$actual_user" NFSHomeDirectory | /usr/bin/awk '{print $2}')"
+[[ "$actual_home" == /Users/* ]] || fail "The signed-in macOS user's home directory could not be resolved."
+guest /bin/test -d "$actual_home" || fail "The signed-in macOS user's home directory does not exist."
 guest_arch="$(guest /usr/bin/uname -m)"
 [[ "$guest_arch" == "arm64" || "$guest_arch" == "x86_64" ]] || fail "Unsupported macOS guest architecture: $guest_arch"
 
@@ -75,5 +78,8 @@ guest /usr/bin/hdiutil attach "$guest_dmg" -nobrowse -readonly -mountpoint "$gue
 app_count="$(guest /usr/bin/find "$guest_mount" -maxdepth 1 -type d | /usr/bin/grep -E '/[^/]+\.app$' | /usr/bin/wc -l | /usr/bin/tr -d ' ')"
 [[ "$app_count" == "1" ]] || fail "The mounted DMG must contain exactly one application."
 
-prlctl exec "$vm_name" /bin/launchctl asuser "$actual_uid" /usr/bin/sudo -u "$actual_user" /usr/bin/open "file://$guest_mount"
+prlctl exec "$vm_name" /bin/launchctl asuser "$actual_uid" \
+  /usr/bin/sudo -H -u "$actual_user" \
+  /usr/bin/env HOME="$actual_home" USER="$actual_user" LOGNAME="$actual_user" \
+  /usr/bin/open "file://$guest_mount"
 printf 'READY_FOR_UI vm=%s user=%s arch=%s bytes=%s sha256=%s mount=%s\n' "$vm_name" "$actual_user" "$guest_arch" "$stable_size" "$guest_hash" "$guest_mount"
