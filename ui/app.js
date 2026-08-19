@@ -476,7 +476,7 @@ async function detect() {
     showOutput("Could not inspect this computer.", String(error));
     if (retryInstall) retryInstall.hidden = false;
     if (initialComputerCheck) setJourneyStage("computer", "error", "The computer check could not finish.");
-    setActivity("Computer check failed", `The computer check could not finish: ${String(error)}`, 0, false, "", "Error");
+    setActivity("Computer check failed", "The computer check could not finish. Review the guidance below and try again.", 0, false, "", "Error");
     return false;
   } finally {
     stopActivityHeartbeat();
@@ -502,7 +502,7 @@ async function runBootstrapStep(step) {
     result = await invoke("run_bootstrap", { step, projectName: null, directory: null, adminPassword, companyTenantId: null });
   } catch (error) {
     showOutput("This setup step could not start.", String(error));
-    setActivity(`${stepLabels[step] || step} setup failed`, `The step could not finish: ${String(error)}`, 0, false, "", "Error");
+    setActivity(`${stepLabels[step] || step} setup failed`, "The step could not finish. Review the guidance below and try again.", 0, false, "", "Error");
     if (journeyState.has(journeyStep)) setJourneyStage(journeyStep, "error", "This step could not finish.");
     return false;
   } finally {
@@ -1071,7 +1071,7 @@ async function startAiSurface() {
     setJourneyStage("ai", "done", `${copy.label} opened with this project.`);
   } catch (error) {
     setJourneyStage("ai", "error", "The selected AI workspace could not be opened.");
-    setActivity("AI workspace could not start", String(error), 0, false, "", "Error");
+    setActivity("AI workspace could not start", "The selected AI workspace could not be opened. Your app remains ready.", 0, false, "", "Error");
     showOutput("Your app is safe and complete.", `Run eai start from ${createdProjectDirectory} or try another workspace.`);
   } finally {
     startAiButton.disabled = false;

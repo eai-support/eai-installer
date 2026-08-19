@@ -270,6 +270,9 @@ if (!app.includes("EAIWizard.resolveTenantSelection(companyTenants, selectedComp
 if (!/if \(tenant\.appsLoaded\) \{\s+if \(retryWorkspaces\) \{\s+retryWorkspaces\.hidden = true;/.test(app)) throw new Error("wizard: cached app recovery leaves a stale retry action visible");
 if (app.includes('steps.push("homebrew")')) throw new Error("wizard: Homebrew must not be a required setup step");
 if (app.includes("console.info(result.output)")) throw new Error("wizard: raw installer command output must not be written to the browser console");
+if (app.split("\n").some((line) => line.includes("setActivity(") && line.includes("String(error)"))) {
+  throw new Error("wizard: raw exception details must not be written to the build summary");
+}
 if (!app.includes("setActivity") || !app.includes("Installation complete") || !app.includes("listenForBootstrapProgress") || !app.includes("eventApi.listen") || !app.includes("setDetectionState") || !app.includes("phaseForTitle") || !app.includes("async function startSetup") || !app.includes("window.setTimeout(() => startSetup(), 250)") || !app.includes("setStep(4)") || !app.includes("async function runSignup") || !app.includes("open_signup") || !app.includes("dialog.open") || !app.includes("choose-folder") || !app.includes("get_company_tenants") || !app.includes("get_company_apps") || !app.includes("loadCompanyApps") || !app.includes("describeWorkspaceFailure") || !app.includes("companyTenantId") || !app.includes("appKey") || !app.includes("renderCompanyApps") || !app.includes("open_project") || !app.includes("projectPath") || !app.includes("initInProgress") || !app.includes("setInitButtonBusy") || !app.includes("aria-busy") || !app.includes("describeInitFailure")) {
   throw new Error("wizard: live activity status updates are missing");
 }
