@@ -640,6 +640,9 @@ fn run_program_in_directory_with_env_and_progress(
         if let Some(home) = user_home_dir() {
             command.env("HOME", &home);
             command.env("npm_config_cache", home.join(".eai-setup/npm-cache"));
+        } else {
+            command.env_remove("HOME");
+            command.env_remove("npm_config_cache");
         }
     }
     if let Some(directory) = directory {
