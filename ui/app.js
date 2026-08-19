@@ -14,7 +14,6 @@ const activityEta = document.querySelector("#activity-eta");
 const activityHeartbeat = document.querySelector("#activity-heartbeat");
 const activityStep = document.querySelector("#activity-step");
 const setupStages = document.querySelector("#setup-stages");
-const installItems = document.querySelector("#install-items");
 const activityLog = document.querySelector("#activity-log");
 const activityLogStatus = document.querySelector("#activity-log-status");
 const retryInstall = document.querySelector("#retry-install");
@@ -375,39 +374,11 @@ function requestMacAdminPassword() {
   });
 }
 
-function renderInstallItems(steps) {
-  installItems.replaceChildren();
-  for (const step of steps) {
-    const item = document.createElement("li");
-    item.className = "install-item";
-    item.dataset.step = step;
-    item.dataset.state = "pending";
-    const name = document.createElement("span");
-    name.textContent = stepLabels[step] || step;
-    const detail = document.createElement("span");
-    detail.className = "install-item-detail";
-    detail.textContent = "Waiting";
-    item.append(name, detail);
-    installItems.append(item);
-  }
-  installItems.hidden = steps.length === 0;
-}
-
-function setInstallItemState(step, state, detailText) {
-  const item = installItems.querySelector(`[data-step="${step}"]`);
-  if (!item) return;
-  item.dataset.state = state;
-  item.lastElementChild.textContent = detailText;
-}
-
 function setDetectionState(report) {
   const tools = new Map(report.tools.map((tool) => [tool.command, tool]));
   const gitReady = Boolean(tools.get("git")?.version);
   const nodeReady = Boolean(tools.get("node")?.version && tools.get("npm")?.version);
   const eaiReady = Boolean(tools.get("eai")?.version);
-  setInstallItemState("git", gitReady ? "done" : "pending", gitReady ? tools.get("git").version : "Not installed");
-  setInstallItemState("node", nodeReady ? "done" : "pending", nodeReady ? `Node ${tools.get("node").version} / npm ready` : "Not installed");
-  setInstallItemState("eai-cli", eaiReady ? "done" : "pending", eaiReady ? tools.get("eai").version : "Not installed");
   setJourneyStage("git", gitReady ? "done" : "pending", gitReady ? "Git is already ready." : "Git needs to be installed.");
   setJourneyStage("node", nodeReady ? "done" : "pending", nodeReady ? "Node.js and npm are already ready." : "Node.js and npm need to be installed.");
   setJourneyStage("eai-cli", eaiReady ? "done" : "pending", eaiReady ? "The EAI CLI is already ready." : "The EAI CLI needs to be installed.");
@@ -428,7 +399,6 @@ async function listenForBootstrapProgress() {
   window.__eaiBootstrapProgressListener = await eventApi.listen("bootstrap-progress", ({ payload }) => {
     if (!activeBootstrapStep || payload.step !== activeBootstrapStep) return;
     setActivity(payload.title, payload.detail, payload.progress ?? null, true, formatEta(payload.estimatedSeconds), phaseForTitle(payload.title));
-    setInstallItemState(payload.step, /ready|complete/i.test(payload.title) ? "done" : "active", phaseForTitle(payload.title));
   });
   if (!window.__eaiBootstrapSummaryListener) {
     window.__eaiBootstrapSummaryListener = await eventApi.listen("bootstrap-summary", ({ payload }) => {
@@ -485,8 +455,6 @@ function showPreviewState() {
 async function detect() {
   const initialComputerCheck = !environmentReport;
   if (initialComputerCheck) setJourneyStage("computer", "active", "Checking this computer and the required tools.");
-  renderInstallItems(prerequisiteSteps);
-  for (const step of prerequisiteSteps) setInstallItemState(step, "active", "Checking");
   setActivity("Checking this computer", "Checking the required tools.", null, true, "", "Checking");
   startActivityHeartbeat("detect");
   try {
@@ -543,7 +511,6 @@ async function runBootstrapStep(step) {
   }
   if (result.output) {
     recordCommandSummaries(step, result.output);
-    console.info(result.output);
   }
   if (!result.ok && !result.demo) {
     const message = result.message || "This setup step failed.";
@@ -571,7 +538,6 @@ async function installPrerequisites() {
   if (!toolMap.get("node")?.version || !toolMap.get("npm")?.version) steps.push("node");
   if (!toolMap.get("eai")?.version) steps.push("eai-cli");
   if (!steps.length) {
-    installItems.hidden = true;
     wizard.prerequisitesReady = true;
     if (retryInstall) retryInstall.hidden = true;
     showOutput("All prerequisites are ready.");
@@ -579,20 +545,16 @@ async function installPrerequisites() {
     for (const step of prerequisiteSteps) setJourneyStage(step, "done", `${stepLabels[step]} is ready.`);
     return true;
   }
-  renderInstallItems(steps);
   setActivity("Preparing installation", `${steps.length} prerequisite${steps.length === 1 ? "" : "s"} need attention.`, 0, true, "Preparing");
   for (const [index, step] of steps.entries()) {
     const name = stepLabels[step] || step;
     const start = Math.round((index / steps.length) * 100);
-    setInstallItemState(step, "active", "Starting");
     setJourneyStage(step, "active", `Installing ${name}.`);
     setActivity(`Installing ${name}`, "Downloading and installing only what is missing. The live status below will show each installer action.", start, true, formatEta(stepEstimates[step]));
     if (!await runBootstrapStep(step)) {
-      setInstallItemState(step, "failed", "Needs attention");
       if (retryInstall) retryInstall.hidden = false;
       return false;
     }
-    setInstallItemState(step, "done", "Ready");
     setJourneyStage(step, "done", `${name} is ready.`);
     await detect();
     setActivity(`${name} installed`, "Continuing setup.", Math.round(((index + 1) / steps.length) * 100), true, formatEta(Math.max(0, steps.slice(index + 1).reduce((total, item) => total + stepEstimates[item], 0))));
@@ -948,7 +910,6 @@ async function runInit() {
   }
   if (result?.output) {
     recordCommandSummaries("init", result.output);
-    console.info(result.output);
   }
   e2eAppCreated = Boolean(result?.app_created);
   if (result?.project_directory) {
