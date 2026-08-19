@@ -114,6 +114,9 @@ function journeyStatusLabel(state) {
 
 function renderJourneyStages() {
   if (!setupStages) return;
+  const openStages = new Set(
+    [...setupStages.querySelectorAll("details[open]")].map((details) => details.dataset.stage),
+  );
   setupStages.replaceChildren();
   for (const [index, stage] of journeyStages.entries()) {
     const value = journeyState.get(stage.id);
@@ -121,7 +124,8 @@ function renderJourneyStages() {
     details.className = "setup-stage";
     details.dataset.stage = stage.id;
     details.dataset.state = value.state;
-    details.open = stage.id === currentJourneyStageId && ["active", "error"].includes(value.state);
+    details.open = openStages.has(stage.id)
+      || (stage.id === currentJourneyStageId && ["active", "error"].includes(value.state));
     const summary = document.createElement("summary");
     const number = document.createElement("span");
     number.className = "setup-stage-number";
@@ -178,9 +182,9 @@ function recordSafeSummary(step, detail) {
   const summaryKey = `${step}:${detail}`;
   if (activitySummaryKeys.has(summaryKey)) return;
   activitySummaryKeys.add(summaryKey);
-  const label = journeyStages.find((stage) => stage.id === (step === "init" ? "app" : step))?.label || stepLabels[step] || "Setup";
-  recordActivityEvent(label, detail, "Update");
   const stageId = step === "init" ? "app" : step === "login" ? "signin" : step;
+  const label = journeyStages.find((stage) => stage.id === stageId)?.label || stepLabels[step] || "Setup";
+  recordActivityEvent(label, detail, "Update");
   if (journeyState.has(stageId)) setJourneyStage(stageId, null, detail);
 }
 

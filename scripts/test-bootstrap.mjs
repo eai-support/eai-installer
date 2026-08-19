@@ -138,6 +138,9 @@ if (!rust.includes('run_program_in_directory_with_progress(&app, "login", "eai",
 for (const value of ["bootstrap-summary", "safe_build_summary", "capture_process_stream", "Downloaded the supported EAI app template.", "Installed the required project packages."]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing safe live build summaries: ${value}`);
 }
+for (const value of ["read_until(b'\\n'", "String::from_utf8_lossy", "process_stream_drains_and_decodes_non_utf8_output"]) {
+  if (!rust.includes(value)) throw new Error(`Tauri adapter does not safely drain process output: ${value}`);
+}
 if (!rust.includes("fn open_signup") || !rust.includes("EAI_SIGNUP_URL") || !rust.includes("www.enterpriseaigroup.com/signup/developer")) {
   throw new Error("Tauri adapter does not provide the fixed public account signup handoff");
 }
@@ -274,6 +277,7 @@ for (const value of ["loadAiSurfaces", "renderAiSurfaces", "startAiSurface", "re
 for (const value of ["setInterval(refreshActivityHeartbeat, 1000)", "Elapsed ${elapsed}s", "Screen updated every second", "Last installer update", "Waiting for your input", "waitingDetails", "activityEvents", "Stopped with error", "Checking the required tools", "journeyStages", "renderJourneyStages", "setJourneyStage", "bootstrap-summary", "recordSafeSummary", "summarizeCommandOutput"]) {
   if (!app.includes(value)) throw new Error(`wizard: per-second progress feedback is missing: ${value}`);
 }
+if (!app.includes('querySelectorAll("details[open]")')) throw new Error("wizard: stage refresh discards the user's expanded build details");
 for (const repetitive of ["activityLastHeartbeatLogAt", 'recordActivityEvent(\n      "Still working"']) {
   if (app.includes(repetitive)) throw new Error(`wizard: repetitive heartbeat remains in build summary: ${repetitive}`);
 }

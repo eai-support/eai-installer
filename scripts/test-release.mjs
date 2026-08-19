@@ -65,8 +65,9 @@ for (const requiredSafetyCheck of [
 }
 assert.doesNotMatch(macosGuestPreparerSource, /Users\/[^/]+\/Downloads/);
 assert.doesNotMatch(macosGuestPreparerSource, /Gubamute/);
-assert.doesNotMatch(macosGuestPreparerSource, /-name ['"]?\*\.app/);
-assert.match(macosGuestPreparerSource, /grep -E '\/\[\^\/\]\+\\\.app\$'/);
+assert.doesNotMatch(macosGuestPreparerSource, /-maxdepth/);
+assert.match(macosGuestPreparerSource, /for app in "\$1"\/\*\.app/);
+assert.match(macosGuestPreparerSource, /\[ -d "\$app" \]/);
 assert.doesNotMatch(macosGuestPreparerSource, /guest \/usr\/bin\/open/);
 assert.match(macosGuestPreparerSource, /dscl \. -read "\/Users\/\$actual_user" NFSHomeDirectory/);
 assert.match(macosGuestPreparerSource, /The signed-in macOS user's home directory could not be resolved/);

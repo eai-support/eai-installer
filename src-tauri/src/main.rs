@@ -145,24 +145,31 @@ fn usable_home_path(path: PathBuf) -> Option<PathBuf> {
 
 #[cfg(unix)]
 fn system_user_home_dir() -> Option<PathBuf> {
-    let mut account: libc::passwd = unsafe { std::mem::zeroed() };
-    let mut result = std::ptr::null_mut();
     let suggested_size = unsafe { libc::sysconf(libc::_SC_GETPW_R_SIZE_MAX) };
-    let mut buffer = vec![0_u8; if suggested_size > 0 { suggested_size as usize } else { 16_384 }];
-    let status = unsafe {
-        libc::getpwuid_r(
-            libc::geteuid(),
-            &mut account,
-            buffer.as_mut_ptr().cast(),
-            buffer.len(),
-            &mut result,
-        )
-    };
-    if status != 0 || result.is_null() || account.pw_dir.is_null() {
-        return None;
+    let mut buffer_size = if suggested_size > 0 { suggested_size as usize } else { 16_384 };
+    loop {
+        let mut account: libc::passwd = unsafe { std::mem::zeroed() };
+        let mut result = std::ptr::null_mut();
+        let mut buffer = vec![0_u8; buffer_size];
+        let status = unsafe {
+            libc::getpwuid_r(
+                libc::geteuid(),
+                &mut account,
+                buffer.as_mut_ptr().cast(),
+                buffer.len(),
+                &mut result,
+            )
+        };
+        if status == libc::ERANGE && buffer_size < 1_048_576 {
+            buffer_size *= 2;
+            continue;
+        }
+        if status != 0 || result.is_null() || account.pw_dir.is_null() {
+            return None;
+        }
+        let home = unsafe { CStr::from_ptr(account.pw_dir) }.to_str().ok()?;
+        return usable_home_path(PathBuf::from(home));
     }
-    let home = unsafe { CStr::from_ptr(account.pw_dir) }.to_str().ok()?;
-    usable_home_path(PathBuf::from(home))
 }
 
 fn user_home_dir() -> Option<PathBuf> {
@@ -520,8 +527,17 @@ where
     R: Read + Send + 'static,
 {
     thread::spawn(move || {
+        let mut reader = BufReader::new(reader);
         let mut captured = Vec::new();
-        for line in BufReader::new(reader).lines().map_while(Result::ok) {
+        let mut bytes = Vec::new();
+        loop {
+            bytes.clear();
+            match reader.read_until(b'\n', &mut bytes) {
+                Ok(0) => break,
+                Ok(_) => {}
+                Err(_) => break,
+            }
+            let line = String::from_utf8_lossy(&bytes);
             let clean = clean_process_output(&line);
             if clean.is_empty() {
                 continue;
@@ -1752,6 +1768,7 @@ fn main() {
 mod tests {
     use super::*;
     use std::cell::Cell;
+    use std::io::Cursor;
 
     #[test]
     fn managed_files_never_use_root_or_relative_home_paths() {
@@ -1768,6 +1785,19 @@ mod tests {
         assert_eq!(safe_build_summary("ENTRA_CLIENT_SECRET=do-not-display"), None);
         assert_eq!(safe_build_summary("Tenant ID: 5dd8db37-0993-f01c-0487-e8f0fae6c3d7"), None);
         assert_eq!(safe_build_summary("/Users/example/private/project"), None);
+    }
+
+    #[test]
+    fn process_stream_drains_and_decodes_non_utf8_output() {
+        let output = capture_process_stream(
+            Cursor::new(b"first\ninvalid-\xff-line\nlast\n".to_vec()),
+            None,
+        )
+        .join()
+        .expect("process stream reader should finish");
+        assert!(output.contains("first"));
+        assert!(output.contains("invalid-�-line"));
+        assert!(output.contains("last"));
     }
 
     #[test]

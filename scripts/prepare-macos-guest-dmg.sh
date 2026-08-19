@@ -75,9 +75,11 @@ guest /bin/rm -rf "$guest_mount"
 guest /bin/mkdir -p "$guest_mount"
 guest /usr/bin/hdiutil attach "$guest_dmg" -nobrowse -readonly -mountpoint "$guest_mount" >/dev/null
 
-app_count="$(guest /usr/bin/find "$guest_mount" -maxdepth 1 -type d | /usr/bin/grep -E '/[^/]+\.app$' | /usr/bin/wc -l | /usr/bin/tr -d ' ')"
+app_count="$(guest /bin/sh -c 'count=0; for app in "$1"/*.app; do [ -d "$app" ] && count=$((count + 1)); done; printf "%s\n" "$count"' sh "$guest_mount")"
 [[ "$app_count" == "1" ]] || fail "The mounted DMG must contain exactly one application."
 
+# The control channel launches outside the Aqua session. Enter the already
+# verified signed-in user's GUI session explicitly so Finder can display the DMG.
 prlctl exec "$vm_name" /bin/launchctl asuser "$actual_uid" \
   /usr/bin/sudo -H -u "$actual_user" \
   /usr/bin/env HOME="$actual_home" USER="$actual_user" LOGNAME="$actual_user" \
