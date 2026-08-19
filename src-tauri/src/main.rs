@@ -1,9 +1,11 @@
 use serde::{Deserialize, Serialize};
 use std::cmp::Reverse;
+#[cfg(unix)]
+use std::ffi::CStr;
 use std::env;
 use std::fs;
 use std::fs::OpenOptions;
-use std::io::Write;
+use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 #[cfg(target_os = "windows")]
@@ -68,6 +70,13 @@ struct BootstrapProgress {
     estimated_seconds: Option<u64>,
 }
 
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BootstrapSummary {
+    step: String,
+    detail: String,
+}
+
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct AiSurface {
@@ -126,6 +135,58 @@ const EAI_SIGNUP_URL: &str = "https://www.enterpriseaigroup.com/signup/developer
 // must distinguish "not compatible yet" from "not installed" deterministically.
 const MIN_EAI_CLI_VERSION: (u64, u64, u64) = (3, 15, 2);
 
+fn usable_home_path(path: PathBuf) -> Option<PathBuf> {
+    if path.is_absolute() && path.parent().is_some() && path != Path::new("/") {
+        Some(path)
+    } else {
+        None
+    }
+}
+
+#[cfg(unix)]
+fn system_user_home_dir() -> Option<PathBuf> {
+    let suggested_size = unsafe { libc::sysconf(libc::_SC_GETPW_R_SIZE_MAX) };
+    let mut buffer_size = if suggested_size > 0 { suggested_size as usize } else { 16_384 };
+    loop {
+        let mut account: libc::passwd = unsafe { std::mem::zeroed() };
+        let mut result = std::ptr::null_mut();
+        let mut buffer = vec![0_u8; buffer_size];
+        let status = unsafe {
+            libc::getpwuid_r(
+                libc::geteuid(),
+                &mut account,
+                buffer.as_mut_ptr().cast(),
+                buffer.len(),
+                &mut result,
+            )
+        };
+        if status == libc::ERANGE && buffer_size < 1_048_576 {
+            buffer_size *= 2;
+            continue;
+        }
+        if status != 0 || result.is_null() || account.pw_dir.is_null() {
+            return None;
+        }
+        let home = unsafe { CStr::from_ptr(account.pw_dir) }.to_str().ok()?;
+        return usable_home_path(PathBuf::from(home));
+    }
+}
+
+fn user_home_dir() -> Option<PathBuf> {
+    #[cfg(target_os = "windows")]
+    {
+        return env::var_os("USERPROFILE").and_then(|value| usable_home_path(PathBuf::from(value)));
+    }
+    #[cfg(unix)]
+    {
+        return system_user_home_dir().or_else(|| {
+            env::var_os("HOME").and_then(|value| usable_home_path(PathBuf::from(value)))
+        });
+    }
+    #[allow(unreachable_code)]
+    None
+}
+
 fn emit_progress(
     app: &AppHandle,
     step: &str,
@@ -146,6 +207,16 @@ fn emit_progress(
     );
 }
 
+fn emit_summary(app: &AppHandle, step: &str, detail: &str) {
+    let _ = app.emit(
+        "bootstrap-summary",
+        BootstrapSummary {
+            step: step.to_string(),
+            detail: detail.to_string(),
+        },
+    );
+}
+
 fn nvm_version_key(path: &Path) -> (u64, u64, u64) {
     let version = path.file_name().and_then(|value| value.to_str()).unwrap_or_default();
     let mut parts = version.trim_start_matches('v').split('.').map(|part| part.parse::<u64>().unwrap_or(0));
@@ -153,10 +224,10 @@ fn nvm_version_key(path: &Path) -> (u64, u64, u64) {
 }
 
 fn nvm_node_bin_dirs() -> Vec<PathBuf> {
-    let Some(home) = env::var_os("HOME") else { return Vec::new(); };
+    let Some(home) = user_home_dir() else { return Vec::new(); };
     let nvm_root = env::var_os("NVM_DIR")
         .map(PathBuf::from)
-        .unwrap_or_else(|| Path::new(&home).join(".nvm"));
+        .unwrap_or_else(|| home.join(".nvm"));
     let versions_root = nvm_root.join("versions/node");
     let mut versions = fs::read_dir(versions_root)
         .ok()
@@ -178,8 +249,7 @@ fn nvm_node_bin_dirs() -> Vec<PathBuf> {
 
 fn user_node_bin_dirs() -> Vec<PathBuf> {
     let mut bins = Vec::new();
-    if let Some(home) = env::var_os("HOME") {
-        let home = PathBuf::from(home);
+    if let Some(home) = user_home_dir() {
         bins.push(home.join(".eai-setup/node/bin"));
         bins.push(home.join(".eai-setup/npm-global/bin"));
     }
@@ -360,6 +430,24 @@ fn run_npm_in_directory(
     run_npm_in_directory_with_env(args, directory, &[])
 }
 
+fn run_npm_in_directory_with_progress(
+    app: &AppHandle,
+    step: &str,
+    args: &[&str],
+    directory: Option<&Path>,
+    environment: &[(&str, &str)],
+) -> Result<(String, String), String> {
+    let progress = Some((app.clone(), step.to_string()));
+    if let Some(script) = npm_cli_script() {
+        let script = script.to_string_lossy().to_string();
+        let mut node_args = Vec::with_capacity(args.len() + 1);
+        node_args.push(script.as_str());
+        node_args.extend(args.iter().copied());
+        return run_program_in_directory_with_env_and_progress("node", &node_args, directory, environment, progress);
+    }
+    run_program_in_directory_with_env_and_progress("npm", args, directory, environment, progress)
+}
+
 fn npm_version() -> Option<String> {
     version("npm", &["--version"]).or_else(|| {
         #[cfg(target_os = "windows")]
@@ -409,11 +497,75 @@ fn clean_process_output(value: &str) -> String {
     clean.trim().to_string()
 }
 
+fn safe_build_summary(value: &str) -> Option<&'static str> {
+    let line = value.to_ascii_lowercase();
+    if line.contains("cloned from") {
+        Some("Downloaded the supported EAI app template.")
+    } else if line.contains("updated package.json") {
+        Some("Updated the project settings.")
+    } else if line.contains("generated .env.local") {
+        Some("Created the local app configuration.")
+    } else if line.contains("created object types scaffold") {
+        Some("Prepared the app data model starter files.")
+    } else if line.contains("generated agents.md") || line.contains("generated claude.md") {
+        Some("Prepared the AI workspace guidance.")
+    } else if line.contains("installed gofer assets") {
+        Some("Installed the EAI delivery guidance.")
+    } else if line.contains("initialized git repository") {
+        Some("Prepared local version control.")
+    } else if (line.contains("added ") && line.contains(" package")) || line.contains("up to date") {
+        Some("Installed the required project packages.")
+    } else if line.contains("authenticated as") {
+        Some("Secure browser sign-in completed.")
+    } else {
+        None
+    }
+}
+
+fn capture_process_stream<R>(reader: R, progress: Option<(AppHandle, String)>) -> thread::JoinHandle<String>
+where
+    R: Read + Send + 'static,
+{
+    thread::spawn(move || {
+        let mut reader = BufReader::new(reader);
+        let mut captured = Vec::new();
+        let mut bytes = Vec::new();
+        loop {
+            bytes.clear();
+            match reader.read_until(b'\n', &mut bytes) {
+                Ok(0) => break,
+                Ok(_) => {}
+                Err(_) => break,
+            }
+            let line = String::from_utf8_lossy(&bytes);
+            let clean = clean_process_output(&line);
+            if clean.is_empty() {
+                continue;
+            }
+            if let (Some((app, step)), Some(summary)) = (progress.as_ref(), safe_build_summary(&clean)) {
+                emit_summary(app, step, summary);
+            }
+            captured.push(clean);
+        }
+        captured.join("\n")
+    })
+}
+
 fn run_program_in_directory_with_env(
     program: &str,
     args: &[&str],
     directory: Option<&Path>,
     environment: &[(&str, &str)],
+) -> Result<(String, String), String> {
+    run_program_in_directory_with_env_and_progress(program, args, directory, environment, None)
+}
+
+fn run_program_in_directory_with_env_and_progress(
+    program: &str,
+    args: &[&str],
+    directory: Option<&Path>,
+    environment: &[(&str, &str)],
+    progress: Option<(AppHandle, String)>,
 ) -> Result<(String, String), String> {
     // npm exposes `eai` as a shell wrapper. Running the package entry point
     // through Node avoids Windows batch quoting and stale-process PATH issues,
@@ -424,11 +576,12 @@ fn run_program_in_directory_with_env(
             let mut node_args = Vec::with_capacity(args.len() + 1);
             node_args.push(script.as_str());
             node_args.extend(args.iter().copied());
-            return run_program_in_directory_with_env(
+            return run_program_in_directory_with_env_and_progress(
                 "node",
                 &node_args,
                 directory,
                 environment,
+                progress,
             );
         }
     }
@@ -484,17 +637,30 @@ fn run_program_in_directory_with_env(
         if let Ok(path) = env::join_paths(paths) {
             command.env("PATH", path);
         }
+        if let Some(home) = user_home_dir() {
+            command.env("HOME", &home);
+            command.env("npm_config_cache", home.join(".eai-setup/npm-cache"));
+        } else {
+            command.env_remove("HOME");
+            command.env_remove("npm_config_cache");
+        }
     }
     if let Some(directory) = directory {
         command.current_dir(directory);
     }
     command.envs(environment.iter().copied());
-    let output = command
-        .output()
+    command.stdout(Stdio::piped()).stderr(Stdio::piped());
+    let mut child = command
+        .spawn()
         .map_err(|error| format!("could not start {program}: {error}"))?;
-    let stdout = clean_process_output(&String::from_utf8_lossy(&output.stdout));
-    let stderr = clean_process_output(&String::from_utf8_lossy(&output.stderr));
-    if output.status.success() {
+    let stdout_reader = child.stdout.take().ok_or_else(|| format!("could not read {program} output"))?;
+    let stderr_reader = child.stderr.take().ok_or_else(|| format!("could not read {program} errors"))?;
+    let stdout_handle = capture_process_stream(stdout_reader, progress.clone());
+    let stderr_handle = capture_process_stream(stderr_reader, progress);
+    let status = child.wait().map_err(|error| format!("could not wait for {program}: {error}"))?;
+    let stdout = stdout_handle.join().map_err(|_| format!("could not collect {program} output"))?;
+    let stderr = stderr_handle.join().map_err(|_| format!("could not collect {program} errors"))?;
+    if status.success() {
         Ok((stdout, stderr))
     } else {
         Err(match (stdout.is_empty(), stderr.is_empty()) {
@@ -512,6 +678,22 @@ fn run_program_in_directory(
     directory: Option<&Path>,
 ) -> Result<(String, String), String> {
     run_program_in_directory_with_env(program, args, directory, &[])
+}
+
+fn run_program_in_directory_with_progress(
+    app: &AppHandle,
+    step: &str,
+    program: &str,
+    args: &[&str],
+    directory: Option<&Path>,
+) -> Result<(String, String), String> {
+    run_program_in_directory_with_env_and_progress(
+        program,
+        args,
+        directory,
+        &[],
+        Some((app.clone(), step.to_string())),
+    )
 }
 
 fn shell_quote(value: &str) -> String {
@@ -535,7 +717,7 @@ fn user_npm_prefix() -> Option<PathBuf> {
         // desktop app and to newly opened command windows.
         env::var_os("APPDATA").map(|root| Path::new(&root).join("npm"))
     } else if cfg!(unix) {
-        env::var_os("HOME").map(|home| Path::new(&home).join(".eai-setup/npm-global"))
+        user_home_dir().map(|home| home.join(".eai-setup/npm-global"))
     } else {
         None
     }
@@ -556,9 +738,9 @@ fn expose_user_npm_bin() -> Result<(), String> {
     fs::create_dir_all(prefix.join("bin")).map_err(|error| error.to_string())?;
     let marker = "EAI_SETUP_NPM_GLOBAL";
     let line = "\n# EAI_SETUP_NPM_GLOBAL\nexport PATH=\"$HOME/.eai-setup/node/bin:$HOME/.eai-setup/npm-global/bin:$PATH\"\n";
-    let Some(home) = env::var_os("HOME") else { return Ok(()); };
+    let Some(home) = user_home_dir() else { return Ok(()); };
     for filename in [".profile", ".zprofile"] {
-        let path = Path::new(&home).join(filename);
+        let path = home.join(filename);
         let existing = fs::read_to_string(&path).unwrap_or_default();
         if !existing.contains(marker) {
             let mut file = OpenOptions::new().create(true).append(true).open(&path).map_err(|error| error.to_string())?;
@@ -1197,10 +1379,10 @@ fn node_tar_install_step(app: &AppHandle, node_version: &str, filename: &str, ur
     }
     let folder = filename.trim_end_matches(".tar.gz");
     let extracted = extract_dir.join(folder);
-    let Some(home) = env::var_os("HOME") else {
+    let Some(home) = user_home_dir() else {
         return command_result("node", false, "The user home directory is unavailable.", Some("Retry EAI Setup from a normal user session"), None, true);
     };
-    let install_root = Path::new(&home).join(".eai-setup/node");
+    let install_root = home.join(".eai-setup/node");
     if let Some(parent) = install_root.parent() {
         if let Err(error) = fs::create_dir_all(parent) {
             return command_result("node", false, &format!("The user Node.js directory could not be created: {error}"), None, None, true);
@@ -1344,11 +1526,11 @@ fn run_bootstrap_sync(app: AppHandle, step: String, project_name: Option<String>
             let install_result = if let Some(prefix) = prefix.as_ref() {
                 let prefix_string = prefix.to_string_lossy().to_string();
                 match fs::create_dir_all(prefix) {
-                    Ok(()) => run_npm_in_directory(&["install", "--global", "--prefix", &prefix_string, "@enterpriseai/cli"], None),
+                    Ok(()) => run_npm_in_directory_with_progress(&app, "eai-cli", &["install", "--global", "--prefix", &prefix_string, "@enterpriseai/cli"], None, &[]),
                     Err(error) => Err(error.to_string()),
                 }
             } else {
-                run_npm_in_directory(&["install", "--global", "@enterpriseai/cli"], None)
+                run_npm_in_directory_with_progress(&app, "eai-cli", &["install", "--global", "@enterpriseai/cli"], None, &[])
             };
             match install_result {
                 Ok((stdout, stderr)) => {
@@ -1369,7 +1551,7 @@ fn run_bootstrap_sync(app: AppHandle, step: String, project_name: Option<String>
                 Err(error) => command_result("eai-cli", false, &error, Some("Install the EAI CLI from npm using a user-writable prefix"), None, true),
             }
         }
-        "login" => match run_program("eai", &["login"]) {
+        "login" => match run_program_in_directory_with_progress(&app, "login", "eai", &["login"], None) {
             Ok((stdout, stderr)) => command_result("login", true, "Browser sign-in completed.", Some("eai login"), Some(format!("{stdout}\n{stderr}")), false),
             Err(error) => command_result("login", false, &error, Some("eai login"), None, true),
         },
@@ -1404,7 +1586,7 @@ fn run_bootstrap_sync(app: AppHandle, step: String, project_name: Option<String>
                 init_args.extend(["--app-key".to_string(), app_key]);
             }
             let init_args_ref = init_args.iter().map(String::as_str).collect::<Vec<_>>();
-            match run_program_in_directory("eai", &init_args_ref, Some(&directory)) {
+            match run_program_in_directory_with_progress(&app, "init", "eai", &init_args_ref, Some(&directory)) {
                 Ok((stdout, stderr)) => {
                     emit_progress(
                         &app,
@@ -1414,7 +1596,9 @@ fn run_bootstrap_sync(app: AppHandle, step: String, project_name: Option<String>
                         Some(90),
                         Some(90),
                     );
-                    let npm_result = run_npm_in_directory_with_env(
+                    let npm_result = run_npm_in_directory_with_progress(
+                        &app,
+                        "init",
                         &["install", "--no-audit", "--no-fund"],
                         Some(&directory),
                         &[("HUSKY", "0")],
@@ -1562,12 +1746,8 @@ fn open_project(path: String) -> Result<(), String> {
 
 #[tauri::command]
 fn local_device_id() -> Result<String, String> {
-    let home = if cfg!(target_os = "windows") {
-        env::var("USERPROFILE").map_err(|_| "user profile directory is unavailable".to_string())?
-    } else {
-        env::var("HOME").map_err(|_| "home directory is unavailable".to_string())?
-    };
-    let directory = Path::new(&home).join(".eai-setup");
+    let home = user_home_dir().ok_or_else(|| "user home directory is unavailable".to_string())?;
+    let directory = home.join(".eai-setup");
     fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
     let path = directory.join("device-id");
     if let Ok(value) = fs::read_to_string(&path) {
@@ -1591,6 +1771,37 @@ fn main() {
 mod tests {
     use super::*;
     use std::cell::Cell;
+    use std::io::Cursor;
+
+    #[test]
+    fn managed_files_never_use_root_or_relative_home_paths() {
+        assert_eq!(usable_home_path(PathBuf::from("/")), None);
+        assert_eq!(usable_home_path(PathBuf::from("relative/home")), None);
+        #[cfg(unix)]
+        assert_eq!(usable_home_path(PathBuf::from("/Users/example")), Some(PathBuf::from("/Users/example")));
+    }
+
+    #[test]
+    fn build_summaries_allow_known_milestones_and_hide_sensitive_output() {
+        assert_eq!(safe_build_summary("✓ Cloned from eai-support/eai-app-template@abc123"), Some("Downloaded the supported EAI app template."));
+        assert_eq!(safe_build_summary("added 225 packages in 2s"), Some("Installed the required project packages."));
+        assert_eq!(safe_build_summary("ENTRA_CLIENT_SECRET=do-not-display"), None);
+        assert_eq!(safe_build_summary("Tenant ID: 5dd8db37-0993-f01c-0487-e8f0fae6c3d7"), None);
+        assert_eq!(safe_build_summary("/Users/example/private/project"), None);
+    }
+
+    #[test]
+    fn process_stream_drains_and_decodes_non_utf8_output() {
+        let output = capture_process_stream(
+            Cursor::new(b"first\ninvalid-\xff-line\nlast\n".to_vec()),
+            None,
+        )
+        .join()
+        .expect("process stream reader should finish");
+        assert!(output.contains("first"));
+        assert!(output.contains("invalid-�-line"));
+        assert!(output.contains("last"));
+    }
 
     #[test]
     fn winget_already_current_is_success_when_commands_are_ready() {

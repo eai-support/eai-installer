@@ -61,6 +61,15 @@ if (!dmgBackgroundSource.includes(">Install Enterprise AI harness</text>") || !d
 }
 
 const rust = (await readFile(new URL("../src-tauri/src/main.rs", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
+for (const value of ["fn user_home_dir", "fn usable_home_path", "getpwuid_r", "user_home_dir().map", "managed_files_never_use_root_or_relative_home_paths"]) {
+  if (!rust.includes(value)) throw new Error(`Tauri adapter does not resolve a safe signed-in user home: ${value}`);
+}
+if ((rust.match(/env::var_os\("HOME"\)/g) ?? []).length !== 1 || rust.includes('Path::new(&home).join(".eai-setup')) {
+  throw new Error("Tauri adapter must not create managed files from a raw HOME environment value");
+}
+for (const value of ['command.env("HOME", &home)', 'command.env("npm_config_cache", home.join(".eai-setup/npm-cache"))', 'command.env_remove("HOME")', 'command.env_remove("npm_config_cache")']) {
+  if (!rust.includes(value)) throw new Error(`Tauri adapter lets a GUI child process inherit an invalid home: ${value}`);
+}
 for (const value of ["MIN_EAI_CLI_VERSION", "@enterpriseai/cli", "eai_cli_version()", "user_npm_global_exec_dirs", "current_version >= MIN_EAI_CLI_VERSION", "fn eai_cli_script", "APPDATA", "run_program_in_directory_with_env(\"node\", &node_args, directory, environment)"] ) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter does not verify the canonical EAI CLI release: ${value}`);
 }
@@ -109,12 +118,12 @@ for (const value of ["E2eConfiguration", "get_e2e_configuration", "verify_e2e_au
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing bounded release E2E support: ${value}`);
 }
 if (!rust.includes("@enterpriseai/cli")) throw new Error("Tauri adapter uses the wrong CLI package");
-if (!rust.includes("run_program_in_directory(\"eai\", &init_args_ref")) throw new Error("Tauri adapter does not run eai init non-interactively in the selected directory");
+if (!rust.includes('run_program_in_directory_with_progress(&app, "init", "eai", &init_args_ref')) throw new Error("Tauri adapter does not run eai init non-interactively with live progress in the selected directory");
 if (!rust.includes('"--no-install".to_string()')) throw new Error("Tauri adapter must keep dependency installation outside the nested CLI init process");
 if (!rust.includes("fn npm_cli_script") || !rust.includes("fn run_npm_in_directory") || !rust.includes("node_modules/npm/bin/npm-cli.js")) {
   throw new Error("Tauri adapter does not provide a direct Node/npm launcher for Windows");
 }
-if (!rust.includes('run_npm_in_directory_with_env(\n                        &["install", "--no-audit", "--no-fund"]')) {
+if (!rust.includes('run_npm_in_directory_with_progress(\n                        &app,\n                        "init",\n                        &["install", "--no-audit", "--no-fund"]')) {
   throw new Error("Tauri adapter does not install generated app dependencies through its platform-aware npm path");
 }
 if (!rust.includes('&[("HUSKY", "0")]')) {
@@ -125,7 +134,13 @@ for (const value of ["app_created: bool", "result.app_created = !existing_app", 
 }
 if (!rust.includes("\"--company-tenant\"")) throw new Error("Tauri adapter does not pass the selected company workspace to eai init");
 if (!rust.includes("command.stdin(Stdio::null())")) throw new Error("Tauri adapter does not close child stdin for GUI-launched commands");
-if (!rust.includes("run_program(\"eai\", &[\"login\"]")) throw new Error("Tauri adapter does not run eai login");
+if (!rust.includes('run_program_in_directory_with_progress(&app, "login", "eai", &["login"], None)')) throw new Error("Tauri adapter does not run eai login with live progress");
+for (const value of ["bootstrap-summary", "safe_build_summary", "capture_process_stream", "Downloaded the supported EAI app template.", "Installed the required project packages."]) {
+  if (!rust.includes(value)) throw new Error(`Tauri adapter is missing safe live build summaries: ${value}`);
+}
+for (const value of ["read_until(b'\\n'", "String::from_utf8_lossy", "process_stream_drains_and_decodes_non_utf8_output"]) {
+  if (!rust.includes(value)) throw new Error(`Tauri adapter does not safely drain process output: ${value}`);
+}
 if (!rust.includes("fn open_signup") || !rust.includes("EAI_SIGNUP_URL") || !rust.includes("www.enterpriseaigroup.com/signup/developer")) {
   throw new Error("Tauri adapter does not provide the fixed public account signup handoff");
 }
@@ -229,6 +244,9 @@ for (const value of ["id=\"app-selection-field\"", "id=\"app-selection\"", "Crea
 for (const value of ["id=\"choose-folder\"", "Use lowercase words separated by hyphens", "Parent folder", "A new folder with your project name will be created here"]) {
   if (!wizard.includes(value)) throw new Error(`wizard: missing project location guidance: ${value}`);
 }
+for (const value of ['autocapitalize="none"', 'autocorrect="off"', 'spellcheck="false"']) {
+  if (!wizard.includes(value)) throw new Error(`wizard: project name permits unwanted typing assistance: ${value}`);
+}
 if (!wizard.includes("Create an EAI account")) throw new Error("wizard: account signup action is missing");
 for (const value of ["Choose how to work with AI", "id=\"complete-location\"", "data-action=\"open-project\"", "Open project folder"]) {
   if (!wizard.includes(value)) throw new Error(`wizard: completion guidance is missing: ${value}`);
@@ -241,23 +259,33 @@ for (const obsolete of ["progress-area", "Step 3 of 6", "Step ${index + 1} of ${
 }
 if (!wizard.includes('id="retry-install"')) throw new Error("wizard: failed installation has no retry control");
 if (!wizard.includes('id="retry-install" data-action="install-all" type="button"')) throw new Error("wizard: install retry control can accidentally submit a form");
-for (const control of ["id=\"activity\"", "id=\"activity-title\"", "id=\"activity-detail\"", "id=\"activity-eta\"", "id=\"activity-heartbeat\"", "id=\"activity-log\"", "id=\"install-items\"", "id=\"admin-password\"", "id=\"admin-password-submit\""]) {
+for (const control of ["id=\"activity\"", "id=\"activity-title\"", "id=\"activity-step\"", "id=\"activity-detail\"", "id=\"activity-eta\"", "id=\"activity-heartbeat\"", "id=\"setup-stages\"", "id=\"build-summary\"", "id=\"activity-log\"", "id=\"admin-password\"", "id=\"admin-password-submit\""]) {
   if (!wizard.includes(control)) throw new Error(`wizard: missing activity status: ${control}`);
 }
-if (!wizard.includes("Recent activity")) throw new Error("wizard: recent activity heading is missing");
+if (wizard.includes('id="install-items"')) throw new Error("wizard: legacy duplicate installation status list must not be rendered");
+if (!wizard.includes("Build summary")) throw new Error("wizard: build summary heading is missing");
 const app = await readFile(new URL("../ui/app.js", import.meta.url), "utf8");
 if (!app.includes('writeE2eReceipt("app", "Apps could not be loaded for the release-test workspace.")')) throw new Error("wizard: release evidence misclassifies app discovery as a tenant failure");
 if (!app.includes("EAIWizard.resolveTenantSelection(companyTenants, selectedCompanyTenantId)")) throw new Error("wizard: rendering can clear a valid release-test tenant selection");
 if (!/if \(tenant\.appsLoaded\) \{\s+if \(retryWorkspaces\) \{\s+retryWorkspaces\.hidden = true;/.test(app)) throw new Error("wizard: cached app recovery leaves a stale retry action visible");
 if (app.includes('steps.push("homebrew")')) throw new Error("wizard: Homebrew must not be a required setup step");
-if (!app.includes("setActivity") || !app.includes("Installation complete") || !app.includes("listenForBootstrapProgress") || !app.includes("eventApi.listen") || !app.includes("renderInstallItems") || !app.includes("setDetectionState") || !app.includes("phaseForTitle") || !app.includes("async function startSetup") || !app.includes("window.setTimeout(() => startSetup(), 250)") || !app.includes("setStep(4)") || !app.includes("async function runSignup") || !app.includes("open_signup") || !app.includes("dialog.open") || !app.includes("choose-folder") || !app.includes("get_company_tenants") || !app.includes("get_company_apps") || !app.includes("loadCompanyApps") || !app.includes("describeWorkspaceFailure") || !app.includes("companyTenantId") || !app.includes("appKey") || !app.includes("renderCompanyApps") || !app.includes("open_project") || !app.includes("projectPath") || !app.includes("initInProgress") || !app.includes("setInitButtonBusy") || !app.includes("aria-busy") || !app.includes("describeInitFailure")) {
+if (app.includes("console.info(result.output)")) throw new Error("wizard: raw installer command output must not be written to the browser console");
+if (app.split("\n").some((line) => line.includes("setActivity(") && line.includes("String(error)"))) {
+  throw new Error("wizard: raw exception details must not be written to the build summary");
+}
+if (app.includes("initialComputerCheck")) throw new Error("wizard: repeat computer checks can leave the stage active");
+if (!app.includes("setActivity") || !app.includes("Installation complete") || !app.includes("listenForBootstrapProgress") || !app.includes("eventApi.listen") || !app.includes("setDetectionState") || !app.includes("phaseForTitle") || !app.includes("async function startSetup") || !app.includes("window.setTimeout(() => startSetup(), 250)") || !app.includes("setStep(4)") || !app.includes("async function runSignup") || !app.includes("open_signup") || !app.includes("dialog.open") || !app.includes("choose-folder") || !app.includes("get_company_tenants") || !app.includes("get_company_apps") || !app.includes("loadCompanyApps") || !app.includes("describeWorkspaceFailure") || !app.includes("companyTenantId") || !app.includes("appKey") || !app.includes("renderCompanyApps") || !app.includes("open_project") || !app.includes("projectPath") || !app.includes("initInProgress") || !app.includes("setInitButtonBusy") || !app.includes("aria-busy") || !app.includes("describeInitFailure")) {
   throw new Error("wizard: live activity status updates are missing");
 }
 for (const value of ["loadAiSurfaces", "renderAiSurfaces", "startAiSurface", "refreshAiSurfaces", "updateAiSurfaceControls", "createHarveyBall", "aiSurfaceRecommendation", "showModal", "aiSurfaceGuidance", "GitHub Copilot app", "GitHub Copilot CLI", "copilot-desktop", "copilot-cli", "detect_ai_surfaces", "start_ai_surface", "install_ai_surface"]) {
   if (!app.includes(value)) throw new Error(`wizard: AI workspace behavior is missing ${value}`);
 }
-for (const value of ["setInterval(refreshActivityHeartbeat, 1000)", "Elapsed ${elapsed}s", "Screen updated every second", "Last installer update", "Waiting for your input", "Action needed", "Still working", "activityLastHeartbeatLogAt", "waitingDetails", "activityEvents", "Stopped with error", "Checking the required tools"]) {
+for (const value of ["setInterval(refreshActivityHeartbeat, 1000)", "Elapsed ${elapsed}s", "Screen updated every second", "Last installer update", "Waiting for your input", "waitingDetails", "activityEvents", "Stopped with error", "Checking the required tools", "journeyStages", "renderJourneyStages", "setJourneyStage", "bootstrap-summary", "recordSafeSummary", "summarizeCommandOutput"]) {
   if (!app.includes(value)) throw new Error(`wizard: per-second progress feedback is missing: ${value}`);
+}
+if (!app.includes('querySelectorAll("details[open]")')) throw new Error("wizard: stage refresh discards the user's expanded build details");
+for (const repetitive of ["activityLastHeartbeatLogAt", 'recordActivityEvent(\n      "Still working"']) {
+  if (app.includes(repetitive)) throw new Error(`wizard: repetitive heartbeat remains in build summary: ${repetitive}`);
 }
 if (app.includes('git: "macOS may show an installer window. If it appears, click Install; otherwise no action is needed."')) {
   throw new Error("wizard: macOS Git fallback still tells users to wait for an unspecified installer window");
@@ -274,6 +302,10 @@ if (!app.includes("cleanText") || !app.includes("describeInitFailure") || !app.i
 const wizardState = await readFile(new URL("../ui/wizard-state.js", import.meta.url), "utf8");
 if (!wizardState.includes("prerequisitesReady") || !wizardState.includes("isKebabCase") || !wizardState.includes("describeInitFailure") || !wizardState.includes("Windows dependency setup needs attention") || !wizardState.includes("App dependencies need attention") || !wizardState.includes("initButtonLabel")) {
   throw new Error("wizard: state validation contract is missing");
+}
+const styles = await readFile(new URL("../ui/styles.css", import.meta.url), "utf8");
+if (!styles.includes(".setup-stage summary::marker") || !styles.includes(".activity-log-heading::marker")) {
+  throw new Error("wizard: accordion markers are not hidden consistently across desktop webviews");
 }
 
 console.log("wizard structure checks ok");

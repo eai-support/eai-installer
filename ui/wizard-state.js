@@ -17,6 +17,39 @@
       .trim();
   }
 
+  function summarizeCommandOutput(value) {
+    const text = cleanText(value);
+    if (!text) return [];
+    const summaries = [];
+    const add = (message) => {
+      if (!summaries.includes(message)) summaries.push(message);
+    };
+    for (const line of text.split("\n")) {
+      if (/cloned from/i.test(line)) add("Downloaded the supported EAI app template.");
+      else if (/updated package\.json/i.test(line)) add("Updated the project settings.");
+      else if (/generated \.env\.local/i.test(line)) add("Created the local app configuration.");
+      else if (/created object types scaffold/i.test(line)) add("Prepared the app data model starter files.");
+      else if (/generated (agents|claude)\.md/i.test(line)) add("Prepared the AI workspace guidance.");
+      else if (/installed gofer assets/i.test(line)) add("Installed the EAI delivery guidance.");
+      else if (/initialized git repository/i.test(line)) add("Prepared local version control.");
+      else if (/\badded \d+ packages?\b|\bup to date\b/i.test(line)) add("Installed the required project packages.");
+      else if (/authenticated as/i.test(line)) add("Secure browser sign-in completed.");
+    }
+    return summaries;
+  }
+
+  function journeyStageForActivity(activeStep, title) {
+    const context = `${activeStep || ""} ${title || ""}`;
+    if (/ai workspace|copilot|claude|codex|grok/i.test(context)) return "ai";
+    if (/sign[ -]?in|login|signup|account/i.test(context)) return "signin";
+    if (/company workspace|\bapp\b|project|folder|tenant/i.test(context)) return "app";
+    if (/eai[ -]?cli/i.test(context)) return "eai-cli";
+    if (/node|npm/i.test(context)) return "node";
+    if (/git|command line tools/i.test(context)) return "git";
+    if (/computer|detect|required tools/i.test(context)) return "computer";
+    return null;
+  }
+
   function initButtonLabel(appKey, busy = false) {
     if (busy) return appKey ? "Initialising project..." : "Creating app...";
     return appKey ? "Use app and initialise project" : "Create and initialise app";
@@ -41,7 +74,7 @@
     return {
       title: "App setup failed",
       detail: cleanMessage,
-      next: "Review Recent activity, correct the issue, then choose Try again.",
+      next: "Review Build summary, correct the issue, then choose Try again.",
     };
   }
 
@@ -77,7 +110,7 @@
     return {
       title: "Company workspaces need attention",
       detail: "EAI could not confirm where this app should be created.",
-      next: "Review Recent activity, then try the workspace check again.",
+      next: "Review Build summary, then try the workspace check again.",
       diagnostic,
       retryable: true,
     };
@@ -106,7 +139,7 @@
     return {
       title: "Apps need attention",
       detail: "EAI could not load the apps for this company workspace.",
-      next: "Review Recent activity, then choose Try again.",
+      next: "Review Build summary, then choose Try again.",
       diagnostic,
       retryable: true,
     };
@@ -177,6 +210,8 @@
     aiSurfaceRecommendation,
     retryActionLabel,
     resolveTenantSelection,
+    summarizeCommandOutput,
+    journeyStageForActivity,
     workspaceRetryCanContinue,
     stepCount,
   };

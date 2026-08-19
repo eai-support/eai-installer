@@ -17,6 +17,25 @@ if (!wizard.isKebabCase("my-eai-app") || wizard.isKebabCase("My App") || wizard.
 if (wizard.cleanText("\u001b[31mFailed\u001b[39m\r\nspawn EINVAL") !== "Failed\nspawn EINVAL") {
   throw new Error("wizard output cleaning is wrong");
 }
+const buildSummaries = wizard.summarizeCommandOutput(`
+✓ Cloned from eai-support/eai-app-template@abc123
+✓ Generated .env.local
+added 225 packages in 2s
+ENTRA_CLIENT_SECRET=do-not-display
+Tenant ID: 5dd8db37-0993-f01c-0487-e8f0fae6c3d7
+`);
+if (!buildSummaries.includes("Downloaded the supported EAI app template.") || !buildSummaries.includes("Created the local app configuration.") || !buildSummaries.includes("Installed the required project packages.")) {
+  throw new Error("wizard safe build summaries omit supported milestones");
+}
+if (buildSummaries.some((summary) => /secret|5dd8db37|abc123/i.test(summary))) {
+  throw new Error("wizard safe build summaries expose private command output");
+}
+if (wizard.journeyStageForActivity("git", "Apple Software Update is installing Git") !== "git") {
+  throw new Error("wizard mistakes Apple Software Update for the app-creation stage");
+}
+if (wizard.journeyStageForActivity(null, "Creating your EAI app") !== "app") {
+  throw new Error("wizard does not recognise the explicit app-creation stage");
+}
 if (wizard.initButtonLabel(null, false) !== "Create and initialise app" || wizard.initButtonLabel("existing-app", false) !== "Use app and initialise project") {
   throw new Error("wizard app action labels are wrong");
 }

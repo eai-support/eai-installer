@@ -21,15 +21,15 @@
 
       <section class="wizard" aria-live="polite">
         <div class="activity" id="activity" hidden>
-          <div class="activity-heading"><span class="activity-spinner" aria-hidden="true"></span><strong id="activity-title">Preparing setup</strong></div>
+          <div class="activity-heading"><span class="activity-spinner" aria-hidden="true"></span><strong id="activity-title">Preparing setup</strong><span id="activity-step" class="activity-step">Step 1 of 7</span></div>
           <p id="activity-detail">The installer will show each action as it runs.</p>
           <div class="activity-meta"><span id="activity-phase">Preparing</span><span id="activity-eta"></span><span id="activity-heartbeat">Elapsed 0s · Screen updated every second · Last installer update just now</span></div>
           <div class="activity-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Installation progress"><span id="activity-bar"></span></div>
-          <ul id="install-items" class="install-items" aria-label="Installation status" hidden></ul>
-          <div class="activity-log-panel">
-            <div class="activity-log-heading"><strong>Recent activity</strong><span id="activity-log-status">Live updates every few seconds</span></div>
-            <ol id="activity-log" class="activity-log" aria-label="Recent setup activity" aria-live="polite"></ol>
-          </div>
+          <div id="setup-stages" class="setup-stages" aria-label="Setup steps"></div>
+          <details class="activity-log-panel" id="build-summary" open>
+            <summary class="activity-log-heading"><strong>Build summary</strong><span id="activity-log-status">Live updates</span></summary>
+            <ol id="activity-log" class="activity-log" aria-label="Build summary" aria-live="polite"></ol>
+          </details>
           <div class="admin-password-panel" id="admin-password-panel" hidden>
             <label for="admin-password">Mac login password <input id="admin-password" type="password" autocomplete="current-password" /></label>
             <p>Used once to authorize Apple's minimal Git tools. Enterprise AI Setup does not save it and does not open Terminal.</p>
@@ -83,7 +83,7 @@
               </label>
               <p class="field-help" id="app-selection-help">Use an existing app or choose Create a new app.</p>
             </div>
-            <label for="project-name">Project name <input id="project-name" placeholder="customer-portal" autocomplete="off" aria-describedby="project-name-help" /></label>
+            <label for="project-name">Project name <input id="project-name" placeholder="customer-portal" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" aria-describedby="project-name-help" /></label>
             <p class="field-help" id="project-name-help">Use lowercase words separated by hyphens. Example: <code>customer-portal</code>.</p>
             <label for="project-directory">Parent folder
               <span class="folder-picker">

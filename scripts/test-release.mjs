@@ -9,8 +9,10 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const runner = path.join(root, "scripts", "release-e2e.mjs");
+const macosGuestPreparer = path.join(root, "scripts", "prepare-macos-guest-dmg.sh");
 const releaseShell = fs.readFileSync(path.join(root, "release.sh"), "utf8");
 const runnerSource = fs.readFileSync(runner, "utf8");
+const macosGuestPreparerSource = fs.readFileSync(macosGuestPreparer, "utf8");
 const releaseWorkflow = fs.readFileSync(path.join(root, ".github", "workflows", "release.yml"), "utf8");
 const tauriConfig = JSON.parse(fs.readFileSync(path.join(root, "src-tauri", "tauri.conf.json"), "utf8"));
 const output = fs.mkdtempSync(path.join(os.tmpdir(), "eai-installer-release-contract-"));
@@ -48,6 +50,35 @@ assert.match(runnerSource, /receipt\.deletedRecords/);
 assert.match(runnerSource, /EAI_DEPROVISION_APP_CREATED/);
 assert.match(runnerSource, /receipt\.appCreated !== appCreated/);
 assert.match(runnerSource, /requiredChecks = \["download", "installer", "prerequisites", "authentication", "tenant", "app", "project", "aiHandoff"\]/);
+for (const requiredSafetyCheck of [
+  /EAI_VM_DOWNLOAD_URL must be a complete HTTP or HTTPS URL/,
+  /The selected Parallels guest is not macOS/,
+  /The macOS guest command is not running as the requested signed-in user/,
+  /The macOS clean-machine test must not run as root/,
+  /The DMG did not reach a stable, non-zero size/,
+  /The guest DMG checksum does not match the CI artifact/,
+  /hdiutil imageinfo/,
+  /EAI_VM_ALLOW_UNSIGNED_TEST/,
+  /READY_FOR_UI/,
+]) {
+  assert.match(macosGuestPreparerSource, requiredSafetyCheck);
+}
+assert.doesNotMatch(macosGuestPreparerSource, /Users\/[^/]+\/Downloads/);
+assert.doesNotMatch(macosGuestPreparerSource, /Gubamute/);
+assert.doesNotMatch(macosGuestPreparerSource, /--password/);
+assert.doesNotMatch(macosGuestPreparerSource, /EAI_VM_GUEST_PASSWORD/);
+assert.match(macosGuestPreparerSource, /prlctl exec "\$vm_name" --current-user/);
+assert.doesNotMatch(macosGuestPreparerSource, /-maxdepth/);
+assert.match(macosGuestPreparerSource, /for app in "\$1"\/\*\.app/);
+assert.match(macosGuestPreparerSource, /\[ -d "\$app" \]/);
+assert.doesNotMatch(macosGuestPreparerSource, /guest \/usr\/bin\/open/);
+assert.match(macosGuestPreparerSource, /dscl \. -read "\/Users\/\$actual_user" NFSHomeDirectory/);
+assert.match(macosGuestPreparerSource, /NFSHomeDirectory 2>\/dev\/null \| \/usr\/bin\/awk .* \|\| true/);
+assert.match(macosGuestPreparerSource, /The signed-in macOS user's home directory could not be resolved/);
+assert.match(macosGuestPreparerSource, /guest \/bin\/test -d "\$actual_home"/);
+assert.match(macosGuestPreparerSource, /launchctl asuser "\$actual_uid"[\s\\]*\/usr\/bin\/sudo -H -u "\$actual_user"/);
+assert.match(macosGuestPreparerSource, /HOME="\$actual_home" USER="\$actual_user" LOGNAME="\$actual_user"/);
+assert.match(macosGuestPreparerSource, /READY_FOR_UI.*mount=%s/);
 assert.match(releaseWorkflow, /name: Install Linux build dependencies/);
 for (const dependency of [
   "build-essential",
@@ -151,5 +182,6 @@ const shellSyntax = execFileSync("bash", ["-n", path.join(root, "release.sh")], 
   encoding: "utf8",
 });
 assert.equal(shellSyntax, "");
+assert.equal(execFileSync("bash", ["-n", macosGuestPreparer], { cwd: root, encoding: "utf8" }), "");
 
 console.log("live release gate contract checks ok");
