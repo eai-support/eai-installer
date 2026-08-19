@@ -790,6 +790,42 @@ fn git_version() -> Option<String> {
     version("git", &["--version"])
 }
 
+fn parse_windows_runtime_version(output: &str) -> Option<String> {
+    output.lines().find_map(|line| {
+        let fields: Vec<&str> = line.split_whitespace().collect();
+        (fields.len() >= 3 && fields[0] == "Version" && fields[1] == "REG_SZ")
+            .then(|| fields[2].to_string())
+    })
+}
+
+fn windows_runtime_registry_key() -> &'static str {
+    if env::consts::ARCH == "aarch64" {
+        r"HKLM\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\arm64"
+    } else {
+        r"HKLM\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64"
+    }
+}
+
+fn windows_runtime_package_id() -> &'static str {
+    if env::consts::ARCH == "aarch64" {
+        "Microsoft.VCRedist.2015+.arm64"
+    } else {
+        "Microsoft.VCRedist.2015+.x64"
+    }
+}
+
+fn windows_vc_runtime_version() -> Option<String> {
+    if !cfg!(target_os = "windows") {
+        return None;
+    }
+    let (stdout, _) = run_program(
+        "reg",
+        &["query", windows_runtime_registry_key(), "/v", "Version"],
+    )
+    .ok()?;
+    parse_windows_runtime_version(&stdout)
+}
+
 fn latest_command_line_tools_label() -> Result<String, String> {
     let mut last_detail = String::new();
     for attempt in 0..15 {
@@ -1050,15 +1086,22 @@ fn detect_environment() -> EnvironmentReport {
     } else {
         None
     };
+    let mut tools = vec![
+        ToolState { command: "git".to_string(), version: git_version() },
+        ToolState { command: "node".to_string(), version: version("node", &["--version"]) },
+        ToolState { command: "npm".to_string(), version: npm_version() },
+        ToolState { command: "eai".to_string(), version: eai_cli_version() },
+    ];
+    if cfg!(target_os = "windows") {
+        tools.push(ToolState {
+            command: "windows-runtime".to_string(),
+            version: windows_vc_runtime_version(),
+        });
+    }
     EnvironmentReport {
         platform: platform.to_string(),
         architecture: env::consts::ARCH.to_string(),
-        tools: vec![
-            ToolState { command: "git".to_string(), version: git_version() },
-            ToolState { command: "node".to_string(), version: version("node", &["--version"]) },
-            ToolState { command: "npm".to_string(), version: npm_version() },
-            ToolState { command: "eai".to_string(), version: eai_cli_version() },
-        ],
+        tools,
         package_manager,
     }
 }
@@ -1069,10 +1112,37 @@ fn package_install_step(app: &AppHandle, step: &str, package: &str, message: &st
         if version("winget", &["--version"]).is_none() {
             return command_result(step, false, "WinGet is not available in this Windows session.", Some("Install or enable App Installer, then rerun EAI Setup."), None, true);
         }
-        let package_id = if package == "git" { "Git.Git" } else { "OpenJS.NodeJS.LTS" };
-        let install_result = run_program("winget", &["install", "--id", package_id, "-e", "--source", "winget", "--accept-source-agreements", "--accept-package-agreements", "--disable-interactivity"]);
+        let mut output = Vec::new();
+        let mut errors = Vec::new();
+        if package == "git" {
+            match run_program("winget", &["install", "--id", "Git.Git", "-e", "--source", "winget", "--accept-source-agreements", "--accept-package-agreements", "--disable-interactivity"]) {
+                Ok((stdout, stderr)) => output.push(format!("{stdout}\n{stderr}")),
+                Err(error) => errors.push(error),
+            }
+        } else {
+            if version("node", &["--version"]).is_none() || npm_version().is_none() {
+                match run_program("winget", &["install", "--id", "OpenJS.NodeJS.LTS", "-e", "--source", "winget", "--accept-source-agreements", "--accept-package-agreements", "--disable-interactivity"]) {
+                    Ok((stdout, stderr)) => output.push(format!("{stdout}\n{stderr}")),
+                    Err(error) => errors.push(error),
+                }
+            }
+            if windows_vc_runtime_version().is_none() {
+                emit_progress(app, step, "Installing Windows app support", "Installing Microsoft's signed runtime required by native Node.js packages.", Some(70), Some(30));
+                match run_program("winget", &["install", "--id", windows_runtime_package_id(), "-e", "--source", "winget", "--accept-source-agreements", "--accept-package-agreements", "--disable-interactivity"]) {
+                    Ok((stdout, stderr)) => output.push(format!("{stdout}\n{stderr}")),
+                    Err(error) => errors.push(error),
+                }
+            }
+        }
         emit_progress(app, step, &format!("Checking {package}"), "Confirming the installed commands are ready.", Some(90), Some(5));
         let ready = wait_for_package_ready(package, 5);
+        let install_result = if ready {
+            Ok((output.join("\n"), errors.join("\n")))
+        } else if errors.is_empty() {
+            Ok((output.join("\n"), String::new()))
+        } else {
+            Err(errors.join("\n"))
+        };
         return windows_package_install_result(step, package, message, install_result, ready);
     }
 
@@ -1135,7 +1205,9 @@ fn package_ready(package: &str) -> bool {
     if package == "git" {
         git_version().is_some()
     } else {
-        version("node", &["--version"]).is_some() && npm_version().is_some()
+        version("node", &["--version"]).is_some()
+            && npm_version().is_some()
+            && (!cfg!(target_os = "windows") || windows_vc_runtime_version().is_some())
     }
 }
 
@@ -1828,6 +1900,19 @@ mod tests {
         );
         assert!(!result.ok);
         assert!(result.requires_user_action);
+    }
+
+    #[test]
+    fn windows_runtime_registry_output_is_parsed() {
+        let output = r#"
+HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\arm64
+    Version    REG_SZ    v14.51.36247.00
+"#;
+        assert_eq!(
+            parse_windows_runtime_version(output),
+            Some("v14.51.36247.00".to_string()),
+        );
+        assert_eq!(parse_windows_runtime_version("ERROR: not found"), None);
     }
 
     #[test]

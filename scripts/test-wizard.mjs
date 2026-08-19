@@ -105,6 +105,15 @@ if (!wizard.prerequisitesReady(report)) throw new Error("complete prerequisite r
 if (wizard.prerequisitesReady({ platform: "linux", package_manager: "apt-get", tools: [{ command: "git", version: "2" }] })) {
   throw new Error("incomplete prerequisite report should not be ready");
 }
+const windowsReport = {
+  ...report,
+  platform: "windows",
+  tools: [...report.tools, { command: "windows-runtime", version: "v14.51.36247.00" }],
+};
+if (!wizard.prerequisitesReady(windowsReport)) throw new Error("complete Windows prerequisite report should be ready");
+if (wizard.prerequisitesReady({ ...windowsReport, tools: report.tools })) {
+  throw new Error("Windows prerequisites should require the native app runtime");
+}
 const surfaceInventory = {
   preferredSurface: "claude-desktop",
   recommendedSurface: "vscode-copilot",

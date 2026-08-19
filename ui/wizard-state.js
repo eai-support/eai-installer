@@ -168,7 +168,9 @@
   function prerequisitesReady(report, demo = false) {
     if (demo) return true;
     if (!report) return false;
-    return ["git", "node", "npm", "eai"].every((command) => report.tools.some((tool) => tool.command === command && tool.version));
+    const required = ["git", "node", "npm", "eai"];
+    if (report.platform === "windows") required.push("windows-runtime");
+    return required.every((command) => report.tools.some((tool) => tool.command === command && tool.version));
   }
 
   function chooseAiSurface(inventory) {
