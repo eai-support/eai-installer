@@ -4,7 +4,6 @@ set -euo pipefail
 
 vm_name="${EAI_MACOS_VM_NAME:-macOS}"
 guest_user="${EAI_VM_GUEST_USER:-}"
-guest_password="${EAI_VM_GUEST_PASSWORD:-}"
 download_url="${EAI_VM_DOWNLOAD_URL:-}"
 host_asset="${EAI_VM_ASSET:-}"
 guest_dmg="/tmp/eai-setup-under-test.dmg"
@@ -16,12 +15,11 @@ fail() {
 }
 
 guest() {
-  prlctl exec "$vm_name" --user "$guest_user" --password "$guest_password" "$@"
+  prlctl exec "$vm_name" --current-user "$@"
 }
 
 command -v prlctl >/dev/null 2>&1 || fail "Parallels prlctl is not installed."
 [[ -n "$guest_user" ]] || fail "EAI_VM_GUEST_USER is required."
-[[ -n "$guest_password" ]] || fail "EAI_VM_GUEST_PASSWORD is required and must come from the protected test environment."
 [[ -n "$download_url" ]] || fail "EAI_VM_DOWNLOAD_URL is required."
 [[ "$download_url" =~ ^https?://[^[:space:]]+$ ]] || fail "EAI_VM_DOWNLOAD_URL must be a complete HTTP or HTTPS URL."
 [[ -f "$host_asset" ]] || fail "EAI_VM_ASSET must point to the validated host-side DMG."

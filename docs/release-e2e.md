@@ -114,8 +114,9 @@ verified mount through the signed-in user's macOS launch session. It uses
 and `LOGNAME` before opening Finder; a plain
 root-owned GUI launch is explicitly forbidden. It deliberately avoids the guest Downloads folder
 because Parallels background tools do not necessarily have macOS privacy access
-to that folder. The guest username and password are protected runtime inputs;
-they must never be committed to this repository or written to test evidence.
+to that folder. The expected guest username is a protected runtime input. The
+adapter uses Parallels' current signed-in user channel and never places a guest
+password in command arguments, repository files, or test evidence.
 Unsigned pull-request artifacts require the explicit
 `EAI_VM_ALLOW_UNSIGNED_TEST=1` test flag; signed customer releases must not use
 that flag.

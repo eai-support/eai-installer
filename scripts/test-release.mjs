@@ -65,6 +65,9 @@ for (const requiredSafetyCheck of [
 }
 assert.doesNotMatch(macosGuestPreparerSource, /Users\/[^/]+\/Downloads/);
 assert.doesNotMatch(macosGuestPreparerSource, /Gubamute/);
+assert.doesNotMatch(macosGuestPreparerSource, /--password/);
+assert.doesNotMatch(macosGuestPreparerSource, /EAI_VM_GUEST_PASSWORD/);
+assert.match(macosGuestPreparerSource, /prlctl exec "\$vm_name" --current-user/);
 assert.doesNotMatch(macosGuestPreparerSource, /-maxdepth/);
 assert.match(macosGuestPreparerSource, /for app in "\$1"\/\*\.app/);
 assert.match(macosGuestPreparerSource, /\[ -d "\$app" \]/);
