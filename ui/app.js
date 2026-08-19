@@ -377,10 +377,14 @@ function requestMacAdminPassword() {
 function setDetectionState(report) {
   const tools = new Map(report.tools.map((tool) => [tool.command, tool]));
   const gitReady = Boolean(tools.get("git")?.version);
-  const nodeReady = Boolean(tools.get("node")?.version && tools.get("npm")?.version);
+  const nodeReady = Boolean(
+    tools.get("node")?.version &&
+    tools.get("npm")?.version &&
+    (report.platform !== "windows" || tools.get("windows-runtime")?.version),
+  );
   const eaiReady = Boolean(tools.get("eai")?.version);
   setJourneyStage("git", gitReady ? "done" : "pending", gitReady ? "Git is already ready." : "Git needs to be installed.");
-  setJourneyStage("node", nodeReady ? "done" : "pending", nodeReady ? "Node.js and npm are already ready." : "Node.js and npm need to be installed.");
+  setJourneyStage("node", nodeReady ? "done" : "pending", nodeReady ? "Node.js, npm, and required app support are ready." : "Node.js, npm, or required app support needs to be installed.");
   setJourneyStage("eai-cli", eaiReady ? "done" : "pending", eaiReady ? "The EAI CLI is already ready." : "The EAI CLI needs to be installed.");
 }
 
@@ -534,13 +538,17 @@ async function installPrerequisites() {
   const toolMap = new Map(environmentReport.tools.map((tool) => [tool.command, tool]));
   const steps = [];
   if (!toolMap.get("git")?.version) steps.push("git");
-  if (!toolMap.get("node")?.version || !toolMap.get("npm")?.version) steps.push("node");
+  if (
+    !toolMap.get("node")?.version ||
+    !toolMap.get("npm")?.version ||
+    (environmentReport.platform === "windows" && !toolMap.get("windows-runtime")?.version)
+  ) steps.push("node");
   if (!toolMap.get("eai")?.version) steps.push("eai-cli");
   if (!steps.length) {
     wizard.prerequisitesReady = true;
     if (retryInstall) retryInstall.hidden = true;
     showOutput("All prerequisites are ready.");
-    setActivity("Everything is ready", "Git, Node.js, npm, and the EAI CLI are already installed.", 100, false);
+    setActivity("Everything is ready", "Git, Node.js, npm, required app support, and the EAI CLI are ready.", 100, false);
     for (const step of prerequisiteSteps) setJourneyStage(step, "done", `${stepLabels[step]} is ready.`);
     return true;
   }
