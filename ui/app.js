@@ -453,15 +453,14 @@ function showPreviewState() {
 }
 
 async function detect() {
-  const initialComputerCheck = !environmentReport;
-  if (initialComputerCheck) setJourneyStage("computer", "active", "Checking this computer and the required tools.");
+  setJourneyStage("computer", "active", "Checking this computer and the required tools.");
   setActivity("Checking this computer", "Checking the required tools.", null, true, "", "Checking");
   startActivityHeartbeat("detect");
   try {
     const report = await invoke("detect_environment");
     if (report.demo) {
       showPreviewState();
-      if (initialComputerCheck) setJourneyStage("computer", "done", "Computer check complete. Preview mode made no changes.");
+      setJourneyStage("computer", "done", "Computer check complete. Preview mode made no changes.");
       setActivity("Computer check complete", "Preview mode is ready. No changes were made.", 100, false);
       return true;
     }
@@ -469,13 +468,13 @@ async function detect() {
     environmentReport = report;
     setToolState(report);
     setDetectionState(report);
-    if (initialComputerCheck) setJourneyStage("computer", "done", `${report.platform} check complete.`);
+    setJourneyStage("computer", "done", `${report.platform} check complete.`);
     setActivity("Computer check complete", `${report.platform} is ready. Missing items are shown below.`, 100, false, "", "Complete");
     return true;
   } catch (error) {
     showOutput("Could not inspect this computer.", String(error));
     if (retryInstall) retryInstall.hidden = false;
-    if (initialComputerCheck) setJourneyStage("computer", "error", "The computer check could not finish.");
+    setJourneyStage("computer", "error", "The computer check could not finish.");
     setActivity("Computer check failed", "The computer check could not finish. Review the guidance below and try again.", 0, false, "", "Error");
     return false;
   } finally {

@@ -273,6 +273,7 @@ if (app.includes("console.info(result.output)")) throw new Error("wizard: raw in
 if (app.split("\n").some((line) => line.includes("setActivity(") && line.includes("String(error)"))) {
   throw new Error("wizard: raw exception details must not be written to the build summary");
 }
+if (app.includes("initialComputerCheck")) throw new Error("wizard: repeat computer checks can leave the stage active");
 if (!app.includes("setActivity") || !app.includes("Installation complete") || !app.includes("listenForBootstrapProgress") || !app.includes("eventApi.listen") || !app.includes("setDetectionState") || !app.includes("phaseForTitle") || !app.includes("async function startSetup") || !app.includes("window.setTimeout(() => startSetup(), 250)") || !app.includes("setStep(4)") || !app.includes("async function runSignup") || !app.includes("open_signup") || !app.includes("dialog.open") || !app.includes("choose-folder") || !app.includes("get_company_tenants") || !app.includes("get_company_apps") || !app.includes("loadCompanyApps") || !app.includes("describeWorkspaceFailure") || !app.includes("companyTenantId") || !app.includes("appKey") || !app.includes("renderCompanyApps") || !app.includes("open_project") || !app.includes("projectPath") || !app.includes("initInProgress") || !app.includes("setInitButtonBusy") || !app.includes("aria-busy") || !app.includes("describeInitFailure")) {
   throw new Error("wizard: live activity status updates are missing");
 }
@@ -301,6 +302,10 @@ if (!app.includes("cleanText") || !app.includes("describeInitFailure") || !app.i
 const wizardState = await readFile(new URL("../ui/wizard-state.js", import.meta.url), "utf8");
 if (!wizardState.includes("prerequisitesReady") || !wizardState.includes("isKebabCase") || !wizardState.includes("describeInitFailure") || !wizardState.includes("Windows dependency setup needs attention") || !wizardState.includes("App dependencies need attention") || !wizardState.includes("initButtonLabel")) {
   throw new Error("wizard: state validation contract is missing");
+}
+const styles = await readFile(new URL("../ui/styles.css", import.meta.url), "utf8");
+if (!styles.includes(".setup-stage summary::marker") || !styles.includes(".activity-log-heading::marker")) {
+  throw new Error("wizard: accordion markers are not hidden consistently across desktop webviews");
 }
 
 console.log("wizard structure checks ok");
