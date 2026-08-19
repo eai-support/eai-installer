@@ -54,6 +54,17 @@ const genericFailure = wizard.describeInitFailure("folder is not writable", "mac
 if (genericFailure.title !== "App setup failed" || !genericFailure.detail.includes("folder is not writable")) {
   throw new Error("wizard generic failure guidance is wrong");
 }
+const missingExistingApp = wizard.describeInitFailure(
+  "No app named eai-app-testing was found in the selected company workspace.",
+  "windows",
+);
+if (missingExistingApp.title !== "Existing app could not be found" || !missingExistingApp.detail.includes("No new platform app was created") || !missingExistingApp.next.includes("Create a new app")) {
+  throw new Error("wizard existing-app lookup guidance is missing");
+}
+const disabledExistingApp = wizard.describeInitFailure("The selected app status is disabled.", "windows");
+if (disabledExistingApp.title !== "Selected app is disabled" || !disabledExistingApp.next.includes("active app")) {
+  throw new Error("wizard disabled-app guidance is missing");
+}
 const temporaryWorkspaceFailure = wizard.describeWorkspaceFailure("503 Service Unavailable");
 if (temporaryWorkspaceFailure.title !== "EAI is temporarily unavailable" || !temporaryWorkspaceFailure.detail.includes("sign-in is complete") || !temporaryWorkspaceFailure.next.includes("Try workspace check again") || temporaryWorkspaceFailure.retryable !== true) {
   throw new Error("wizard temporary workspace failure guidance is wrong");

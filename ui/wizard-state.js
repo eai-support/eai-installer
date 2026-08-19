@@ -57,6 +57,34 @@
 
   function describeInitFailure(message, platform = "") {
     const cleanMessage = cleanText(message) || "The app could not be initialised.";
+    if (/no app named .* was found in the selected company workspace/i.test(cleanMessage)) {
+      return {
+        title: "Existing app could not be found",
+        detail: "The selected app is no longer available in this company workspace. No new platform app was created.",
+        next: "Choose Create a new app, or refresh the workspace list and select the existing app again.",
+      };
+    }
+    if (/more than one enrollment was returned for app/i.test(cleanMessage)) {
+      return {
+        title: "Existing app record needs attention",
+        detail: "EAI found more than one platform record for the selected app, so it stopped to avoid connecting this project to the wrong app. No new platform app was created.",
+        next: "Ask a company administrator to resolve the duplicate app record, then retry.",
+      };
+    }
+    if (/does not identify a runtime tenant/i.test(cleanMessage)) {
+      return {
+        title: "Existing app is not ready",
+        detail: "The selected app does not have a runtime workspace recorded, so EAI stopped before creating a project. No new platform app was created.",
+        next: "Choose Create a new app, or ask a company administrator to repair the selected app record before retrying.",
+      };
+    }
+    if (/app.*disabled|status[^\n]*disabled/i.test(cleanMessage)) {
+      return {
+        title: "Selected app is disabled",
+        detail: "The selected EAI app is disabled. EAI did not create a new app or change the existing app.",
+        next: "Choose a different active app, or ask a company administrator to enable this app before retrying.",
+      };
+    }
     if (/the app was created, but its dependencies could not be installed/i.test(cleanMessage)) {
       return {
         title: "App dependencies need attention",

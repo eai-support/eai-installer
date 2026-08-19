@@ -1729,7 +1729,7 @@ fn run_bootstrap_sync(app: AppHandle, step: String, project_name: Option<String>
                     } else {
                         "eai init <project-name> --company-tenant <company-tenant-id> --current-dir --skip-prompts --no-splash --no-install"
                     };
-                    command_result("init", false, &error, Some(command), None, true)
+                    command_result("init", false, &error, Some(command), Some(error.clone()), true)
                 }
             }
         }
