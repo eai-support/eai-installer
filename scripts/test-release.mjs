@@ -73,6 +73,7 @@ assert.match(macosGuestPreparerSource, /for app in "\$1"\/\*\.app/);
 assert.match(macosGuestPreparerSource, /\[ -d "\$app" \]/);
 assert.doesNotMatch(macosGuestPreparerSource, /guest \/usr\/bin\/open/);
 assert.match(macosGuestPreparerSource, /dscl \. -read "\/Users\/\$actual_user" NFSHomeDirectory/);
+assert.match(macosGuestPreparerSource, /NFSHomeDirectory 2>\/dev\/null \| \/usr\/bin\/awk .* \|\| true/);
 assert.match(macosGuestPreparerSource, /The signed-in macOS user's home directory could not be resolved/);
 assert.match(macosGuestPreparerSource, /guest \/bin\/test -d "\$actual_home"/);
 assert.match(macosGuestPreparerSource, /launchctl asuser "\$actual_uid"[\s\\]*\/usr\/bin\/sudo -H -u "\$actual_user"/);
