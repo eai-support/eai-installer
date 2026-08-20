@@ -925,7 +925,7 @@ async function runInit() {
   }
   if (!result.ok && !result.demo) {
     const failure = EAIWizard.describeInitFailure(result.message, environmentReport?.platform);
-    showOutput(failure.title, `Next: ${failure.next}`);
+    showOutput(failure.title, `${failure.detail} Next: ${failure.next}`);
     setActivity(failure.title, failure.detail, 0, false, "", "Error");
     setJourneyStage("app", "error", failure.detail);
     return false;
