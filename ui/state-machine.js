@@ -669,12 +669,23 @@
     ].filter((group) => group.items.length);
   }
 
-  /** Where a tool comes from, said as its makers would say it. */
+  /**
+   * Where a tool comes from, said as its makers would say it.
+   *
+   * The CLI's install URLs point at documentation — docs.github.com,
+   * learn.chatgpt.com — and "GitHub Copilot CLI comes from
+   * docs.github.com" is a sentence about a manual rather than about a
+   * product. The documentation subdomain is dropped for the sentence;
+   * what is left is still the host we are about to open.
+   */
+  const DOC_SUBDOMAINS = /^(docs|learn|developer|help|support|www)\./;
+
   function harnessOrigin(surface) {
     if (!surface) return { site: "", account: "" };
     const url = String(surface.installUrl || surface.install_url || "");
     const host = url.replace(/^https?:\/\//, "").split("/")[0] || "";
-    return { site: host, account: surface.provider || host };
+    const site = host.replace(DOC_SUBDOMAINS, "");
+    return { site, account: surface.provider || site };
   }
 
   /**

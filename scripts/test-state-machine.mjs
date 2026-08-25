@@ -460,6 +460,20 @@ const emptyMac = installedMac.map((surface) => ({ ...surface, installed: false }
 
   const origin = machine.harnessOrigin({ installUrl: "https://code.visualstudio.com/download", provider: "GitHub" });
   if (origin.site !== "code.visualstudio.com") fail(`the origin host is wrong: ${origin.site}`);
+
+  /* The CLI's install URLs point at documentation. "GitHub Copilot CLI
+     comes from docs.github.com" is a sentence about a manual. */
+  for (const [url, expected] of [
+    ["https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli", "github.com"],
+    ["https://learn.chatgpt.com/docs/codex/cli", "chatgpt.com"],
+    ["https://www.example.com/get", "example.com"],
+    ["https://claude.ai/download", "claude.ai"],
+    ["https://x.ai/cli", "x.ai"],
+  ]) {
+    const site = machine.harnessOrigin({ installUrl: url, provider: "Someone" }).site;
+    if (site !== expected) fail(`${url} was described as coming from ${site}, not ${expected}`);
+  }
+  if (machine.harnessOrigin(null).site !== "") fail("a missing surface still claims an origin");
 }
 
 /* ================= 8. STATES HAVE ADDRESSES ==================== */
