@@ -73,6 +73,7 @@ visible.
 | HARNESS-02 | Choose a harness | Nothing is installed | Only the "Not installed" group is drawn, the alert names the vendor site and account, and the button reads Get <tool>. |
 | HARNESS-03 | Choose a harness | Choose Get and leave for the vendor site | The waiting box appears, the alert is withdrawn, the button is disabled and reads Waiting for <tool>. |
 | HARNESS-04 | Choose a harness | The tool is installed while the waiting box is up | The screen updates by itself within a few seconds and the button becomes Next; the poll stops. |
+| HARNESS-06 | Choose a harness | Open an option in the list | The divider sits below the whole option, separating it from the next one. There is no line between an option's title and its own explanation, and none below the last option. |
 | HARNESS-05 | Choose a harness | Detection itself fails | The screen says the check failed and the app is safe; it does not read as though the app failed. |
 | PLATFORM-01 | Every screen | Run on Windows | No screen says Mac, Finder, xcode-select or Command Line Tools; the prerequisite failure names winget and the location question names File Explorer. |
 | PLATFORM-02 | Every screen | Run on Linux | No screen names a Mac or a PC; the prerequisite failure names the distribution package manager. |
