@@ -116,7 +116,7 @@ const DRIVEN_CLASSES = [
   "lbl", "sub", "val",
   "i3-step", "answered", "i3-num", "i3-foot", "i3-nav",
   "i3-welcome", "i3-tick", "i3-welcome-acts", "i3-welcome-fine", "wide",
-  "i4-group", "i4-pick", "i4-row", "i4-alert", "i4-pick-alert", "i4-wait",
+  "i4-group", "i4-pick", "i4-row", "i4-steps", "i4-wait",
   "i4-list", "i4-back", "i4-actions", "i4-eai", "i4-eai-note", "i4-eai-video",
   "mark", "tile", "nm", "state", "on", "ready", "missing",
   "eai-btn", "primary", "ring", "off", "big", "ghost-quiet",
@@ -150,8 +150,22 @@ if (!/\.i4-list \.i4-pick \{[^}]*border-bottom:\s*1px/s.test(css)) {
 if (!/\.i4-list \.i4-pick \.i4-row \{[^}]*border-bottom:\s*none/s.test(css)) {
   fail("the row inside an option still draws a divider, which lands between its title and its explanation");
 }
-if (/\.i4-pick-alert \{[^}]*border-top:/s.test(css)) {
-  fail("the option's alert draws a line above itself, separating it from the row it belongs to");
+if (/\.i4-steps \{[^}]*border-top:/s.test(css)) {
+  fail("the option's steps draw a line above themselves, separating them from the row they belong to");
+}
+
+/* The steps hang off the row, and the way that is said is the left edge:
+   16px of row padding, a 16px mark and a 12px gap put the tile at 44, so
+   44 is where the numbers go. A different number is a block that starts
+   its own thing. */
+if (!/\.i4-steps \{[^}]*padding:[^;]*44px/s.test(css)) {
+  fail("the steps are not aligned to the tile's column, so they read as a new block rather than part of the row");
+}
+if (!/\.i4-row \.mark \{[^}]*flex:\s*0 0 16px/s.test(css) || !/\.i4-row \{[^}]*gap:\s*12px/s.test(css)) {
+  fail("the row's lead-in changed, so the steps' 44px left edge no longer lands on the tile");
+}
+if (!/\.i4-row\.on \.nm \{[^}]*color:\s*var\(--color-foreground\)/s.test(css)) {
+  fail("the chosen option's name is still muted — a subject in the same grey as the things you did not pick");
 }
 
 if (!css.includes("summary::marker") || !css.includes("summary::-webkit-details-marker")) {

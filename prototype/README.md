@@ -104,3 +104,6 @@ true.
 - `docs/scenario-matrix.md` — what has to be true, with IDs
 - The shared design source: `prototypes/statemachine`, which does the
   same thing for the web sign-up flow
+- The hi-fi frames in Paper, which are the reference for anything the
+  prototype does not cover — the harness screen's three steps came from
+  there

@@ -329,8 +329,15 @@ for (const removed of ["harvey-ball", "recommendation-dialog", "How the Harvey b
 if (!machineSource.includes("Ready on ") || !machineSource.includes("Not installed")) {
   throw new Error("wizard: the AI tool list no longer separates what is installed from what is not");
 }
-if (!machineSource.includes("your app is already created either way")) {
-  throw new Error("wizard: leaving for a vendor site no longer reassures that the app already exists");
+/* The round trip is three steps rather than a paragraph, and the third
+   one is the one that matters: come back. The reassurance that nothing
+   is lost by leaving now lives in the box that is on screen while they
+   are away, which is when somebody needs it. */
+for (const step of ["Download and install", "Sign in there with", "Come back to this app"]) {
+  if (!machineSource.includes(step)) throw new Error(`wizard: the round trip is missing its step: ${step}`);
+}
+if (!machineSource.includes("nothing is lost if you")) {
+  throw new Error("wizard: nothing reassures somebody that leaving does not lose the app they just created");
 }
 
 // The macOS-only password moment, and the record of what actually ran.

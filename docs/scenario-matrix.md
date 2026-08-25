@@ -70,7 +70,9 @@ visible.
 | STATE-09 | Creating | Initialization fails partway | The row that was running is marked failed, the rows after it stay pending, no fifth row appears, and Retry this step is offered. |
 | STATE-10 | Built | The harness opened on the project | The success overlay lands over the hand-off and offers Open the project folder and Done. |
 | HARNESS-01 | Choose a harness | A supported tool is already installed | It is listed first under "Ready on this <device>", it is preselected, there is no alert, and the button reads Next. |
-| HARNESS-02 | Choose a harness | Nothing is installed | Only the "Not installed" group is drawn, the alert names the vendor site and account, and the button reads Get <tool>. |
+| HARNESS-02 | Choose a harness | Nothing is installed | Only the "Not installed" group is drawn, and the chosen option opens into three numbered steps: their site, their account, come back. |
+| HARNESS-07 | Choose a harness | Any option is chosen | Its name is the primary colour and semibold; every option not chosen stays muted. |
+| HARNESS-08 | Choose a harness | A not-installed option is chosen | The step numbers sit in the tile's column, 44px from the row's left edge, so the block reads as belonging to that row. |
 | HARNESS-03 | Choose a harness | Choose Get and leave for the vendor site | The waiting box appears, the alert is withdrawn, the button is disabled and reads Waiting for <tool>. |
 | HARNESS-04 | Choose a harness | The tool is installed while the waiting box is up | The screen updates by itself within a few seconds and the button becomes Next; the poll stops. |
 | HARNESS-06 | Choose a harness | Open an option in the list | The divider sits below the whole option, separating it from the next one. There is no line between an option's title and its own explanation, and none below the last option. |

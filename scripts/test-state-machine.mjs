@@ -231,8 +231,7 @@ function everySentence(platform) {
   for (const group of machine.harnessGroups(surfaces, platform)) lines.push(group.label, group.note);
   const waiting = machine.harnessWaiting(surfaces[1], platform);
   lines.push(waiting.title, waiting.body);
-  const alert = machine.harnessAlert(surfaces[1]);
-  lines.push(alert.title, ...alert.parts.map((part) => (typeof part === "string" ? part : part.b)));
+  lines.push(...machine.harnessSteps(surfaces[1]));
   lines.push(machine.harnessButtonLabel(surfaces[0]), machine.harnessButtonLabel(surfaces[1]), machine.harnessButtonLabel(surfaces[1], { waiting: true }));
 
   const handoff = machine.handoffCopy(surfaces[0], { projectName: "contract-renewals" });
@@ -620,19 +619,33 @@ const emptyMac = installedMac.map((surface) => ({ ...surface, installed: false }
 }
 
 {
-  if (machine.harnessButtonLabel(installedMac[0]) !== "Next") fail("an installed tool does not move the flow on");
-  if (machine.harnessButtonLabel(installedMac[1]) !== "Get GitHub Copilot CLI") fail("a missing tool does not offer to get it");
+  /* One label for both, because the three steps now say what fetching
+     one involves and a button repeating step one competes with it. */
+  if (machine.harnessButtonLabel(installedMac[0]) !== "Next step") fail("an installed tool does not move the flow on");
+  if (machine.harnessButtonLabel(installedMac[1]) !== "Next step") fail("a missing tool gets a different button from an installed one");
   if (machine.harnessButtonLabel(installedMac[1], { waiting: true }) !== "Waiting for GitHub Copilot CLI…") {
     fail("the waiting button does not say what it is waiting for");
   }
   if (machine.harnessButtonLabel(null) !== "Choose an AI tool") fail("no selection does not ask for one");
 
-  if (machine.harnessAlert(installedMac[0])) fail("an installed tool is given a go-and-get-it alert");
-  const alert = machine.harnessAlert(installedMac[1]);
-  if (!alert.title.includes("github.com")) fail(`the alert does not name the site: ${alert.title}`);
-  const body = alert.parts.map((part) => (typeof part === "string" ? part : part.b)).join("");
-  if (!body.includes("GitHub")) fail("the alert does not say whose account they will need");
-  if (!body.includes("already created")) fail("the alert does not reassure that the app already exists");
+  /* The round trip, as three steps: their site, their account, and back.
+     A paragraph saying all three in one breath is the shape that makes
+     somebody skim it and then be surprised twice. */
+  if (machine.harnessSteps(installedMac[0])) fail("an installed tool is given steps for fetching it");
+  const steps = machine.harnessSteps(installedMac[1]);
+  if (steps.length !== 3) fail(`the round trip is ${steps.length} steps, not three`);
+  if (!steps[0].includes("github.com")) fail(`the first step does not name the site: ${steps[0]}`);
+  if (!steps[0].includes(installedMac[1].name)) fail("the first step does not name the tool");
+  if (!steps[1].includes("GitHub")) fail("the second step does not say whose account they will need");
+  if (!/come back/i.test(steps[2])) fail("the third step does not say to come back");
+
+  /* "a" or "an" by how the name is said, not how it is spelled: a rule
+     that only looks for vowels writes "a xAI account". */
+  for (const [provider, expected] of [["GitHub", "a GitHub"], ["Anthropic", "an Anthropic"],
+    ["OpenAI", "an OpenAI"], ["Google", "a Google"], ["xAI", "an xAI"]]) {
+    const said = machine.harnessSteps({ name: "Tool", provider, installUrl: "https://example.com", installed: false })[1];
+    if (!said.includes(`${expected} account`)) fail(`the second step says "${said}" rather than "${expected} account"`);
+  }
 
   const origin = machine.harnessOrigin({ installUrl: "https://code.visualstudio.com/download", provider: "GitHub" });
   if (origin.site !== "code.visualstudio.com") fail(`the origin host is wrong: ${origin.site}`);
