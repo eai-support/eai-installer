@@ -59,6 +59,9 @@ visible.
 | STATE-11 | Set up | The location has not been chosen yet | One button, at the left, reading Choose location. No path, no greyed text, and nothing that reads as an answer already in. |
 | STATE-12 | Set up | The location has been chosen | The path is shown, with Change location on the right of it. Both controls say "location", matching the question. |
 | STATE-13 | Set up | Any stage | The form is three questions — workspace, name, location. The app name is always editable. |
+| STATE-14 | Set up | The name has not been typed yet | The field is empty with ghost text, and the location question is not shown. Nothing on the screen is pre-answered. |
+| STATE-15 | Set up | Type an app name one character at a time | The location question appears on the first character and does not close again on a hyphen mid-word. Clearing the field closes it. |
+| STATE-16 | Set up | Type a name that is not kebab case | Create app stays disabled, and leaving the field says why. Typing again clears the message. |
 | STATE-08 | Set up | The account has no workspace | No workspace row is shown beside the failure, and every question below stays down. |
 | STATE-09 | Creating | Initialization fails partway | The row that was running is marked failed, the rows after it stay pending, no fifth row appears, and Retry this step is offered. |
 | STATE-10 | Built | The harness opened on the project | The success overlay lands over the hand-off and offers Open the project folder and Done. |
