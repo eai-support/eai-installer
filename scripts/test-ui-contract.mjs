@@ -117,7 +117,7 @@ const DRIVEN_CLASSES = [
   "i3-step", "answered", "i3-num", "i3-foot", "i3-nav",
   "i3-welcome", "i3-tick", "i3-welcome-acts", "i3-welcome-fine", "wide",
   "i4-group", "i4-pick", "i4-row", "i4-steps", "i4-wait",
-  "i4-list", "i4-back", "i4-actions", "i4-eai", "i4-eai-note", "i4-eai-video",
+  "i4-list", "i4-eai", "i4-eai-note", "i4-eai-video", "eai-foot", "i3-foot-end", "over",
   "mark", "tile", "nm", "on", "missing",
   "eai-btn", "primary", "ring", "off", "big", "ghost-quiet",
   "eai-field", "eai-input", "eai-combo", "eai-inner", "eai-err", "eai-note",
@@ -173,6 +173,21 @@ if (!/\.i4-row\.on \.nm \{[^}]*color:\s*var\(--color-foreground\)/s.test(css)) {
    the list, once where it only fills the right edge. */
 if (/class="state"/.test(app)) {
   fail("every AI tool row repeats what its group heading already says");
+}
+
+/* Anchored was not enough: `margin-top: auto` puts the rail at the
+   bottom of the screen and lets it leave with the content when that
+   grows past the window. Sticky is what keeps it where anchored was
+   aiming, and the negative side margins are what stop content showing
+   in the gutters underneath it. */
+if (!/\.eai-screen > \.eai-foot \{[^}]*position:\s*sticky/s.test(css)) {
+  fail("the action rail is not sticky, so the primary can scroll out of view");
+}
+if (!/\.eai-screen > \.eai-foot \{[^}]*margin:[^;]*-34px/s.test(css)) {
+  fail("the sticky rail's background stops at the body's padding, so content shows through beside it");
+}
+if (/\.eai-body \{[^}]*padding:\s*26px 34px 28px/s.test(css)) {
+  fail("the body still owns the bottom padding, which puts a strip of content under the sticky rail");
 }
 
 if (!css.includes("summary::marker") || !css.includes("summary::-webkit-details-marker")) {
