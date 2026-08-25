@@ -118,7 +118,7 @@ const DRIVEN_CLASSES = [
   "i3-welcome", "i3-tick", "i3-welcome-acts", "i3-welcome-fine", "wide",
   "i4-group", "i4-pick", "i4-row", "i4-steps", "i4-wait",
   "i4-list", "i4-back", "i4-actions", "i4-eai", "i4-eai-note", "i4-eai-video",
-  "mark", "tile", "nm", "state", "on", "ready", "missing",
+  "mark", "tile", "nm", "on", "missing",
   "eai-btn", "primary", "ring", "off", "big", "ghost-quiet",
   "eai-field", "eai-input", "eai-combo", "eai-inner", "eai-err", "eai-note",
   "eai-done", "eai-done-card", "tick",
@@ -166,6 +166,13 @@ if (!/\.i4-row \.mark \{[^}]*flex:\s*0 0 16px/s.test(css) || !/\.i4-row \{[^}]*g
 }
 if (!/\.i4-row\.on \.nm \{[^}]*color:\s*var\(--color-foreground\)/s.test(css)) {
   fail("the chosen option's name is still muted — a subject in the same grey as the things you did not pick");
+}
+
+/* The group heading says whether these are here or not. A column on
+   every row repeating it is the same fact twice: once where it organises
+   the list, once where it only fills the right edge. */
+if (/class="state"/.test(app)) {
+  fail("every AI tool row repeats what its group heading already says");
 }
 
 if (!css.includes("summary::marker") || !css.includes("summary::-webkit-details-marker")) {
@@ -356,7 +363,12 @@ for (const name of writtenByRail) {
 /* app.js is not allowed to say "this Mac". Anything that names the
    machine has to come from state-machine.js, where the Windows and
    Linux wordings live beside it and the tests can read all three. */
-for (const line of app.split("\n")) {
+/* Block comments are stripped as well as line comments. A comment
+   explaining why a heading says what it says is not the app saying it,
+   and a guard that cannot tell those apart makes the honest move —
+   writing down the reasoning — the one that fails. */
+const appCode = app.replace(/\/\*[\s\S]*?\*\//g, "");
+for (const line of appCode.split("\n")) {
   const code = line.split("//")[0];
   if (!/["'`]/.test(code)) continue;
   if (/\bthis Mac\b|\bthis PC\b|\bFinder\b|\bxcode-select\b|\bwinget\b/.test(code)) {

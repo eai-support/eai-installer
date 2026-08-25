@@ -100,3 +100,46 @@ never blocks anything on its own. It raises the "cannot reach EAI"
 failure, and the person retries; a wrong-region probe that succeeds is
 also fine, because sign-in then finds out the truth. `BASE_URL_PUBLIC_API`
 overrides the host for anyone who needs it.
+
+---
+
+## KI-05 · The harness screen's primary can sit below the fold
+
+**Status:** open, needs a design decision · **Found:** 2026-08-25
+
+**What somebody would observe.** On *Choose how to work with AI*, in a
+900×720 window, the list can run long enough that **Next step** is below
+the visible area until you scroll. Measured, worst first:
+
+| State | Over the fold |
+| --- | --- |
+| Install failure, nothing installed | 108px |
+| One installed, a not-installed option chosen | 49px |
+| Waiting for a tool to land | 42px |
+| Nothing installed | 14px |
+
+**Why.** The three steps under a chosen option add ~84px, and the bar
+across the top adds ~30px. Both are wanted; together they cost more than
+the screen had spare.
+
+**What is not the cause.** The window size. The design's own frame for
+this screen is 720×583 — narrower and shorter than the window — so it
+fits there comfortably. The difference is structural, not dimensional.
+
+**Three differences from that frame, any of which would recover the
+space.** Each is a design decision rather than a bug fix, so none has
+been made unilaterally:
+
+1. **Back is at the bottom in the frame, at the top here.** The frame
+   ends in a two-ended rail — `‹ Back` on the left, `Next step` on the
+   right — like the Set up screen already does. Here there is a Back
+   button above the title *and* an actions block below. Moving it down
+   would save roughly 54px and make the two screens consistent.
+2. **The primary is full width here, natural width in the frame.** Full
+   width came from the prototype's "the screen ends in one door".
+3. **Check again is stacked above the primary,** which is this app's
+   addition — the frame has no such control. Beside the primary rather
+   than above it would save 52px.
+
+Doing (1) and (3) fits every state except the install failure, where the
+list has genuinely accumulated an extra note and scrolling is honest.

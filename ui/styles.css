@@ -783,15 +783,6 @@ button, input { font-family: inherit; }
   line-height: 18px;
   color: var(--color-foreground);
 }
-.i4-row .state {
-  flex: none;
-  font-family: var(--font-mono);
-  font-size: 12.5px;
-  line-height: 16px;
-  color: var(--color-muted-foreground);
-  white-space: nowrap;
-}
-.i4-row.ready .state { color: var(--color-foreground); }
 /* Not here yet, and not chosen: the name steps back. Choosing it brings
    it forward — a row you have picked is the subject of the screen, and a
    subject in the same grey as the things you did not pick is a screen
