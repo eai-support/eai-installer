@@ -7,153 +7,326 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <main class="shell">
-      <header class="topbar">
-        <div class="brand">
-          <img class="brand-logo" src="assets/eai-square-man-logo.png" alt="" />
-          <div>
-            <p class="eyebrow">Enterprise AI</p>
-            <h1>Enterprise AI Setup</h1>
-          </div>
-        </div>
-        <span id="platform" class="status">Detecting device</span>
-      </header>
+    <!-- The setup app, and nothing around it. The window is the chrome:
+         macOS draws the traffic lights, Windows draws the title bar, and
+         nothing in here should try to draw either of them again.
 
-      <section class="wizard" aria-live="polite">
-        <div class="activity" id="activity" hidden>
-          <div class="activity-heading"><span class="activity-spinner" aria-hidden="true"></span><strong id="activity-title">Preparing setup</strong><span id="activity-step" class="activity-step">Step 1 of 7</span></div>
-          <p id="activity-detail">The installer will show each action as it runs.</p>
-          <div class="activity-meta"><span id="activity-phase">Preparing</span><span id="activity-eta"></span><span id="activity-heartbeat">Elapsed 0s · Screen updated every second · Last installer update just now</span></div>
-          <div class="activity-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Installation progress"><span id="activity-bar"></span></div>
-          <div id="setup-stages" class="setup-stages" aria-label="Setup steps"></div>
-          <details class="activity-log-panel" id="build-summary" open>
-            <summary class="activity-log-heading"><strong>Build summary</strong><span id="activity-log-status">Live updates</span></summary>
-            <ol id="activity-log" class="activity-log" aria-label="Build summary" aria-live="polite"></ol>
-          </details>
-          <div class="admin-password-panel" id="admin-password-panel" hidden>
-            <label for="admin-password">Mac login password <input id="admin-password" type="password" autocomplete="current-password" /></label>
-            <p>Used once to authorize Apple's minimal Git tools. Enterprise AI Setup does not save it and does not open Terminal.</p>
-            <div class="activity-actions"><button class="primary" id="admin-password-submit" type="button">Authorize Git installation</button><button class="secondary" id="admin-password-cancel" type="button">Cancel</button></div>
-          </div>
-          <div class="activity-actions"><button class="secondary" id="retry-install" data-action="install-all" type="button" hidden>Try again</button><button class="secondary" id="retry-workspaces" data-action="retry-workspaces" type="button" hidden>Try again</button></div>
-        </div>
-        <section class="wizard-panel current" data-panel="0" aria-labelledby="welcome-title">
-          <img class="panel-logo" src="assets/eai-square-man-logo.png" alt="Enterprise AI" />
-          <p class="eyebrow">Welcome</p>
-          <h2 id="welcome-title">Set up this computer for EAI</h2>
-          <p class="lead">Prepare this computer, sign in securely, and create your first EAI app.</p>
-          <ul class="promise-list">
-            <li>Required developer tools ready</li>
-            <li>Secure browser sign-in</li>
-            <li>App folder and project created</li>
-            <li>Only missing tools installed</li>
-          </ul>
-          <div class="panel-actions end">
-            <button class="primary" data-action="start">Start setup</button>
-          </div>
-        </section>
+         Seven screens live in this one body, one visible at a time. The
+         screen ids match ui/state-machine.js exactly — app.js reaches
+         into this markup by id, and scripts/test-ui-contract.mjs fails
+         the build if the two ever drift apart. -->
+    <div class="skin-setup eai" id="setupApp">
+      <div class="eai-body">
 
-        <section class="wizard-panel" data-panel="3" aria-labelledby="signin-title" hidden>
-          <h2 id="signin-title">Sign in to EAI</h2>
-          <p class="lead">Sign in securely in your browser. Your password stays there.</p>
-          <div class="callout">
-            <strong>Next</strong>
-            <p>Your browser will open. After sign-in, setup continues automatically.</p>
-          </div>
-          <div class="panel-actions end">
-            <button class="primary" data-action="login">Sign in with browser</button>
-            <button class="secondary" data-action="signup">Create an EAI account</button>
-          </div>
-          <p class="quiet">New to EAI? Create an account first, then return here to sign in.</p>
-        </section>
+        <!-- A · Sign in.
 
-        <section class="wizard-panel" data-panel="4" aria-labelledby="app-title" hidden>
-          <h2 id="app-title">Start your EAI app</h2>
-          <p class="lead">Name your app and choose its parent folder.</p>
-          <div class="form-grid">
-            <div id="company-tenant-field" hidden>
-              <label for="company-tenant">Company workspace
-                <select id="company-tenant" aria-describedby="company-tenant-help"></select>
+             One status, with two faces. #checkRows is the whole of it:
+             either a tick saying the computer is ready, or a row for
+             each thing standing in the way. Never both — "ready" is a
+             claim that sign-in can proceed, so nothing that stops it may
+             sit beside it. -->
+        <div class="eai-screen gap-8" data-screen="signin">
+          <div class="eai-brand">
+            <img src="assets/eai-square-man-logo.png" alt="Enterprise AI" />
+          </div>
+
+          <div class="eai-head">
+            <h3>Sign in to Enterprise AI</h3>
+            <p id="signinSub">Use the account you signed up with. Your browser opens for the password, and it stays there.</p>
+          </div>
+
+          <div class="eai-rows" id="checkRows" role="status" aria-live="polite"></div>
+
+          <!-- macOS only, and only while Apple's own installer is asking.
+               Windows and Linux never see it: their package managers put
+               their own prompt on screen, which is theirs to draw. -->
+          <div class="eai-note admin-note" id="adminPanel" hidden>
+            <div class="tx">
+              <b>Authorise the Git installation</b>
+              <span>Enter your Mac login password once. EAI Setup uses it only for Apple's minimal Command Line Tools, never saves it, and does not open Terminal.</span>
+              <label class="eai-field admin-field" for="adminPassword">
+                <input class="eai-input" id="adminPassword" type="password" autocomplete="current-password" />
               </label>
-              <p class="field-help" id="company-tenant-help">Choose where this app is managed.</p>
+              <div class="eai-acts gap-2">
+                <button class="eai-btn" type="button" id="adminCancel">Not now</button>
+                <button class="eai-btn primary" type="button" id="adminSubmit">Authorise</button>
+              </div>
             </div>
-            <div id="app-selection-field" hidden>
-              <label for="app-selection">App
-                <select id="app-selection" aria-describedby="app-selection-help"></select>
-              </label>
-              <p class="field-help" id="app-selection-help">Use an existing app or choose Create a new app.</p>
-            </div>
-            <label for="project-name">Project name <input id="project-name" placeholder="customer-portal" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" aria-describedby="project-name-help" /></label>
-            <p class="field-help" id="project-name-help">Use lowercase words separated by hyphens. Example: <code>customer-portal</code>.</p>
-            <label for="project-directory">Parent folder
-              <span class="folder-picker">
-                <input id="project-directory" placeholder="Choose a parent folder" autocomplete="off" aria-describedby="project-directory-help" />
-                <button class="secondary" id="choose-folder" data-action="choose-folder" type="button">Choose folder</button>
-              </span>
-            </label>
           </div>
-          <p class="field-help" id="project-directory-help">A new folder with your project name will be created here. Use Choose folder to open Finder or File Explorer.</p>
-          <div class="panel-actions end">
-            <button class="primary" id="init-app" data-action="init">Create and initialise app</button>
+
+          <div class="eai-acts gap-2">
+            <button class="eai-btn" type="button" id="setupCreate">Create an EAI account</button>
+            <button class="eai-btn primary ring" type="button" id="setupSignin">Sign in with browser</button>
           </div>
-        </section>
-
-        <section class="wizard-panel" data-panel="5" aria-labelledby="complete-title" hidden>
-          <div class="panel-icon success" aria-hidden="true">OK</div>
-          <h2 id="complete-title">Choose how to work with AI</h2>
-          <p class="lead" id="complete-message">Your EAI app is ready. Choose an AI workspace, then follow the short sign-in step it shows.</p>
-          <div class="completion-location" id="complete-location" hidden></div>
-          <div id="ai-surface-status" class="callout"><strong>Finding your AI workspaces</strong><p>EAI is checking this computer. No provider account or project content is read.</p></div>
-          <fieldset id="ai-surface-field" class="surface-field" hidden>
-            <legend>Choose an AI workspace</legend>
-            <div class="surface-columns">
-              <span aria-hidden="true"></span>
-              <span>AI workspace</span>
-              <button id="recommendation-help" class="column-help" type="button" aria-haspopup="dialog" aria-controls="recommendation-dialog">
-                Recommendation <span class="help-icon" aria-hidden="true">?</span>
-              </button>
-            </div>
-            <div id="ai-surface-options" class="surface-options"></div>
-          </fieldset>
-          <p id="ai-surface-next" class="surface-next" hidden></p>
-          <p id="ai-surface-consent" class="quiet" hidden>The selected provider can read this project and use your provider account. EAI does not see or store that account.</p>
-          <div class="panel-actions end">
-            <button class="secondary" id="open-project" data-action="open-project" hidden>Open project folder</button>
-            <button class="secondary" id="refresh-ai" data-action="refresh-ai" hidden>Check again</button>
-            <button class="secondary" data-action="finish">Close setup</button>
-            <button class="primary" id="start-ai" data-action="start-ai" hidden>Open AI workspace</button>
-          </div>
-        </section>
-
-        <output id="output" class="output" aria-live="polite" hidden></output>
-      </section>
-
-      <footer>EAI Setup never stores your password or API secrets.</footer>
-    </main>
-    <dialog id="recommendation-dialog" class="recommendation-dialog" aria-labelledby="recommendation-title">
-      <div class="dialog-heading">
-        <div>
-          <p class="eyebrow">Recommendation</p>
-          <h2 id="recommendation-title">How the Harvey ball is scored</h2>
         </div>
-        <button id="recommendation-close" class="dialog-close" type="button" aria-label="Close recommendation explanation">Close</button>
+
+        <!-- B · Coming back from the browser.
+
+             On the happy path this is a beat and nobody acts on it. It
+             is also the only place the browser hand-off can be reported
+             on: the app opens a browser and then waits on something it
+             does not control — a tab somebody can close, a link that
+             expires, a callback a corporate proxy can eat. The failed
+             face is this one with the tick turned over. -->
+        <div class="eai-screen" data-screen="welcome" hidden>
+          <div class="i3-welcome" id="welcomeBlock">
+            <span class="i3-tick" id="welcomeMark" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.5 4.5L19 7.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </span>
+            <h3 id="welcomeTitle">Signed in</h3>
+            <p id="welcomeSub">Opening your browser…</p>
+
+            <!-- Only when the browser never came back. "Try again" is the
+                 primary because the usual cause is a closed tab, and one
+                 press fixes that. The link is the other half, and it is
+                 the half designs forget: if the callback is being
+                 swallowed on the way home, retrying does the same nothing
+                 a second time. -->
+            <div class="i3-welcome-acts" id="welcomeActs" hidden>
+              <div class="eai-acts gap-2">
+                <button class="eai-btn" type="button" id="welcomeCopy">Copy the sign-in link</button>
+                <button class="eai-btn primary" type="button" id="welcomeRetry">Try again</button>
+              </div>
+              <p class="i3-welcome-fine" id="welcomeFine">If your browser never opened, paste the link into it yourself.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- C · Setup, on one page.
+
+             Questions revealed downwards as each is answered, with no
+             Continue between them: a click whose only meaning is "yes, I
+             did just answer that" is a click worth deleting. The numbers
+             are written by app.js rather than typed here, because the
+             app picker only exists for accounts whose workspace already
+             has apps and the list has to renumber around it. -->
+        <div class="eai-screen gap-6" data-screen="setup" hidden>
+          <div class="eai-head">
+            <h3>Let's get set up</h3>
+            <p id="setupSub">Signed in. Your workspace came with you — a few things, and your app exists.</p>
+          </div>
+
+          <div class="i3-steps" id="setupSteps">
+
+            <section class="i3-step" data-step="workspace">
+              <div class="i3-step-head">
+                <span class="i3-num">1</span>
+                <div class="tx">
+                  <b>Choose a workspace</b>
+                  <span>Where this app is managed, and who it belongs to.</span>
+                </div>
+              </div>
+              <div class="eai-rows" id="wsRows"></div>
+              <div class="eai-note" id="wsNote" hidden>
+                <i class="mk fail bang">!</i>
+                <div class="tx">
+                  <b id="wsNoteTitle">No workspaces for this account</b>
+                  <span id="wsNoteBody"></span>
+                </div>
+              </div>
+              <div class="eai-acts gap-2 pt-2" id="wsActs" hidden>
+                <button class="eai-btn" type="button" id="wsRetry">Try again</button>
+              </div>
+            </section>
+
+            <!-- Not in the tested prototype, because self-serve sign-up
+                 has no existing apps to choose between. Company accounts
+                 do, and connecting a project to the wrong one is not
+                 something a later screen can undo, so it is a question
+                 rather than a guess. Hidden entirely when the workspace
+                 has no apps, which is the common case. -->
+            <section class="i3-step" data-step="app" hidden>
+              <div class="i3-step-head">
+                <span class="i3-num">2</span>
+                <div class="tx">
+                  <b>New app, or one you already have</b>
+                  <span>Connect this project to an app that already exists, or create a new one.</span>
+                </div>
+              </div>
+              <div class="eai-rows" id="appRows"></div>
+            </section>
+
+            <section class="i3-step" data-step="name" hidden>
+              <div class="i3-step-head">
+                <span class="i3-num">2</span>
+                <div class="tx">
+                  <b>Name your app</b>
+                  <span id="nameHelp">Kebab case only. Example: workflow-name-here</span>
+                </div>
+              </div>
+              <div class="eai-field" data-field="name">
+                <input class="eai-input" type="text" id="projName" placeholder="workflow-name-here" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" />
+                <div class="eai-err" hidden><i class="mk fail bang sm">!</i><span></span></div>
+              </div>
+            </section>
+
+            <section class="i3-step" data-step="folder" hidden>
+              <div class="i3-step-head">
+                <span class="i3-num">3</span>
+                <div class="tx">
+                  <b>Choose a location</b>
+                  <span id="folderHelp">Where the app is saved. We recommend a new folder — the chooser has a New Folder button.</span>
+                </div>
+              </div>
+              <div class="eai-field" data-field="folder">
+                <button class="eai-btn loc-start" type="button" id="chooseFolderStart">Choose location</button>
+                <div class="eai-combo" id="locCombo" hidden>
+                  <input type="text" id="projFolder" readonly />
+                  <button class="eai-inner" type="button" id="chooseFolder">Change folder</button>
+                </div>
+                <div class="eai-err" hidden><i class="mk fail bang sm">!</i><span></span></div>
+              </div>
+            </section>
+
+          </div>
+
+          <!-- The anchored footer: Back on the left, the primary on the
+               right, both there from question one and the primary greyed
+               until the last answer lands. A rail with Back at one end
+               and where-you-are-going at the other reads as a step in
+               something, which is what this is. -->
+          <div class="i3-foot">
+            <button class="eai-btn i3-nav" type="button" id="setupBack">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M14.5 6l-6 6 6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Back
+            </button>
+            <button class="eai-btn primary i3-nav" type="button" id="createApp" disabled>
+              Create app
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9.5 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- D · eai init, said in the words of the flow board. -->
+        <div class="eai-screen gap-6" data-screen="running" hidden>
+          <div class="eai-head">
+            <h3 id="runTitle">Creating your EAI app</h3>
+            <p id="runSub">Downloading the app template into your folder.</p>
+          </div>
+
+          <div class="eai-rows" id="runLines" role="status" aria-live="polite"></div>
+
+          <div class="eai-note" id="runNote" hidden>
+            <i class="mk fail bang">!</i>
+            <div class="tx">
+              <b id="runNoteTitle"></b>
+              <span id="runNoteBody"></span>
+            </div>
+          </div>
+
+          <div class="eai-acts gap-3 pt-2" id="runActs" hidden>
+            <button class="eai-btn" type="button" id="runBack">Back</button>
+            <button class="eai-btn primary" type="button" id="runRetry">Retry this step</button>
+          </div>
+        </div>
+
+        <!-- E · Choosing a harness.
+
+             Two groups, and which group a tool is in is the only thing
+             on this screen that changes between a computer that already
+             has the tool and one that does not. Ready first; the rest
+             come from their makers, and the alert inside the chosen row
+             says that whole trip up front rather than a step at a time. -->
+        <div class="eai-screen gap-6" data-screen="done" hidden>
+          <button class="i4-back" type="button" id="harnessBack">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M14.5 6l-6 6 6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Back
+          </button>
+
+          <div class="eai-head">
+            <h3>Choose how to work with AI</h3>
+            <p id="harnessSub"></p>
+          </div>
+
+          <div class="eai-rows i4-list" id="harnessRows"></div>
+
+          <div class="eai-note" id="harnessNote" hidden>
+            <i class="mk fail bang">!</i>
+            <div class="tx">
+              <b id="harnessNoteTitle"></b>
+              <span id="harnessNoteBody"></span>
+            </div>
+          </div>
+
+          <div class="i4-actions">
+            <button class="eai-btn ghost-quiet" type="button" id="harnessRefresh" hidden>Check again</button>
+            <button class="eai-btn primary big" type="button" id="harnessGo">Next</button>
+          </div>
+        </div>
+
+        <!-- F · The hand-off, on its own.
+
+             Everything on it is about the window we are about to hand
+             them to and cannot write into. The button says which one, by
+             name. Every line here that isn't "type /eai" is a line
+             competing with it, so there are none. -->
+        <div class="eai-screen gap-6" data-screen="handoff" hidden>
+          <button class="i4-back" type="button" id="handoffBack">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M14.5 6l-6 6 6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Back
+          </button>
+
+          <div class="eai-head">
+            <h3 id="handoffTitle">One last thing</h3>
+            <p id="handoffSub"></p>
+          </div>
+
+          <div class="i4-eai" id="harnessEai">
+            <div class="i4-eai-note">
+              <div class="tx">
+                <b>When it opens, type <code>/eai</code> and press enter</b>
+                <span id="harnessEaiBody"></span>
+              </div>
+            </div>
+            <div class="i4-eai-video" id="harnessVideo" data-app="your AI tool" data-project="your app"></div>
+          </div>
+
+          <div class="eai-note" id="handoffNote" hidden>
+            <i class="mk fail bang">!</i>
+            <div class="tx">
+              <b id="handoffNoteTitle"></b>
+              <span id="handoffNoteBody"></span>
+            </div>
+          </div>
+
+          <div class="i4-actions">
+            <button class="eai-btn ghost-quiet" type="button" id="handoffFolder">Open the project folder</button>
+            <button class="eai-btn primary big" type="button" id="handoffGo">Open in your AI tool</button>
+          </div>
+        </div>
+
       </div>
-      <p>The ball shows how complete the current EAI handoff is for a general user. One quarter is awarded for each capability:</p>
-      <ol class="recommendation-criteria">
-        <li>Opens the project automatically.</li>
-        <li>Starts with the prepared EAI first request.</li>
-        <li>Uses the repository's EAI and Gofer instructions.</li>
-        <li>Provides an integrated visual project and chat workspace.</li>
-      </ol>
-      <div class="recommendation-scale" aria-label="Harvey ball score guide">
-        <span><span class="harvey-ball" style="--recommendation-score: 4" aria-hidden="true"></span> Full: best fit</span>
-        <span><span class="harvey-ball" style="--recommendation-score: 3" aria-hidden="true"></span> Three quarters: strong fit</span>
-        <span><span class="harvey-ball" style="--recommendation-score: 2" aria-hidden="true"></span> Half: supported</span>
-        <span><span class="harvey-ball" style="--recommendation-score: 1" aria-hidden="true"></span> Quarter: basic handoff</span>
+
+      <!-- Not a screen and not in the prototype: the record of what the
+           installer actually did, for the one call in fifty where the
+           designed sentence is not enough and somebody has to be told
+           which command failed. Shut by default, on every screen, and
+           never in the way of the primary. -->
+      <details class="eai-diag" id="diagnostics">
+        <summary><span>Setup details</span><span class="eai-diag-status" id="diagStatus"></span></summary>
+        <ol class="eai-diag-log" id="diagLog" aria-live="polite"></ol>
+        <p class="eai-diag-foot" id="diagFoot"></p>
+      </details>
+    </div>
+
+    <!-- G · Built. Lands over everything, because it is the end. -->
+    <div class="eai-done" id="builtOverlay" hidden>
+      <div class="eai-done-card">
+        <span class="tick">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.5 4.5L19 7.5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+        <h3 id="builtTitle">That's it — you're building</h3>
+        <p id="builtBody"></p>
+        <div class="eai-acts gap-2">
+          <button class="eai-btn" type="button" id="builtFolder">Open the project folder</button>
+          <button class="eai-btn primary" type="button" id="builtDone">Done</button>
+        </div>
       </div>
-      <p class="quiet">This measures EAI workflow integration, not model intelligence, price, security, or provider quality. Ready and Official download describe installation status separately.</p>
-    </dialog>
+    </div>
+
     <script src="wizard-state.js"></script>
+    <script src="state-machine.js"></script>
+    <script src="video.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

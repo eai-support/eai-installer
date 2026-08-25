@@ -208,16 +208,23 @@ if (rust.includes("Command::new(user") || rust.includes("shell = user")) {
 
 console.log("bootstrap safety checks ok");
 
+/* ------------------------------------------------------------------
+   The wizard's structure, after the state-machine redesign.
+
+   Every assertion below was one before it, aimed at the same problem in
+   the wizard-panel version of this app. The screens changed; the things
+   worth guarding did not. Where the old markup is gone entirely, the
+   check moved to whatever now carries the same responsibility, and
+   where a control was deliberately removed the check that it is gone
+   is here so it does not creep back in.
+------------------------------------------------------------------- */
+
 const wizard = await readFile(new URL("../ui/index.html", import.meta.url), "utf8");
-const activityStart = wizard.indexOf('class="activity"');
-const firstPanelStart = wizard.indexOf('class="wizard-panel');
-const retryWorkspaceControl = wizard.indexOf('id="retry-workspaces"');
-if (retryWorkspaceControl < activityStart || retryWorkspaceControl > firstPanelStart) {
-  throw new Error("wizard: workspace retry must remain visible independently of the current panel");
-}
+const machineSource = await readFile(new URL("../ui/state-machine.js", import.meta.url), "utf8");
+
 const brandLogo = await readFile(new URL("../ui/assets/eai-square-man-logo.png", import.meta.url));
 if (brandLogo.length < 1024) throw new Error("wizard: Enterprise AI logo asset is missing or unexpectedly small");
-for (const brandElement of ["Enterprise AI Setup", "assets/eai-square-man-logo.png", "class=\"brand-logo\"", "class=\"panel-logo\""]) {
+for (const brandElement of ["Enterprise AI Setup", "assets/eai-square-man-logo.png", 'class="eai-brand"']) {
   if (!wizard.includes(brandElement)) throw new Error(`wizard: branding is missing ${brandElement}`);
 }
 const bundleLogo = await readFile(new URL("../src-tauri/icons/icon.png", import.meta.url));
@@ -226,86 +233,166 @@ const bundleLogoSource = await readFile(new URL("../src-tauri/icons/icon.svg", i
 for (const color of ["#123d5b", "#83d8ef"]) {
   if (!bundleLogoSource.includes(color)) throw new Error(`bundle: Enterprise AI logo source is missing ${color}`);
 }
-for (const panel of ["0", "3", "4", "5"]) {
-  if (!wizard.includes(`data-panel="${panel}"`)) throw new Error(`wizard: missing panel ${panel}`);
+
+// The seven screens of the tested state machine, and the overlay the
+// last one lands in.
+for (const screen of ["signin", "welcome", "setup", "running", "done", "handoff"]) {
+  if (!wizard.includes(`data-screen="${screen}"`)) throw new Error(`wizard: missing screen ${screen}`);
 }
-for (const control of ["data-action=\"start\"", "data-action=\"login\"", "data-action=\"signup\"", "data-action=\"retry-workspaces\"", "data-action=\"choose-folder\"", "data-action=\"init\"", "data-action=\"start-ai\"", "data-action=\"finish\""]) {
-  if (!wizard.includes(control)) throw new Error(`wizard: missing control ${control}`);
+if (!wizard.includes('id="builtOverlay"')) throw new Error("wizard: the built state has no overlay");
+// The panel model it replaced must not come back alongside it.
+if (wizard.includes("data-panel=") || wizard.includes("wizard-panel")) {
+  throw new Error("wizard: the old numbered panel model is back beside the state machine");
 }
-for (const value of ["id=\"ai-surface-status\"", "id=\"ai-surface-options\"", "id=\"ai-surface-next\"", "id=\"ai-surface-consent\"", "id=\"refresh-ai\"", "id=\"recommendation-help\"", "id=\"recommendation-dialog\"", "id=\"recommendation-close\"", "How the Harvey ball is scored", "Choose how to work with AI", "Check again", "provider account"]) {
-  if (!wizard.includes(value)) throw new Error(`wizard: AI workspace handoff is missing ${value}`);
+
+// Sign-in holds the readiness result and both of its ways out.
+for (const value of ['id="checkRows"', 'id="setupSignin"', 'id="setupCreate"', 'id="signinSub"']) {
+  if (!wizard.includes(value)) throw new Error(`wizard: sign-in is missing ${value}`);
 }
-for (const value of ["id=\"company-tenant-field\"", "id=\"company-tenant\"", "Company workspace", "Choose where this app is managed"]) {
-  if (!wizard.includes(value)) throw new Error(`wizard: missing company workspace selection: ${value}`);
+if (!wizard.includes("Create an EAI account")) throw new Error("wizard: account signup action is missing");
+
+// The browser hand-off can fail, and the screen that reports it has the
+// pair of controls that failure needs.
+for (const value of ['id="welcomeMark"', 'id="welcomeTitle"', 'id="welcomeSub"', 'id="welcomeActs"', 'id="welcomeCopy"', 'id="welcomeRetry"', "Copy the sign-in link"]) {
+  if (!wizard.includes(value)) throw new Error(`wizard: signed-in beat is missing ${value}`);
 }
-for (const value of ["id=\"app-selection-field\"", "id=\"app-selection\"", "Create a new app", "Use an existing app"]) {
-  if (!wizard.includes(value)) throw new Error(`wizard: missing existing app selection: ${value}`);
+
+// The form, revealed downwards, with its questions and its rail.
+for (const value of ['data-step="workspace"', 'data-step="app"', 'data-step="name"', 'data-step="folder"', 'id="wsRows"', 'id="appRows"', 'id="projName"', 'id="projFolder"', 'id="chooseFolder"', 'id="chooseFolderStart"', 'id="createApp"', 'id="setupBack"']) {
+  if (!wizard.includes(value)) throw new Error(`wizard: the setup form is missing ${value}`);
 }
-for (const value of ["id=\"choose-folder\"", "Use lowercase words separated by hyphens", "Parent folder", "A new folder with your project name will be created here"]) {
-  if (!wizard.includes(value)) throw new Error(`wizard: missing project location guidance: ${value}`);
+if (!wizard.includes("Kebab case only")) throw new Error("wizard: the app name question does not say what shape a name is");
+if (!wizard.includes("Choose a workspace")) throw new Error("wizard: missing company workspace selection");
+if (!wizard.includes("Connect this project to an app that already exists")) {
+  throw new Error("wizard: existing apps can no longer be connected to a project");
+}
+if (!wizard.includes('id="createApp" disabled')) {
+  throw new Error("wizard: the primary is enabled before the form has been answered");
 }
 for (const value of ['autocapitalize="none"', 'autocorrect="off"', 'spellcheck="false"']) {
   if (!wizard.includes(value)) throw new Error(`wizard: project name permits unwanted typing assistance: ${value}`);
 }
-if (!wizard.includes("Create an EAI account")) throw new Error("wizard: account signup action is missing");
-for (const value of ["Choose how to work with AI", "id=\"complete-location\"", "data-action=\"open-project\"", "Open project folder"]) {
-  if (!wizard.includes(value)) throw new Error(`wizard: completion guidance is missing: ${value}`);
+// A workspace that could not be listed has a way to try again, and it
+// lives on the question it belongs to rather than in a floating bar.
+if (!wizard.includes('id="wsNote"') || !wizard.includes('id="wsRetry"')) {
+  throw new Error("wizard: a failed workspace check has no retry beside the question it blocks");
+}
+const wsQuestionStart = wizard.indexOf('data-step="workspace"');
+const wsQuestionEnd = wizard.indexOf('data-step="app"');
+if (wizard.indexOf('id="wsRetry"') < wsQuestionStart || wizard.indexOf('id="wsRetry"') > wsQuestionEnd) {
+  throw new Error("wizard: workspace retry has drifted away from the workspace question");
+}
+
+// Creating, as rows rather than a command log, with an honest retry.
+for (const value of ['id="runLines"', 'id="runTitle"', 'id="runSub"', 'id="runNote"', 'id="runRetry"', 'id="runBack"']) {
+  if (!wizard.includes(value)) throw new Error(`wizard: the creating screen is missing ${value}`);
+}
+
+// Choosing a harness, and the hand-off it leads to.
+for (const value of ['id="harnessRows"', 'id="harnessSub"', 'id="harnessNote"', 'id="harnessGo"', 'id="harnessRefresh"', 'id="harnessBack"', "Choose how to work with AI", "Check again"]) {
+  if (!wizard.includes(value)) throw new Error(`wizard: AI tool selection is missing ${value}`);
+}
+for (const value of ['id="handoffTitle"', 'id="handoffSub"', 'id="harnessEaiBody"', 'id="harnessVideo"', 'id="handoffGo"', 'id="handoffBack"', "<code>/eai</code>"]) {
+  if (!wizard.includes(value)) throw new Error(`wizard: the hand-off instruction is missing ${value}`);
+}
+if (!wizard.includes('id="builtFolder"') || !wizard.includes('id="handoffFolder"')) {
+  throw new Error("wizard: the finished project cannot be opened from the screens that end the flow");
+}
+// Harvey balls were removed on purpose: a pie chart scoring somebody
+// else's product, on the screen where they choose it, was answering a
+// question nobody asked. Grouped rows say the same thing in words.
+for (const removed of ["harvey-ball", "recommendation-dialog", "How the Harvey ball is scored", "Harvey ball"]) {
+  if (wizard.includes(removed)) throw new Error(`wizard: the Harvey ball scoring is back: ${removed}`);
+}
+if (!machineSource.includes("Ready on ") || !machineSource.includes("Not installed")) {
+  throw new Error("wizard: the AI tool list no longer separates what is installed from what is not");
+}
+if (!machineSource.includes("your app is already created either way")) {
+  throw new Error("wizard: leaving for a vendor site no longer reassures that the app already exists");
+}
+
+// The macOS-only password moment, and the record of what actually ran.
+for (const control of ['id="adminPanel"', 'id="adminPassword"', 'id="adminSubmit"', 'id="adminCancel"', "does not open Terminal"]) {
+  if (!wizard.includes(control)) throw new Error(`wizard: macOS Git authorisation is missing: ${control}`);
+}
+for (const control of ['id="diagnostics"', 'id="diagLog"', 'id="diagStatus"', "Setup details"]) {
+  if (!wizard.includes(control)) throw new Error(`wizard: the record of what the installer did is missing: ${control}`);
+}
+// Every button in a screen is a button, not a submit in disguise.
+for (const match of wizard.matchAll(/<button\b(?![^>]*type="button")[^>]*>/g)) {
+  throw new Error(`wizard: a control can accidentally submit a form: ${match[0]}`);
 }
 if (wizard.includes('id="next-command"') || wizard.includes("completion-command")) {
   throw new Error("wizard: internal init command must not be shown on the completion screen");
 }
-for (const obsolete of ["progress-area", "Step 3 of 6", "Step ${index + 1} of ${steps.length}", "Install missing tools", "I am signed in"]) {
+for (const obsolete of ["progress-area", "Step 3 of 6", "Install missing tools", "I am signed in", 'id="install-items"']) {
   if (wizard.includes(obsolete)) throw new Error(`wizard: unnecessary user step remains: ${obsolete}`);
 }
-if (!wizard.includes('id="retry-install"')) throw new Error("wizard: failed installation has no retry control");
-if (!wizard.includes('id="retry-install" data-action="install-all" type="button"')) throw new Error("wizard: install retry control can accidentally submit a form");
-for (const control of ["id=\"activity\"", "id=\"activity-title\"", "id=\"activity-step\"", "id=\"activity-detail\"", "id=\"activity-eta\"", "id=\"activity-heartbeat\"", "id=\"setup-stages\"", "id=\"build-summary\"", "id=\"activity-log\"", "id=\"admin-password\"", "id=\"admin-password-submit\""]) {
-  if (!wizard.includes(control)) throw new Error(`wizard: missing activity status: ${control}`);
-}
-if (wizard.includes('id="install-items"')) throw new Error("wizard: legacy duplicate installation status list must not be rendered");
-if (!wizard.includes("Build summary")) throw new Error("wizard: build summary heading is missing");
+
 const app = await readFile(new URL("../ui/app.js", import.meta.url), "utf8");
-if (!app.includes('writeE2eReceipt("app", "Apps could not be loaded for the release-test workspace.")')) throw new Error("wizard: release evidence misclassifies app discovery as a tenant failure");
-if (!app.includes("EAIWizard.resolveTenantSelection(companyTenants, selectedCompanyTenantId)")) throw new Error("wizard: rendering can clear a valid release-test tenant selection");
-if (!/if \(tenant\.appsLoaded\) \{\s+if \(retryWorkspaces\) \{\s+retryWorkspaces\.hidden = true;/.test(app)) throw new Error("wizard: cached app recovery leaves a stale retry action visible");
+
+// The release receipt still knows whether a platform app was created.
+if (!app.includes('writeE2eReceipt("app", "Apps could not be loaded for the release-test workspace.")')) {
+  throw new Error("wizard: release evidence misclassifies app discovery as a tenant failure");
+}
+if (!app.includes("helpers.resolveTenantSelection(tenants, facts.selectedTenantId)")) {
+  throw new Error("wizard: rendering can clear a valid release-test tenant selection");
+}
 if (app.includes('steps.push("homebrew")')) throw new Error("wizard: Homebrew must not be a required setup step");
 if (app.includes("console.info(result.output)")) throw new Error("wizard: raw installer command output must not be written to the browser console");
-if (app.split("\n").some((line) => line.includes("setActivity(") && line.includes("String(error)"))) {
-  throw new Error("wizard: raw exception details must not be written to the build summary");
+
+// Raw exception text belongs in the record, never in a designed
+// sentence. `note()` is the record; anything that paints a screen is not.
+for (const line of app.split("\n")) {
+  if (!/String\(error\)/.test(line)) continue;
+  if (/writeE2eReceipt|console\.error/.test(line)) continue;
+  throw new Error(`wizard: an unfiltered exception reaches the interface: ${line.trim()}`);
 }
-if (app.includes("initialComputerCheck")) throw new Error("wizard: repeat computer checks can leave the stage active");
-if (!app.includes("setActivity") || !app.includes("Installation complete") || !app.includes("listenForBootstrapProgress") || !app.includes("eventApi.listen") || !app.includes("setDetectionState") || !app.includes("phaseForTitle") || !app.includes("async function startSetup") || !app.includes("window.setTimeout(() => startSetup(), 250)") || !app.includes("setStep(4)") || !app.includes("async function runSignup") || !app.includes("open_signup") || !app.includes("dialog.open") || !app.includes("choose-folder") || !app.includes("get_company_tenants") || !app.includes("get_company_apps") || !app.includes("loadCompanyApps") || !app.includes("describeWorkspaceFailure") || !app.includes("companyTenantId") || !app.includes("appKey") || !app.includes("renderCompanyApps") || !app.includes("open_project") || !app.includes("projectPath") || !app.includes("initInProgress") || !app.includes("setInitButtonBusy") || !app.includes("aria-busy") || !app.includes("describeInitFailure") || !app.includes('showOutput(failure.title, `${failure.detail} Next: ${failure.next}`)')) {
-  throw new Error("wizard: live activity status updates are missing");
+for (const value of ["helpers.cleanText(error)", "helpers.cleanText(result.message)"]) {
+  if (!app.includes(value)) throw new Error(`wizard: diagnostics are not stripped of terminal control sequences: ${value}`);
 }
-for (const value of ["loadAiSurfaces", "renderAiSurfaces", "startAiSurface", "refreshAiSurfaces", "updateAiSurfaceControls", "createHarveyBall", "aiSurfaceRecommendation", "showModal", "aiSurfaceGuidance", "GitHub Copilot app", "GitHub Copilot CLI", "copilot-desktop", "copilot-cli", "detect_ai_surfaces", "start_ai_surface", "install_ai_surface"]) {
-  if (!app.includes(value)) throw new Error(`wizard: AI workspace behavior is missing ${value}`);
+
+// The wiring the flow cannot work without.
+for (const value of [
+  "listenForBootstrapProgress", "eventApi.listen", "bootstrap-progress", "bootstrap-summary", "bootstrap-signin-url",
+  "detect_environment", "check_connectivity", "run_bootstrap", "get_company_tenants", "get_company_apps",
+  "open_signup", "detect_ai_surfaces", "start_ai_surface", "install_ai_surface", "open_project", "write_e2e_receipt",
+  "dialog.open", "companyTenantId", "appKey", "projectPath",
+  "helpers.describeWorkspaceFailure", "helpers.describeAppFailure", "helpers.describeInitFailure",
+  "helpers.summarizeCommandOutput", "helpers.prerequisitesReady", "helpers.isKebabCase", "helpers.chooseAiSurface",
+  "machine.faultsInForce", "machine.setupSteps", "machine.runRows", "machine.harnessGroups", "machine.classifyBootstrapFailure",
+  "function reset()", "function paint()", "requestMacAdminPassword", "startHarnessPoll", "stopHarnessPoll",
+]) {
+  if (!app.includes(value)) throw new Error(`wizard: the state-machine driver is missing ${value}`);
 }
-for (const value of ["setInterval(refreshActivityHeartbeat, 1000)", "Elapsed ${elapsed}s", "Screen updated every second", "Last installer update", "Waiting for your input", "waitingDetails", "activityEvents", "Stopped with error", "Checking the required tools", "journeyStages", "renderJourneyStages", "setJourneyStage", "bootstrap-summary", "recordSafeSummary", "summarizeCommandOutput"]) {
-  if (!app.includes(value)) throw new Error(`wizard: per-second progress feedback is missing: ${value}`);
+// paint() must always rebuild from the reset, never patch what was left.
+if (!/function paint\(\)[\s\S]{0,900}?\breset\(\);/.test(app)) {
+  throw new Error("wizard: paint() no longer resets before it draws, so a state can be half-applied");
 }
-if (!app.includes('querySelectorAll("details[open]")')) throw new Error("wizard: stage refresh discards the user's expanded build details");
-for (const repetitive of ["activityLastHeartbeatLogAt", 'recordActivityEvent(\n      "Still working"']) {
-  if (app.includes(repetitive)) throw new Error(`wizard: repetitive heartbeat remains in build summary: ${repetitive}`);
+// The waiting box promises the screen updates by itself. It has to.
+if (!app.includes("setInterval") || !app.includes("waitingForSurfaceId")) {
+  throw new Error("wizard: the waiting state does not actually watch for the tool to land");
 }
-if (app.includes('git: "macOS may show an installer window. If it appears, click Install; otherwise no action is needed."')) {
-  throw new Error("wizard: macOS Git fallback still tells users to wait for an unspecified installer window");
+if (!/stopHarnessPoll\(\);/.test(app.slice(app.indexOf("function startHarnessPoll")))) {
+  throw new Error("wizard: the waiting poll is never stopped");
 }
-if (!app.includes("Working - no action needed") || !app.includes("Apple Software Update is still installing Git")) {
-  throw new Error("wizard: long-running macOS installs do not explain the live status clearly");
-}
-if (!app.includes('activity.hidden = !active && phase !== "Error"') || !app.includes("requestMacAdminPassword") || !app.includes("adminPassword")) {
-  throw new Error("wizard: failed activity log is hidden instead of remaining available for diagnosis");
-}
-if (!app.includes("cleanText") || !app.includes("describeInitFailure") || !app.includes('"not-run"')) {
-  throw new Error("wizard: cross-platform app initialization diagnostics are missing");
-}
+// Setup begins on its own; the buttons are the accessible fallback.
+if (!app.includes("start();")) throw new Error("wizard: the app never starts itself");
+
 const wizardState = await readFile(new URL("../ui/wizard-state.js", import.meta.url), "utf8");
-if (!wizardState.includes("prerequisitesReady") || !wizardState.includes("isKebabCase") || !wizardState.includes("describeInitFailure") || !wizardState.includes("Windows dependency setup needs attention") || !wizardState.includes("App dependencies need attention") || !wizardState.includes("initButtonLabel")) {
+if (!wizardState.includes("prerequisitesReady") || !wizardState.includes("isKebabCase") || !wizardState.includes("describeInitFailure") || !wizardState.includes("Windows dependency setup needs attention") || !wizardState.includes("App dependencies need attention")) {
   throw new Error("wizard: state validation contract is missing");
 }
+if (!machineSource.includes("root.EAISetup") || !machineSource.includes("function createState()")) {
+  throw new Error("wizard: the state machine module does not register");
+}
+
 const styles = await readFile(new URL("../ui/styles.css", import.meta.url), "utf8");
-if (!styles.includes(".setup-stage summary::marker") || !styles.includes(".activity-log-heading::marker")) {
+if (!styles.includes("summary::marker") || !styles.includes("summary::-webkit-details-marker")) {
   throw new Error("wizard: accordion markers are not hidden consistently across desktop webviews");
+}
+if (!styles.includes("prefers-reduced-motion")) {
+  throw new Error("wizard: the reveal and the spinner do not respect a reduced-motion preference");
 }
 
 console.log("wizard structure checks ok");

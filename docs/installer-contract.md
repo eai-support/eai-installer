@@ -59,11 +59,15 @@ commands.
   requires first-use GitHub sign-in; VS Code requires the Copilot extension.
 - GitHub Copilot in VS Code is the default recommendation when no supported
   workspace is installed. Claude, Codex, and Grok remain explicit choices.
-- The recommendation score is shown as a four-quarter Harvey ball. It scores
-  automatic project opening, automatic delivery of the EAI first request,
-  repository-owned EAI/Gofer instruction support, and an integrated visual
-  project/chat workspace. It does not score model intelligence, price,
-  security, or provider quality. Installation status remains a separate label.
+- AI workspaces are shown in two named groups: the ones already on this
+  computer, and the ones the user has to fetch from their makers. The group a
+  workspace is in is the only thing that changes between a machine that has it
+  and one that does not, which keeps the two cases comparable.
+- The four-quarter Harvey ball has been removed. It scored somebody else's
+  product on the screen where the user chooses it, and the score it gave was
+  routinely read as a quality rating even though it measured only handoff
+  completeness. Installation status and the vendor origin are stated in words
+  instead.
 - EAI Setup opens a fixed official provider installation page only after the
   user requests it. It does not accept provider credentials, agree to provider
   terms, or silently install commercial software.
