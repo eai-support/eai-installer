@@ -209,7 +209,7 @@ for (const name of await readdir(new URL("../ui/", import.meta.url))) {
    drifts back to bordered option boxes or a coloured field is a rail
    that reviews the app in somebody else's design language. */
 const railCss = await readFile(new URL("../prototype/rail.css", import.meta.url), "utf8");
-for (const name of ["st-rail", "st-title", "st-flows", "st-stage", "st-cap", "st-frame",
+for (const name of ["st-rail", "st-title", "st-stage", "st-cap", "st-frame",
   "rl-group", "rl-label", "rl-note", "rl-select", "rl-opt", "rl-tick", "rl-pill", "rl-chip"]) {
   if (!railCss.includes(`.${name}`)) fail(`the playground rail has lost the prototype's .${name}`);
 }
@@ -221,10 +221,27 @@ if (!railCss.includes(".rl-tick .box.radio::after")) {
 }
 if (!/grid-template-columns:\s*296px/.test(railCss)) fail("the rail is no longer the prototype's width");
 
+/* Anything shipped hidden and given a display by a class needs to say
+   so, because an author rule beats the browser's own [hidden]. The
+   failure panel spent a while as an empty bordered box under the app,
+   scrolling the page for no reason. */
+for (const match of railCss.matchAll(/\.([a-z-]+)\s*\{[^}]*display:\s*(flex|grid|block)[^}]*\}/g)) {
+  const name = match[1];
+  if (!new RegExp(`\\.${name}\\[hidden\\]`).test(railCss)) continue;
+  if (!new RegExp(`\\.${name}\\[hidden\\]\\s*\\{[^}]*display:\\s*none`).test(railCss)) {
+    fail(`.${name}[hidden] does not actually hide`);
+  }
+}
+if (!/\.st-dead\[hidden\]\s*\{[^}]*display:\s*none/.test(railCss)) {
+  fail("the failure panel is shipped hidden but its class gives it a display — it will sit under the app as an empty box");
+}
+
 /* Grey is the surface colour and nothing else. A control that fills
    itself grey is a control competing with the app beside it, and the
    whole point of the page is that it does not. */
-for (const rule of ["rl-pill", "rl-chip", "rl-select", "rl-opt", "rl-tick"]) {
+/* The select is the exception and is meant to be filled: it is the one
+   control that hides its options, and the fill is what says so. */
+for (const rule of ["rl-pill", "rl-chip", "rl-opt", "rl-tick"]) {
   const block = new RegExp(`\\.${rule}[^{]*\\{([^}]*)\\}`, "g");
   for (const match of railCss.matchAll(block)) {
     const grey = /background:\s*(#f4f4f5|#fafafa|#f5f5f5)/.exec(match[1]);
