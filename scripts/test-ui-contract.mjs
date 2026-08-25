@@ -269,6 +269,17 @@ if (/function group\(label,\s*note\)/.test(railJs)) {
   fail("group() takes a description again — the label is the whole of it");
 }
 
+/* The dev server adds a live-reload client to HTML responses. It must
+   never reach a file: ui/ is what Tauri bundles, and a signed build
+   holding an EventSource pointed at localhost is a dev tool shipped by
+   accident. */
+for (const [name, source] of [["ui/index.html", html], ["prototype/index.html",
+  await readFile(new URL("../prototype/index.html", import.meta.url), "utf8")]]) {
+  if (/__reload|EventSource/.test(source)) {
+    fail(`${name} contains the dev server's reload client — it belongs in the response, not on disk`);
+  }
+}
+
 /* Two: the rail can express every state the app can be put into. A
    parameter the app reads and the rail never writes is a state nobody
    can review; a parameter the rail writes and the app ignores is a
