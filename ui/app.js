@@ -817,10 +817,6 @@ function tileFor(surface) {
 }
 
 const TICK_SVG = '<svg viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.5 4.5L19 7.5" stroke="#ffffff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-const ALERT_ICON = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">'
-  + '<circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.9"/>'
-  + '<path d="M12 11v5.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'
-  + '<circle cx="12" cy="7.8" r="1.15" fill="currentColor"/></svg>';
 
 function renderHarnessRows(surfaces) {
   const rows = el("harnessRows");
@@ -848,19 +844,20 @@ function renderHarnessRows(surfaces) {
       row.addEventListener("click", () => chooseSurface(surface.id));
       pick.appendChild(row);
 
-      const alert = machine.harnessAlert(surface);
-      if (chosen && alert) {
-        const box = document.createElement("div");
-        box.className = "i4-alert i4-pick-alert";
-        box.innerHTML = `${ALERT_ICON}<div class="tx"><b></b><span></span></div>`;
-        box.querySelector("b").textContent = alert.title;
-        box.querySelector("span").replaceChildren(...alert.parts.map((part) => {
-          if (typeof part === "string") return document.createTextNode(part);
-          const node = document.createElement("b");
-          node.textContent = part.b;
-          return node;
-        }));
-        pick.appendChild(box);
+      /* The round trip, as three steps, in the option they belong to.
+         The numbers sit in the tile's column so the block reads as
+         hanging off this row rather than starting a new one. */
+      const steps = chosen ? machine.harnessSteps(surface) : null;
+      if (steps) {
+        const list = document.createElement("ol");
+        list.className = "i4-steps";
+        for (const text of steps) {
+          const item = document.createElement("li");
+          item.innerHTML = '<span class="n"></span><span class="tx"></span>';
+          item.querySelector(".tx").textContent = text;
+          list.appendChild(item);
+        }
+        pick.appendChild(list);
       }
       rows.appendChild(pick);
     }
@@ -869,10 +866,10 @@ function renderHarnessRows(surfaces) {
 
 function showWaiting(surface) {
   const copy = machine.harnessWaiting(surface, platform());
-  // The alert said "we'll open their site". It has been opened. Leaving it
-  // up beside a box that says we are waiting for the result is the screen
-  // giving two different accounts of where somebody is.
-  for (const alert of document.querySelectorAll(".i4-pick-alert")) alert.hidden = true;
+  /* Step one said "download and install it from their site". It has been
+     opened. Leaving the steps up beside a box saying we are waiting for
+     the result is the screen giving two accounts of where somebody is. */
+  for (const steps of document.querySelectorAll(".i4-steps")) steps.hidden = true;
   let box = maybe("harnessWait");
   if (!box) {
     box = document.createElement("div");

@@ -672,13 +672,54 @@ button, input { font-family: inherit; }
 .i4-list .i4-pick:last-child { border-bottom: none; }
 .i4-list .i4-pick .i4-row { border-bottom: none; }
 
-.i4-pick:not(.on) .i4-pick-alert { display: none; }
-.i4-pick .i4-pick-alert {
-  border: none;
-  border-radius: 0;
-  margin: 0 16px 12px;
-  width: calc(100% - 32px);
+/* --- the round trip, as three steps -----------------------------
+
+   Numbered, and hung off the option they belong to. The left edge is
+   44px: the row is 16px of padding, a 16px mark, a 12px gap — which
+   puts the tile at 44, and the numbers in the tile's column. That is
+   what makes the block read as belonging to the row above it rather
+   than starting a new one, and it is measured from the row rather than
+   guessed. */
+.i4-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0 16px 14px 44px;
+  list-style: none;
 }
+.i4-steps[hidden] { display: none; }
+.i4-steps li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+}
+.i4-steps .n {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--color-hairline);
+  border-radius: 50%;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--color-muted-foreground);
+}
+.i4-steps .tx {
+  flex: 1;
+  min-width: 0;
+  font-size: 13.5px;
+  line-height: 18px;
+  color: var(--color-foreground);
+}
+/* Numbered by the list, not by the markup: an <ol> already counts, and
+   a number typed into each item is a number that can be wrong. */
+.i4-steps { counter-reset: step; }
+.i4-steps li { counter-increment: step; }
+.i4-steps .n::before { content: counter(step); }
 
 .i4-row {
   display: flex;
@@ -751,7 +792,12 @@ button, input { font-family: inherit; }
   white-space: nowrap;
 }
 .i4-row.ready .state { color: var(--color-foreground); }
+/* Not here yet, and not chosen: the name steps back. Choosing it brings
+   it forward — a row you have picked is the subject of the screen, and a
+   subject in the same grey as the things you did not pick is a screen
+   that has not registered the choice. */
 .i4-row.missing .nm { color: var(--color-muted-foreground); }
+.i4-row.on .nm { color: var(--color-foreground); font-weight: var(--font-weight-semibold); }
 
 .i4-alert {
   display: flex;

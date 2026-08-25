@@ -752,7 +752,7 @@
     const ready = (surfaces || []).filter((surface) => surface.installed);
     const dev = device(platform);
     if (!ready.length) {
-      return `None of these are on ${dev.device} yet. Pick the one you'd like and we'll send you to its makers.`;
+      return `None of these are on ${dev.device} yet. Pick the one you'd like and we'll send you to its makers to download and install.`;
     }
     if (ready.length === 1) {
       return `${ready[0].name} is already on ${dev.device}. Pick it, or use something else.`;
@@ -806,30 +806,57 @@
    * ends by saying the app already exists, because the most common
    * reason people abandon here is thinking they are about to lose it.
    */
-  function harnessAlert(surface) {
-    if (!surface || surface.installed) return null;
-    const origin = harnessOrigin(surface);
-    return {
-      title: origin.site ? `${surface.name} comes from ${origin.site}` : `${surface.name} comes from its makers`,
-      parts: [
-        "We'll open their site. Install it and make a ",
-        { b: origin.account || surface.provider || "provider" },
-        " account there, then come back here — your app is already created either way.",
-      ],
-    };
+  /**
+   * "a" or "an", by how the name is said rather than how it is spelled.
+   *
+   * The providers are GitHub, Anthropic, OpenAI, Google, xAI. A rule
+   * that only looks for vowels gets "a xAI account", because x is a
+   * consonant that is pronounced starting with one.
+   */
+  function article(word) {
+    return /^[aeioux]/i.test(String(word || "")) ? "an" : "a";
   }
 
   /**
-   * The button's verb, which is the whole design of this screen.
+   * The round trip, as three steps.
    *
-   * "Next" when the thing is there, "Get" when the user has to fetch
-   * it, and the waiting form while they are away. Never the same word
-   * for three different amounts of work.
+   * A tool that is not here is not one action, it is a trip: their site,
+   * their installer, their account, and back. The paragraph that used to
+   * sit here said all of that in one breath, which is the shape that
+   * makes somebody skim it and then be surprised twice — once by the
+   * account they did not know they needed, and once by having to come
+   * back at all. Numbered, it is three things to do and the third one is
+   * the one that matters.
+   */
+  function harnessSteps(surface) {
+    if (!surface || surface.installed) return null;
+    const origin = harnessOrigin(surface);
+    const provider = origin.account || surface.provider || "their";
+    return [
+      origin.site
+        ? `Download and install ${surface.name} from ${origin.site}`
+        : `Download and install ${surface.name} from its makers`,
+      `Sign in there with ${article(provider)} ${provider} account`,
+      "Come back to this app to complete EAI set up",
+    ];
+  }
+
+  /**
+   * The button, which no longer carries the verb.
+   *
+   * It used to say "Get Claude Code" for something that was not here and
+   * "Next" for something that was, on the principle that the verb should
+   * say how much work is about to happen. The three steps now say that,
+   * in more detail and in the place somebody is already reading — and a
+   * button repeating step one is a button competing with it.
+   *
+   * Waiting keeps its own words, because that is a state rather than a
+   * choice: it is not asking anything, it is reporting.
    */
   function harnessButtonLabel(surface, { waiting = false } = {}) {
     if (!surface) return "Choose an AI tool";
     if (waiting) return `Waiting for ${surface.name}…`;
-    return surface.installed ? "Next" : `Get ${surface.name}`;
+    return "Next step";
   }
 
   /** The box that appears while they are on somebody else's website. */
@@ -974,7 +1001,7 @@
     goTo,
     handoffCopy,
     builtCopy,
-    harnessAlert,
+    harnessSteps,
     harnessButtonLabel,
     harnessGroups,
     harnessOrigin,
