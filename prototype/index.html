@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex, nofollow" />
+<title>EAI Setup — statemachine</title>
+<link rel="stylesheet" href="rail.css" />
+</head>
+<body>
+
+<!-- Every state EAI Setup can be in, on one page.
+
+     The same idea as the shared repo's /statemachine, and for the same
+     reason: the flow is for handing to a tester — one URL, one journey,
+     no way to see the ninth state without playing the first eight. This
+     is the other half, for the people making it, who need to look at the
+     failure on the sign-in screen next to the one on the last screen and
+     ask whether they were written by the same person.
+
+     Three things it is not:
+
+     · **Not a copy.** The app on the right is `../ui/index.html` in a
+       frame, driven by the query string the installer already
+       understands. There is no second copy of any screen in this folder
+       to keep up to date. Change ui/ and reload this page.
+
+     · **Not shipped.** It is outside `ui/`, which is what Tauri bundles,
+       so it cannot reach a signed build. scripts/test-ui-contract.mjs
+       fails if it is ever moved inside.
+
+     · **Not the flow.** Nothing here is clickable inside the app that
+       would run a real command — the frame is in preview mode, where
+       every Tauri call is stubbed. Every state comes from the rail, so
+       no state can be reached by accident and every one can be linked
+       to. -->
+
+<aside class="rl">
+  <div class="rl-title">
+    <b>EAI Setup — statemachine</b>
+    <span>Seven screens, ten ways to break, and the two facts about the machine that change the last three.</span>
+  </div>
+
+  <!-- Built by rail.js, because every group is a question about the
+       state and the state is the only thing that decides them. -->
+  <div id="rail"></div>
+
+  <div class="rl-foot">
+    <button class="rl-copy" id="copyLink" type="button">Copy the app's link</button>
+    <span class="rl-note"><kbd>&larr;</kbd> <kbd>&rarr;</kbd> steps through the screens in order</span>
+  </div>
+</aside>
+
+<main class="st">
+  <div class="st-cap">
+    <b id="capName">Sign in</b>
+    <span id="capNote"></span>
+  </div>
+
+  <!-- The real app, at the real window size, read from tauri.conf.json
+       so the two cannot drift apart. -->
+  <div class="st-frame" id="frame">
+    <iframe id="app" title="EAI Setup" src="about:blank"></iframe>
+  </div>
+
+  <div class="st-dead" id="dead" hidden></div>
+</main>
+
+<script src="../ui/state-machine.js"></script>
+<script src="rail.js"></script>
+</body>
+</html>

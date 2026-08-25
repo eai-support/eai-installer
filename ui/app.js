@@ -1657,19 +1657,21 @@ function applyDevAddress() {
   if (!query.has("screen")) return false;
   window.__eaiDevAddress = true;
   machine.readAddress(window.location.search, state);
+
   facts.environment = { platform: state.platform, architecture: "preview", tools: [] };
   facts.demo = true;
   facts.account = "you@example.com";
   facts.projectName = "contract-renewals";
   facts.projectFolder = state.platform === "windows" ? "C:\\Users\\you\\Projects" : "/Users/you/Projects";
-  facts.projectPath = `${facts.projectFolder}/contract-renewals`;
+  facts.projectPath = `${facts.projectFolder}${state.platform === "windows" ? "\\" : "/"}contract-renewals`;
   facts.projectDirectory = facts.projectPath;
   facts.tenants = [{ id: "preview", displayName: "Northwind Group", slug: "northwind", active: true, apps: [], appsLoaded: true }];
   facts.selectedTenantId = "preview";
   facts.appAnswered = true;
-  facts.runReached = "template";
-  // ?workspaces=2 and ?apps=1 reach the two shapes of the form that only
-  // company accounts ever see, and that a self-serve tester never will.
+  facts.runReached = query.get("reached") || "template";
+
+  /* ?workspaces=2 and ?apps=1 reach the two shapes of the form that only
+     company accounts ever see, and that a self-serve tester never will. */
   if (query.get("workspaces") === "2") {
     facts.tenants.push({ id: "preview-2", displayName: "Northwind Retail", slug: "northwind-retail", active: true, apps: [], appsLoaded: true });
   }
@@ -1679,15 +1681,68 @@ function applyDevAddress() {
       { key: "supplier-intake", displayName: "Supplier intake", status: "active" },
     ];
   }
+
+  /* Which AI tools are on this machine, as a list of ids.
+
+     The one control the harness screens exist to answer. `installed=none`
+     is the empty machine and `installed=claude-cli,codex-cli` is a
+     machine with two, because "is it here" is not a boolean across a list
+     of six and a rail that pretends it is cannot reach the state where
+     the ready group has more than one row in it. */
   facts.surfaces = previewInventory();
-  if (query.get("harness") === "installed") facts.surfaces.surfaces[2].installed = true;
-  facts.selectedSurfaceId = helpers.chooseAiSurface(facts.surfaces);
-  facts.failureContext = {
-    prereq: { step: "git" },
-    network: { host: "api.au.myenterprise.ai" },
-    init: { title: "The app template would not download", detail: "The folder was created and is empty. Nothing was left half-written." },
-  };
+  const installed = query.has("installed")
+    ? query.get("installed").split(",").filter((id) => id && id !== "none")
+    : query.get("harness") === "installed" ? ["claude-cli"] : [];
+  for (const surface of facts.surfaces.surfaces) surface.installed = installed.includes(surface.id);
+  const wanted = query.get("pick");
+  facts.selectedSurfaceId = facts.surfaces.surfaces.some((surface) => surface.id === wanted)
+    ? wanted
+    : helpers.chooseAiSurface(facts.surfaces);
   if (query.get("waiting") === "1") facts.waitingForSurfaceId = facts.selectedSurfaceId;
+
+  /* What each failure is about. `step` matters because the prerequisite
+     failure says a different true sentence for each tool and for a check
+     that never finished at all. */
+  /* The init note follows the row that failed, because a screen whose
+     failed row says "Dependencies installed" and whose note underneath
+     says "The app template would not download" is a screen contradicting
+     itself — and a preview that can produce one is a preview that will
+     be reviewed as a bug. In the real flow this comes from the CLI. */
+  const initFailures = {
+    workspace: { title: "The workspace would not connect", detail: "Nothing was created. The folder is untouched.", next: "Check the workspace is still active, then retry this step." },
+    folder: { title: "The folder could not be created", detail: "Nothing was written. Choose a location you can write to.", next: "Pick another location, then retry this step." },
+    template: { title: "The app template would not download", detail: "The folder was created and is empty. Nothing was left half-written.", next: "An EAI admin can grant access to the asset library, or you can retry once they have." },
+    dependencies: { title: "The app's packages would not install", detail: "The project files were created, so the folder is safe to reuse.", next: "Retry this step. If it fails again, open the folder and run npm install." },
+  };
+
+  facts.failureContext = {
+    prereq: { step: query.get("step") || "git" },
+    network: { host: "api.au.myenterprise.ai" },
+    init: initFailures[facts.runReached] || initFailures.template,
+  };
+
+  /* The two moments the sign-in screen has while nothing has failed and
+     nobody has pressed anything: the quiet fix-up running, and macOS
+     asking for a password. Both are states a reviewer has to see and
+     neither is reachable by waiting, because in a preview build there is
+     nothing to wait for. */
+  const busy = query.get("busy");
+  if (busy) {
+    facts.prereqBusy = busy;
+    facts.prereqDetail = "";
+  }
+  if (query.get("admin") === "1") {
+    facts.prereqBusy = facts.prereqBusy || "git";
+    facts.prereqDetail = "Waiting for your approval before Apple's installer can run.";
+    pendingAdminPassword = () => {};
+  }
+  if (query.get("signin") === "waiting") facts.signinWaiting = true;
+  if (query.get("signin") === "waiting-long") {
+    facts.signinWaiting = true;
+    facts.signinEscapeShown = true;
+  }
+  if (query.get("link") === "1") facts.signinUrl = "https://login.example.com/authorize?code=preview";
+
   paint();
   return true;
 }

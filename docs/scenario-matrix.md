@@ -71,6 +71,11 @@ visible.
 
 ## Evidence rules
 
+- `npm run prototype` opens every screen and failure below in the real
+  app, at the real window size, with a rail to reach them. It is a review
+  tool and is not in the bundle. It cannot exercise anything that needs a
+  real machine — the macOS password prompt, a real login, a real init —
+  so it evidences wording and screen state, never behaviour.
 - `scripts/test-state-machine.mjs` covers every screen, every fault and every
   platform wording without a browser, including the check that no Windows or
   Linux sentence names a Mac.

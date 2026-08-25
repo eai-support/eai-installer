@@ -1,0 +1,208 @@
+/* ------------------------------------------------------------------
+   The room around the app.
+
+   Deliberately not the app's stylesheet. Nothing in here may look like
+   EAI Setup: the whole value of the page is that the panel on the right
+   is obviously the product and everything else is obviously scaffolding.
+   A rail styled in the product's own palette makes a reviewer read the
+   two as one design.
+------------------------------------------------------------------- */
+
+:root {
+  color-scheme: light;
+  --ink: #18181b;
+  --muted: #71717a;
+  --quiet: #a1a1aa;
+  --line: #e4e4e7;
+  --paper: #fafafa;
+  --accent: #0099ff;
+  --rail: 300px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--ink);
+  background: #f4f4f5;
+}
+
+body {
+  display: grid;
+  grid-template-columns: var(--rail) minmax(0, 1fr);
+}
+
+kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: #fff;
+  font-family: inherit;
+  font-size: 10px;
+}
+
+/* ========================== the rail ============================= */
+
+.rl {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 20px 18px;
+  overflow-y: auto;
+  background: #fff;
+  border-right: 1px solid var(--line);
+}
+
+.rl-title { display: flex; flex-direction: column; gap: 6px; padding-bottom: 18px; }
+.rl-title b { font-size: 14px; font-weight: 600; }
+.rl-title span { font-size: 12px; line-height: 1.5; color: var(--muted); }
+
+.rl-group { display: flex; flex-direction: column; gap: 6px; padding: 16px 0; border-top: 1px solid var(--line); }
+.rl-label { font-size: 10px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--quiet); }
+.rl-note { font-size: 11px; line-height: 1.5; color: var(--muted); }
+
+.rl-select {
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fff;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.rl-opt {
+  display: block;
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  color: var(--muted);
+  cursor: pointer;
+}
+.rl-opt:hover { background: var(--paper); }
+.rl-opt.on { border-color: var(--ink); background: var(--paper); color: var(--ink); font-weight: 500; }
+
+.rl-pill { display: flex; gap: 4px; padding: 3px; border: 1px solid var(--line); border-radius: 999px; }
+.rl-chip {
+  flex: 1;
+  padding: 5px 10px;
+  border: none;
+  border-radius: 999px;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.rl-chip.on { background: var(--ink); color: #fff; }
+.rl-chip:disabled { color: var(--quiet); cursor: default; }
+
+.rl-tick {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 9px 6px 6px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  line-height: 1.4;
+  text-align: left;
+  color: var(--muted);
+  cursor: pointer;
+}
+.rl-tick:hover { background: var(--paper); }
+.rl-tick.on { color: var(--ink); }
+.rl-tick .box {
+  flex: 0 0 15px;
+  display: grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  margin-top: 1px;
+  border: 1.5px solid var(--quiet);
+  border-radius: 4px;
+}
+.rl-tick .box.radio { border-radius: 50%; }
+.rl-tick.on .box { border-color: var(--ink); background: var(--ink); }
+.rl-tick .box svg { width: 9px; height: 9px; opacity: 0; }
+.rl-tick.on .box svg { opacity: 1; }
+
+.rl-foot { display: flex; flex-direction: column; gap: 10px; margin-top: auto; padding-top: 18px; border-top: 1px solid var(--line); }
+.rl-copy {
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fff;
+  font: inherit;
+  font-size: 12px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.rl-copy:hover { background: var(--paper); }
+
+/* ========================== the stage ============================ */
+
+.st {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  min-height: 0;
+  padding: 24px;
+  overflow: auto;
+}
+
+.st-cap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  max-width: 900px;
+}
+.st-cap b { font-size: 15px; font-weight: 600; }
+.st-cap span { font-size: 12.5px; line-height: 1.6; color: var(--muted); }
+
+/* The window, drawn as a window. Not the app's own chrome — the app has
+   none, because on a desktop the operating system draws it. This is the
+   page admitting that what it is showing is a window. */
+.st-frame {
+  position: relative;
+  flex: none;
+  overflow: hidden;
+  border: 1px solid #d4d4d8;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 24px 60px -24px rgba(9, 9, 11, 0.35);
+  animation: st-in 0.22s ease;
+}
+@keyframes st-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+.st-frame iframe { display: block; width: 100%; height: 100%; border: 0; }
+
+.st-dead {
+  max-width: 640px;
+  padding: 16px 18px;
+  border: 1px solid #fca5a5;
+  border-radius: 10px;
+  background: #fef2f2;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #7f1d1d;
+}
+.st-dead code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .st-frame { animation: none; }
+}

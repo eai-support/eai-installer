@@ -52,6 +52,19 @@ hands control to the normal EAI CLI flow.
     wording are the same story on macOS, Windows and Linux; only the names of
     the machine, its file manager and its package manager change.
 
+## Review the screens without installing anything
+
+```bash
+npm run prototype
+```
+
+Opens every state the setup app can be in — seven screens, ten
+failures, three platforms — in the real app at the real window size,
+with a rail to reach them. It renders `ui/` in a frame rather than
+keeping a copy, so it cannot drift from what ships, and it is outside
+the folder Tauri bundles so it cannot reach a signed build. See
+`prototype/README.md`.
+
 ## Download the installer
 
 The public release channel serves native installers directly from GitHub
