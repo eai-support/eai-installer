@@ -103,43 +103,35 @@ overrides the host for anyone who needs it.
 
 ---
 
-## KI-05 · The harness screen's primary can sit below the fold
+## KI-05 · The harness screen's primary could sit below the fold
 
-**Status:** open, needs a design decision · **Found:** 2026-08-25
+**Status:** fixed, 2026-08-25 · **Raised by:** Gareth
 
-**What somebody would observe.** On *Choose how to work with AI*, in a
-900×720 window, the list can run long enough that **Next step** is below
-the visible area until you scroll. Measured, worst first:
+**What happened.** On *Choose how to work with AI*, in a 900×720 window,
+the list could run long enough that **Next step** was below the visible
+area until you scrolled — 108px under at worst, on the install failure.
 
-| State | Over the fold |
-| --- | --- |
-| Install failure, nothing installed | 108px |
-| One installed, a not-installed option chosen | 49px |
-| Waiting for a tool to land | 42px |
-| Nothing installed | 14px |
+**Why.** Anchored is not the same as visible. `margin-top: auto` puts
+the rail at the bottom of the screen, and when the content above grows
+past the window the rail goes with it. The three steps and the bar
+across the top were each wanted; together they cost more than the screen
+had spare.
 
-**Why.** The three steps under a chosen option add ~84px, and the bar
-across the top adds ~30px. Both are wanted; together they cost more than
-the screen had spare.
+**What changed.** Three things, all of which the hi-fi frames already
+had:
 
-**What is not the cause.** The window size. The design's own frame for
-this screen is 720×583 — narrower and shorter than the window — so it
-fits there comfortably. The difference is structural, not dimensional.
+1. **The rail is sticky**, so it is where anchored was aiming: the
+   content scrolls under it and the primary is never off screen.
+2. **Back moved into the rail.** The harness screen and the hand-off had
+   a Back button above the title *and* an actions block below. The
+   frames put Back on the left of the rail and nothing above the title,
+   which is what the Set up screen already did.
+3. **Check again sits beside the primary** rather than stacked above it.
 
-**Three differences from that frame, any of which would recover the
-space.** Each is a design decision rather than a bug fix, so none has
-been made unilaterally:
+Together those recovered enough that every state fits without scrolling
+except the hand-off with a failed launch, which is 23px over — and there
+the rail stays put, which was the point.
 
-1. **Back is at the bottom in the frame, at the top here.** The frame
-   ends in a two-ended rail — `‹ Back` on the left, `Next step` on the
-   right — like the Set up screen already does. Here there is a Back
-   button above the title *and* an actions block below. Moving it down
-   would save roughly 54px and make the two screens consistent.
-2. **The primary is full width here, natural width in the frame.** Full
-   width came from the prototype's "the screen ends in one door".
-3. **Check again is stacked above the primary,** which is this app's
-   addition — the frame has no such control. Beside the primary rather
-   than above it would save 52px.
-
-Doing (1) and (3) fits every state except the install failure, where the
-list has genuinely accumulated an extra note and scrolling is honest.
+A hairline appears above the rail only when something is scrolling
+underneath it. A rule under content that ends above it is a rule drawing
+a box for no reason.

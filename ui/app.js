@@ -313,6 +313,20 @@ function reset() {
 
 const SPINNER = "<s></s><s></s><s></s><s></s><s></s><s></s><s></s><s></s>";
 
+/**
+ * A rail button's words, without disturbing its chevron.
+ *
+ * `textContent = "..."` on one of these would throw the arrow away, and
+ * it would come back on the next paint from the markup — so the bug
+ * would only show between a label change and a repaint, which is the
+ * hardest kind to see.
+ */
+function setLabel(button, text) {
+  const words = [...button.childNodes].find((node) => node.nodeType === Node.TEXT_NODE && node.textContent.trim());
+  if (words) words.textContent = text;
+  else button.prepend(document.createTextNode(text));
+}
+
 function escapeHtml(value) {
   return String(value).replace(/[&<>"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[character]));
 }
@@ -540,7 +554,7 @@ const PAINT = {
       // The primary is the check. A second button beside it reading the
       // same words is the screen offering one action twice.
       el("harnessRefresh").hidden = true;
-      el("harnessGo").textContent = "Check again";
+      setLabel(el("harnessGo"), "Check again");
       return;
     }
 
@@ -554,7 +568,7 @@ const PAINT = {
       el("harnessNoteTitle").textContent = fault.head(platform(), { harnessName: chosen?.name });
       el("harnessNoteBody").textContent = fault.body(platform());
       el("harnessNote").hidden = false;
-      el("harnessGo").textContent = machine.harnessButtonLabel(chosen);
+      setLabel(el("harnessGo"), machine.harnessButtonLabel(chosen));
       return;
     }
 
@@ -563,7 +577,7 @@ const PAINT = {
       return;
     }
 
-    el("harnessGo").textContent = machine.harnessButtonLabel(chosen);
+    setLabel(el("harnessGo"), machine.harnessButtonLabel(chosen));
     el("harnessGo").disabled = !chosen;
   },
 
@@ -586,7 +600,7 @@ const PAINT = {
       }
       body.append(document.createTextNode(piece));
     }
-    el("handoffGo").textContent = copy.button;
+    setLabel(el("handoffGo"), copy.button);
     el("handoffFolder").hidden = !facts.projectPath;
 
     const film = el("harnessVideo");
@@ -655,6 +669,24 @@ function renderSteps() {
   }
 }
 
+/**
+ * Whether the rail has anything scrolling under it.
+ *
+ * The line above it is drawn only then. A rule under content that ends
+ * above it is a rule drawing a box for no reason, and on most screens
+ * the content does end above it.
+ */
+function syncFootLine() {
+  const body = document.querySelector(".eai-body");
+  const foot = document.querySelector(`[data-screen="${state.screen}"] .eai-foot`);
+  if (!foot) return;
+  const under = body.scrollHeight - body.scrollTop - body.clientHeight > 1;
+  foot.classList.toggle("over", under);
+}
+
+document.querySelector(".eai-body").addEventListener("scroll", syncFootLine, { passive: true });
+window.addEventListener("resize", syncFootLine);
+
 function paint() {
   /* Which field somebody was in, so a repaint triggered by their own
      typing does not take the caret away from them. The reveal repaints
@@ -669,6 +701,8 @@ function paint() {
   renderSteps();
   PAINT[state.screen](machine.faultsInForce(state));
   document.querySelector(".eai-body").scrollTop = 0;
+  // After the screen is drawn, so it measures what is actually there.
+  requestAnimationFrame(syncFootLine);
 
   if (focused) {
     const node = maybe(focused);
@@ -889,7 +923,7 @@ function showWaiting(surface) {
   box.querySelector(".tx span").textContent = copy.body;
   box.hidden = false;
   el("harnessGo").disabled = true;
-  el("harnessGo").textContent = machine.harnessButtonLabel(surface, { waiting: true });
+  setLabel(el("harnessGo"), machine.harnessButtonLabel(surface, { waiting: true }));
 }
 
 function selectedSurface() {

@@ -311,6 +311,18 @@ for (const value of ['id="runLines"', 'id="runTitle"', 'id="runSub"', 'id="runNo
 }
 
 // Choosing a harness, and the hand-off it leads to.
+/* One rail, on every screen that has one: Back on the left, the primary
+   on the right, stuck to the bottom so it never scrolls away. No Back
+   above a title anywhere — the hi-fi frames put it in the rail. */
+if (wizard.includes('class="i4-back"') || wizard.includes('class="i4-actions"')) {
+  throw new Error("wizard: a Back button is above a title again, or the actions are stacked instead of railed");
+}
+for (const screen of ["setup", "running", "done", "handoff"]) {
+  const start = wizard.indexOf(`data-screen="${screen}"`);
+  const end = wizard.indexOf("data-screen=", start + 1);
+  const markup = wizard.slice(start, end < 0 ? undefined : end);
+  if (!markup.includes("eai-foot")) throw new Error(`wizard: the ${screen} screen's actions are not stuck to the bottom`);
+}
 for (const value of ['id="harnessRows"', 'id="harnessSub"', 'id="harnessNote"', 'id="harnessGo"', 'id="harnessRefresh"', 'id="harnessBack"', "Choose how to work with AI", "Check again"]) {
   if (!wizard.includes(value)) throw new Error(`wizard: AI tool selection is missing ${value}`);
 }

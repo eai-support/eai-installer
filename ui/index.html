@@ -66,7 +66,7 @@
             </div>
           </div>
 
-          <div class="eai-acts gap-2">
+          <div class="eai-acts gap-2 eai-foot">
             <button class="eai-btn" type="button" id="setupCreate">Create an EAI account</button>
             <button class="eai-btn primary ring" type="button" id="setupSignin">Sign in with browser</button>
           </div>
@@ -180,7 +180,7 @@
                until the last answer lands. A rail with Back at one end
                and where-you-are-going at the other reads as a step in
                something, which is what this is. -->
-          <div class="i3-foot">
+          <div class="i3-foot eai-foot">
             <button class="eai-btn i3-nav" type="button" id="setupBack">
               <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M14.5 6l-6 6 6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
               Back
@@ -209,7 +209,7 @@
             </div>
           </div>
 
-          <div class="eai-acts gap-3 pt-2" id="runActs" hidden>
+          <div class="eai-acts gap-3 eai-foot" id="runActs" hidden>
             <button class="eai-btn" type="button" id="runBack">Back</button>
             <button class="eai-btn primary" type="button" id="runRetry">Retry this step</button>
           </div>
@@ -223,11 +223,6 @@
              come from their makers, and the alert inside the chosen row
              says that whole trip up front rather than a step at a time. -->
         <div class="eai-screen gap-6" data-screen="done" hidden>
-          <button class="i4-back" type="button" id="harnessBack">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M14.5 6l-6 6 6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            Back
-          </button>
-
           <div class="eai-head">
             <h3>Choose how to work with AI</h3>
             <p id="harnessSub"></p>
@@ -243,9 +238,18 @@
             </div>
           </div>
 
-          <div class="i4-actions">
-            <button class="eai-btn ghost-quiet" type="button" id="harnessRefresh" hidden>Check again</button>
-            <button class="eai-btn primary big" type="button" id="harnessGo">Next</button>
+          <div class="i3-foot eai-foot">
+            <button class="eai-btn i3-nav" type="button" id="harnessBack">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M14.5 6l-6 6 6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Back
+            </button>
+            <div class="i3-foot-end">
+              <button class="eai-btn i3-nav ghost-quiet" type="button" id="harnessRefresh" hidden>Check again</button>
+              <button class="eai-btn primary i3-nav" type="button" id="harnessGo">
+                Next step
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9.5 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -256,11 +260,6 @@
              name. Every line here that isn't "type /eai" is a line
              competing with it, so there are none. -->
         <div class="eai-screen gap-6" data-screen="handoff" hidden>
-          <button class="i4-back" type="button" id="handoffBack">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M14.5 6l-6 6 6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            Back
-          </button>
-
           <div class="eai-head">
             <h3 id="handoffTitle">One last thing</h3>
             <p id="handoffSub"></p>
@@ -284,9 +283,18 @@
             </div>
           </div>
 
-          <div class="i4-actions">
-            <button class="eai-btn ghost-quiet" type="button" id="handoffFolder">Open the project folder</button>
-            <button class="eai-btn primary big" type="button" id="handoffGo">Open in your AI tool</button>
+          <div class="i3-foot eai-foot">
+            <button class="eai-btn i3-nav" type="button" id="handoffBack">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M14.5 6l-6 6 6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Back
+            </button>
+            <div class="i3-foot-end">
+              <button class="eai-btn i3-nav ghost-quiet" type="button" id="handoffFolder">Open the project folder</button>
+              <button class="eai-btn primary i3-nav" type="button" id="handoffGo">
+                Open in your AI tool
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9.5 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+            </div>
           </div>
         </div>
 

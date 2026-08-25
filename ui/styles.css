@@ -121,7 +121,7 @@ button, input { font-family: inherit; }
   max-width: var(--app-width);
   margin-inline: auto;
   overflow-y: auto;
-  padding: 26px 34px 28px;
+  padding: 26px 34px 0;
   font-family: var(--font-sans);
 }
 
@@ -174,8 +174,46 @@ button, input { font-family: inherit; }
 .eai-screen[hidden] { display: none; }
 .eai-screen.gap-8 { gap: var(--spacing-8); }
 .eai-screen.gap-6 { gap: var(--spacing-6); }
-.eai-screen > .eai-acts,
-.eai-screen > .i4-actions { margin-top: auto; }
+/* --- the rail, stuck to the bottom ------------------------------
+
+   Back on the left, the primary on the right, on every screen that has
+   them — which is what the hi-fi frames do, and why neither the harness
+   screen nor the hand-off has a Back button above its title any more.
+
+   Anchored was not enough. `margin-top: auto` puts the rail at the
+   bottom of the screen, and when the content above grows past the
+   window the rail goes with it: the primary ends up below the fold on
+   the one screen whose job is a choice and a primary. Sticky keeps it
+   where anchored was aiming.
+
+   The negative side margins let its background reach the body's
+   gutters, so content scrolling underneath does not show in the 34px
+   either side of it. */
+.eai-screen > .eai-foot {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  margin: auto -34px 0;
+  padding: 14px 34px 26px;
+  background: var(--color-background);
+}
+
+/* The line appears only when it is separating something. A rule under
+   content that ends above it is a rule drawing a box for no reason. */
+.eai-screen > .eai-foot::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--color-border);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.eai-screen > .eai-foot.over::before { opacity: 1; }
+
+.i3-foot-end { display: flex; align-items: center; gap: 8px; }
 .eai-screen[data-screen="welcome"] { justify-content: center; }
 
 .eai-head {
@@ -607,36 +645,15 @@ button, input { font-family: inherit; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: auto;
-  padding-top: 8px;
 }
-.eai-btn.i3-nav { height: 32px; gap: 6px; padding: 0 12px; font-size: 14px; }
+.eai-btn.i3-nav { height: 32px; gap: 6px; padding: 0 12px; font-size: 13px; }
 .eai-btn.i3-nav svg { width: 14px; height: 14px; flex: none; }
-.eai-btn.i3-nav:first-child { padding-left: 9px; }
-.eai-btn.i3-nav:last-child { padding-right: 9px; }
+/* The chevron sits closer to the edge than the word does, on whichever
+   side it is on. */
+.eai-btn.i3-nav svg:first-child { margin-left: -3px; }
+.eai-btn.i3-nav svg:last-child { margin-right: -3px; }
 
 /* ==================== choosing a harness ========================= */
-
-.i4-back {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  align-self: flex-start;
-  padding: 6px 12px 6px 9px;
-  background: var(--color-background);
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: var(--font-weight-medium);
-  line-height: 18px;
-  color: var(--color-foreground);
-  cursor: pointer;
-  transition: background-color 0.15s ease;
-}
-.i4-back:hover { background: var(--color-accent); }
-.i4-back:focus-visible { outline: 2px solid var(--color-ring); outline-offset: 2px; }
-.i4-back svg { width: 14px; height: 14px; flex: none; }
 
 .i4-list[hidden] { display: none; }
 
@@ -833,8 +850,6 @@ button, input { font-family: inherit; }
   color: var(--color-foreground);
 }
 .i4-wait .tx span { font-size: 13px; line-height: 18px; color: var(--color-muted-foreground); }
-
-.i4-actions { display: flex; flex-direction: column; align-items: stretch; gap: 8px; width: 100%; }
 
 /* ======================== the hand-off =========================== */
 
