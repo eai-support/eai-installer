@@ -133,10 +133,6 @@ button, input { font-family: inherit; }
 .eai-screen > .i4-actions { margin-top: auto; }
 .eai-screen[data-screen="welcome"] { justify-content: center; }
 
-/* The mark, centred above the title on the first screen only. */
-.eai-brand { display: flex; justify-content: center; padding-bottom: 4px; }
-.eai-brand img { display: block; width: 64px; height: 64px; object-fit: contain; }
-
 .eai-head {
   display: flex;
   flex-direction: column;

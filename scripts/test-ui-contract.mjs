@@ -221,6 +221,37 @@ if (!railCss.includes(".rl-tick .box.radio::after")) {
 }
 if (!/grid-template-columns:\s*296px/.test(railCss)) fail("the rail is no longer the prototype's width");
 
+/* Grey is the surface colour and nothing else. A control that fills
+   itself grey is a control competing with the app beside it, and the
+   whole point of the page is that it does not. */
+for (const rule of ["rl-pill", "rl-chip", "rl-select", "rl-opt", "rl-tick"]) {
+  const block = new RegExp(`\\.${rule}[^{]*\\{([^}]*)\\}`, "g");
+  for (const match of railCss.matchAll(block)) {
+    const grey = /background:\s*(#f4f4f5|#fafafa|#f5f5f5)/.exec(match[1]);
+    if (grey) fail(`.${rule} fills itself ${grey[1]} — grey is the page's surface, not a control's`);
+  }
+}
+
+/* One label, two or three words, and nothing under it explaining what
+   the group is for. A sentence per group is three or four lines of grey
+   text down a 296px rail saying what the labels already say, and it
+   breaks the rhythm: the groups that have one sit further apart than
+   the groups that do not. */
+const railJs = await readFile(new URL("../prototype/rail.js", import.meta.url), "utf8");
+for (const match of railJs.matchAll(/\bgroup\(([^)]*)\)/g)) {
+  const args = match[1];
+  if (args.includes(",") && !args.startsWith("broken ?")) {
+    fail(`a rail group carries a description: group(${args})`);
+  }
+  for (const label of args.matchAll(/"([^"]+)"/g)) {
+    const words = label[1].trim().split(/\s+/).length;
+    if (words > 3) fail(`the rail label "${label[1]}" is ${words} words — a group label is three at most`);
+  }
+}
+if (/function group\(label,\s*note\)/.test(railJs)) {
+  fail("group() takes a description again — the label is the whole of it");
+}
+
 /* Two: the rail can express every state the app can be put into. A
    parameter the app reads and the rail never writes is a state nobody
    can review; a parameter the rail writes and the app ignores is a

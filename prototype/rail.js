@@ -194,19 +194,28 @@ function show() {
 
 const TICK = '<svg viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.5 4.5L19 7.5" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
-function group(label, note) {
+/**
+ * A group: one label, and the controls under it.
+ *
+ * No description. Every group here used to carry a sentence explaining
+ * what it did, which is three or four lines of grey text stacked down a
+ * 296px rail saying things the labels already say — and it broke the
+ * rhythm, because the groups that had one sat further apart than the
+ * groups that did not. The label is two or three words and the controls
+ * under it say the rest.
+ *
+ * The two notes that remain are the prototype's, and neither describes
+ * a group: one says the arrow keys work, and one says why a screen's
+ * failures are radios rather than checkboxes. They are about the state,
+ * which is what the page is for.
+ */
+function group(label) {
   const node = document.createElement("div");
   node.className = "rl-group";
   const heading = document.createElement("div");
   heading.className = "rl-label";
   heading.textContent = label;
   node.append(heading);
-  if (note) {
-    const explanation = document.createElement("div");
-    explanation.className = "rl-note";
-    explanation.textContent = note;
-    node.append(explanation);
-  }
   return node;
 }
 
@@ -326,7 +335,7 @@ function renderRail() {
      Offered everywhere, because unlike the prototype's "This Mac" it
      changes the wording of every screen rather than the shape of the
      last three. It is the control this port exists to have. */
-  const platform = group("This computer", "Changes what the screens call the machine, its file manager and its package manager.");
+  const platform = group("This computer");
   for (const [text, value] of PLATFORMS) {
     platform.append(option(text, state.platform === value, () => {
       state.platform = value;
@@ -369,7 +378,7 @@ function renderRail() {
 
 function runProgress() {
   const broken = state.faults.length > 0;
-  const node = group(broken ? "Where it failed" : "How far it has got");
+  const node = group(broken ? "Failed at" : "Progress");
   for (const row of machine.RUN_ROWS) {
     node.append(option(row.label, fixtures.reached === row.id, () => {
       fixtures.reached = row.id;
@@ -388,7 +397,7 @@ function runProgress() {
 /* --- the shapes of the form only company accounts ever see ---------- */
 
 function formShape() {
-  const node = group("This account", "Self-serve sign-up never sees the second of these.");
+  const node = group("This account");
   node.append(option("One workspace", fixtures.workspaces === 1, () => {
     fixtures.workspaces = 1;
     show();
@@ -404,7 +413,7 @@ function formShape() {
 
 function signinDetail() {
   if (machine.isBroken(state, "prereq")) {
-    const node = group("Which prerequisite", "The failure says a different true sentence for each of these.");
+    const node = group("Which prerequisite");
     for (const [text, value] of PREREQ_STEPS) {
       if (value === "windows-runtime" && state.platform !== "windows") continue;
       node.append(option(text, fixtures.step === value, () => {
@@ -415,7 +424,7 @@ function signinDetail() {
     return node;
   }
 
-  const node = group("Before anyone presses anything", "The quiet fix-up, which is most of what this screen is.");
+  const node = group("Readiness");
   node.append(option("Finished — the tick", !fixtures.busy && !fixtures.admin, () => {
     fixtures.busy = null;
     fixtures.admin = false;
@@ -445,12 +454,12 @@ function signinDetail() {
 
 function welcomeDetail() {
   if (state.faults.length) {
-    const node = group("The link", "The CLI only prints it when it is given a callback port, which the installer does not do.");
+    const node = group("The link");
     node.append(option("No link — a sentence instead", !fixtures.link, () => { fixtures.link = false; show(); }));
     node.append(option("A link was printed", fixtures.link, () => { fixtures.link = true; show(); }));
     return node;
   }
-  const node = group("The moment", "The happy path is a beat nobody acts on. The wait is not.");
+  const node = group("Browser");
   node.append(option("Signed in", !fixtures.signin, () => { fixtures.signin = null; show(); }));
   node.append(option("Waiting on the browser", fixtures.signin === "waiting", () => { fixtures.signin = "waiting"; show(); }));
   node.append(option("Waiting, long enough to worry", fixtures.signin === "waiting-long", () => { fixtures.signin = "waiting-long"; show(); }));
@@ -467,7 +476,7 @@ function welcomeDetail() {
        screens exist to answer ------------------------------------- */
 
 function harnessDetail() {
-  const node = group("AI tools on this computer", "The one fact that changes the last three screens.");
+  const node = group("AI tools");
 
   node.append(option("Nothing installed", fixtures.installed.length === 0, () => {
     fixtures.installed = [];
@@ -494,7 +503,7 @@ function harnessDetail() {
     show();
   }));
 
-  const chosen = group("Which one is picked");
+  const chosen = group("Picked");
   chosen.append(option("Whichever the app would pick", !fixtures.pick, () => { fixtures.pick = null; show(); }));
   for (const surface of SURFACES) {
     chosen.append(option(surface.name, fixtures.pick === surface.id, () => { fixtures.pick = surface.id; show(); }));

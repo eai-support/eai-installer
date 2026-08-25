@@ -222,10 +222,21 @@ console.log("bootstrap safety checks ok");
 const wizard = await readFile(new URL("../ui/index.html", import.meta.url), "utf8");
 const machineSource = await readFile(new URL("../ui/state-machine.js", import.meta.url), "utf8");
 
-const brandLogo = await readFile(new URL("../ui/assets/eai-square-man-logo.png", import.meta.url));
-if (brandLogo.length < 1024) throw new Error("wizard: Enterprise AI logo asset is missing or unexpectedly small");
-for (const brandElement of ["Enterprise AI Setup", "assets/eai-square-man-logo.png", 'class="eai-brand"']) {
-  if (!wizard.includes(brandElement)) throw new Error(`wizard: branding is missing ${brandElement}`);
+/* The app's branding is the window and its icon, not a mark inside the
+   screen. The prototype's sign-in is the head and nothing else: the
+   operating system already calls the window Enterprise AI Setup and the
+   title says it again where somebody is reading, so a logo on top of
+   both is a third statement of the same fact. */
+if (!wizard.includes("Sign in to Enterprise AI")) {
+  throw new Error("wizard: the sign-in screen no longer names the product");
+}
+if (wizard.includes('class="eai-brand"') || wizard.includes("eai-square-man-logo")) {
+  throw new Error("wizard: a mark is back above the sign-in title — the prototype's screen is the head and nothing else");
+}
+const tauriWindow = JSON.parse(await readFile(new URL("../src-tauri/tauri.conf.json", import.meta.url), "utf8"))
+  .app?.windows?.[0];
+if (tauriWindow?.title !== "Enterprise AI Setup") {
+  throw new Error("wizard: the window no longer carries the product name, which is now the only place it is branded");
 }
 const bundleLogo = await readFile(new URL("../src-tauri/icons/icon.png", import.meta.url));
 if (bundleLogo.length < 1024) throw new Error("bundle: Enterprise AI logo icon is missing or unexpectedly small");
