@@ -43,13 +43,19 @@ local device ID is an authorization decision.
 
 The installer delegates detection and launch to the versioned
 `eai.ai-surfaces/v1` CLI contract. Detection reads command and application
-metadata only. It does not inspect provider accounts or project contents.
+metadata plus the selected project's Git root and origin URL. It does not
+inspect provider accounts or project source files.
 
 The user chooses the workspace on first use; the last successfully opened
 workspace becomes the next default. Starting it is an explicit confirmation
 that the selected provider may read the project and use the user's provider
 account. EAI Setup remains open until the handoff reports success or a useful
 failure.
+
+For the macOS Copilot Desktop handoff, clicking that workspace is the explicit
+authorization for bounded prompt insertion. Only that launch receives the
+`--allow-copilot-prompt-insertion` CLI flag; no remembered, implicit, or
+non-Copilot launch receives it from EAI Setup.
 
 EAI Setup never obtains provider credentials or writes provider tokens into the
 project. When a provider is missing, an explicit user action may open a fixed

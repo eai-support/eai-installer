@@ -35,6 +35,7 @@ const aiSurfaceNext = document.querySelector("#ai-surface-next");
 const aiSurfaceConsent = document.querySelector("#ai-surface-consent");
 const refreshAiButton = document.querySelector("#refresh-ai");
 const startAiButton = document.querySelector("#start-ai");
+const copyAiPromptButton = document.querySelector("#copy-ai-prompt");
 const recommendationHelp = document.querySelector("#recommendation-help");
 const recommendationDialog = document.querySelector("#recommendation-dialog");
 const recommendationClose = document.querySelector("#recommendation-close");
@@ -55,6 +56,10 @@ let failedAppTenantId = null;
 let createdProjectDirectory = null;
 let aiSurfaceInventory = null;
 let selectedAiSurfaceId = null;
+let currentAiPromptToCopy = null;
+let aiSurfaceLaunchInProgress = false;
+let aiSurfaceLastLaunchAt = 0;
+const aiSurfaceLaunchCooldownMs = 750;
 let projectPath = null;
 let initInProgress = false;
 let e2eConfig = null;
@@ -92,7 +97,10 @@ const stepEstimates = {
 const aiSurfaceGuidance = {
   "copilot-desktop": {
     label: "GitHub Copilot app",
-    ready: "GitHub Copilot will open. Sign in to GitHub if asked, choose Add local repositories, and select the project folder shown above.",
+    ready: "GitHub Copilot will ask you to confirm a new Interactive session for this GitHub repository, with the first EAI message ready.",
+    automaticProjectReady: "GitHub Copilot will open this exact project. EAI will confirm Copilot's official Allow prompt only after checking that it names this exact folder, then try to put the first message into one verified empty message box. Clicking this workspace gives EAI permission to do those steps. EAI will not press Send. On first use, macOS may ask for permission; if it blocks this step, EAI Setup will show Copy first message.",
+    projectOnlyReady: "GitHub Copilot will open this project. This installation cannot fill the first message automatically. Return to EAI Setup, choose Copy first message, paste it into Copilot, then press Send.",
+    manualReady: "GitHub Copilot will open. Add the project folder shown above, then start a session and paste the first EAI message.",
     notInstalled: "Download GitHub Copilot from GitHub. After installing it, return here and select Check again.",
   },
   "copilot-cli": {
@@ -102,8 +110,20 @@ const aiSurfaceGuidance = {
   },
   "vscode-copilot": {
     label: "GitHub Copilot in VS Code",
-    ready: "VS Code will open this project. Sign in to GitHub in VS Code if asked, then open Copilot Chat.",
+    ready: "VS Code will open this project, start Copilot Chat, and send the first EAI message. Sign in to GitHub in VS Code if asked.",
     notInstalled: "Install VS Code and the GitHub Copilot extension from the official page. Return here and select Check again.",
+  },
+  "claude-desktop": {
+    label: "Claude Desktop",
+    ready: "Claude Desktop will open a Code session for this project with the first EAI message ready. Confirm the folder if asked, then press Send.",
+    manualReady: "Claude Desktop will open. This installed version needs you to choose the project folder and start a Code session manually.",
+    notInstalled: "Install Claude Desktop from Anthropic. Return here and select Check again.",
+  },
+  "codex-desktop": {
+    label: "Codex Desktop",
+    ready: "Codex Desktop will open a new chat in this project with the first EAI message ready. Review it, then press Send.",
+    manualReady: "Codex Desktop will open. This installed version needs you to choose the project folder and start a new chat manually.",
+    notInstalled: "Install Codex Desktop from OpenAI. Return here and select Check again.",
   },
 };
 
@@ -194,11 +214,38 @@ function recordCommandSummaries(step, commandOutput) {
 }
 
 function aiSurfaceCopy(surface) {
-  return aiSurfaceGuidance[surface?.id] || {
+  const guidance = aiSurfaceGuidance[surface?.id] || {
     label: surface?.name || "AI workspace",
     ready: `${surface?.name || "The AI workspace"} will open with this project. Follow its sign-in or project selection prompts.`,
     notInstalled: `Open the official ${surface?.provider || "provider"} page, install ${surface?.name || "the workspace"}, then return here and select Check again.`,
   };
+  if (guidance.automaticProjectReady && copilotPromptInsertionReady(surface)) {
+    return { ...guidance, ready: guidance.automaticProjectReady };
+  }
+  if (surface?.launchSupport === "manual-project" && guidance.manualReady) {
+    return { ...guidance, ready: guidance.manualReady };
+  }
+  if (surface?.launchSupport === "project-only" && guidance.projectOnlyReady) {
+    return { ...guidance, ready: guidance.projectOnlyReady };
+  }
+  return guidance;
+}
+
+function copilotPromptInsertionReady(surface) {
+  if (surface?.id !== "copilot-desktop" || aiSurfaceInventory?.platform !== "darwin") return false;
+  return Boolean(aiSurfaceInventory?.surfaces?.some((candidate) =>
+    candidate.id === "copilot-cli" && candidate.installed === true && candidate.supportsAppBridge === true));
+}
+
+function aiSurfaceLaunchMessage(surface, result, fallback) {
+  if (surface?.id !== "copilot-desktop") return fallback;
+  if (result?.promptInsertionStatus === "permission-required") {
+    return "GitHub Copilot opened this project, but macOS did not allow EAI Setup to fill its message box. Nothing is broken. Open System Settings > Privacy & Security > Accessibility and turn on EAI Setup. If macOS also asks whether EAI Setup may control System Events, choose Allow. Then return here, choose Copy first message, paste it into Copilot, and press Send.";
+  }
+  if (result?.preparedPrompt !== true && (result?.promptInsertionStatus === "not-attempted" || !copilotPromptInsertionReady(surface))) {
+    return "GitHub Copilot opened this project, but this installation could not fill the first message automatically. Return to EAI Setup, choose Copy first message, paste it into Copilot, and press Send.";
+  }
+  return fallback;
 }
 
 function updateAiSurfaceControls(surface) {
@@ -212,6 +259,25 @@ function updateAiSurfaceControls(surface) {
   if (aiSurfaceNext) {
     aiSurfaceNext.hidden = false;
     aiSurfaceNext.textContent = surface.installed ? copy.ready : copy.notInstalled;
+  }
+}
+
+function setAiPromptToCopy(prompt = null) {
+  currentAiPromptToCopy = typeof prompt === "string" && prompt.trim() && prompt.length <= 4000
+    ? prompt
+    : null;
+  if (!copyAiPromptButton) return;
+  copyAiPromptButton.hidden = !currentAiPromptToCopy;
+  copyAiPromptButton.textContent = "Copy first message";
+}
+
+function setAiSurfaceLaunchBusy(busy) {
+  aiSurfaceLaunchInProgress = busy;
+  if (startAiButton) startAiButton.disabled = busy;
+  if (refreshAiButton) refreshAiButton.disabled = busy;
+  if (aiSurfaceField) aiSurfaceField.setAttribute("aria-busy", String(busy));
+  for (const input of aiSurfaceOptions?.querySelectorAll('input[name="ai-surface"]') || []) {
+    input.disabled = busy;
   }
 }
 
@@ -671,7 +737,10 @@ async function runE2eFlow() {
     return;
   }
   try {
-    await invoke("start_ai_surface", { directory: createdProjectDirectory, surfaceId: surface.id });
+    const result = await invoke("start_ai_surface", { directory: createdProjectDirectory, surfaceId: surface.id });
+    if (result?.action !== "launch" || result?.launched !== true || result?.surfaceId !== surface.id) {
+      throw new Error("The AI workspace did not confirm the requested project handoff.");
+    }
   } catch (error) {
     await writeE2eReceipt("aiHandoff", `The AI workspace could not be opened: ${String(error)}`);
     return;
@@ -956,8 +1025,10 @@ async function runInit() {
 function renderAiSurfaces() {
   if (!aiSurfaceInventory || !aiSurfaceOptions) return;
   aiSurfaceOptions.replaceChildren();
+  setAiPromptToCopy();
+  const visibleSurfaces = EAIWizard.visibleAiSurfaces(aiSurfaceInventory);
   selectedAiSurfaceId = EAIWizard.chooseAiSurface(aiSurfaceInventory);
-  for (const surface of aiSurfaceInventory.surfaces) {
+  for (const surface of visibleSurfaces) {
     const row = document.createElement("label");
     row.className = "surface-option";
     const input = document.createElement("input");
@@ -966,8 +1037,12 @@ function renderAiSurfaces() {
     input.value = surface.id;
     input.checked = surface.id === selectedAiSurfaceId;
     input.addEventListener("change", () => {
+      setAiPromptToCopy();
       selectedAiSurfaceId = surface.id;
       updateAiSurfaceControls(surface);
+    });
+    input.addEventListener("click", () => {
+      void startAiSurface(surface.id);
     });
     const copy = document.createElement("span");
     const name = document.createElement("strong");
@@ -988,16 +1063,16 @@ function renderAiSurfaces() {
     row.append(input, copy, badge);
     aiSurfaceOptions.append(row);
   }
-  const selected = aiSurfaceInventory.surfaces.find((surface) => surface.id === selectedAiSurfaceId);
+  const selected = visibleSurfaces.find((surface) => surface.id === selectedAiSurfaceId);
   aiSurfaceField.hidden = false;
   aiSurfaceConsent.hidden = false;
   if (refreshAiButton) refreshAiButton.hidden = false;
   startAiButton.hidden = false;
   updateAiSurfaceControls(selected);
-  const readyCount = aiSurfaceInventory.surfaces.filter((surface) => surface.installed).length;
+  const readyCount = visibleSurfaces.filter((surface) => surface.installed).length;
   aiSurfaceStatus.innerHTML = readyCount
-    ? `<strong>${readyCount} AI workspace${readyCount === 1 ? " is" : "s are"} ready</strong><p>Choose one below. EAI will open the project and explain the next step.</p>`
-    : "<strong>Choose an AI workspace</strong><p>GitHub Copilot, Claude, Codex, and Grok can work with your EAI project. Install one only if you need it.</p>";
+    ? `<strong>${readyCount} AI workspace${readyCount === 1 ? " is" : "s are"} ready</strong><p>Click one below. EAI will hand off the project and first message wherever that installed app supports it.</p>`
+    : "<strong>Choose an AI workspace</strong><p>GitHub Copilot, Claude, and Codex can work with your EAI project. Install one only if you need it.</p>";
 }
 
 recommendationHelp?.addEventListener("click", () => recommendationDialog?.showModal());
@@ -1017,22 +1092,22 @@ async function loadAiSurfaces() {
         surfaces: [
           { id: "vscode-copilot", name: "GitHub Copilot in VS Code", provider: "GitHub", launchSupport: "project-and-prompt", installed: false, recommended: true },
           { id: "copilot-cli", name: "GitHub Copilot CLI", provider: "GitHub", launchSupport: "project-and-prompt", installed: false, recommended: false },
-          { id: "copilot-desktop", name: "GitHub Copilot app", provider: "GitHub", launchSupport: "manual-project", installed: false, recommended: false },
-          { id: "claude-desktop", name: "Claude Desktop", provider: "Anthropic", launchSupport: "manual-project", installed: false, recommended: false },
+          { id: "copilot-desktop", name: "GitHub Copilot app", provider: "GitHub", launchSupport: "project-only", installed: false, recommended: false },
+          { id: "claude-desktop", name: "Claude Desktop", provider: "Anthropic", launchSupport: "project-and-prompt", installed: false, recommended: false },
           { id: "claude-cli", name: "Claude Code", provider: "Anthropic", launchSupport: "project-and-prompt", installed: false, recommended: false },
-          { id: "codex-desktop", name: "Codex Desktop", provider: "OpenAI", launchSupport: "project-only", installed: false, recommended: false },
+          { id: "codex-desktop", name: "Codex Desktop", provider: "OpenAI", launchSupport: "project-and-prompt", installed: false, recommended: false },
           { id: "codex-cli", name: "Codex CLI", provider: "OpenAI", launchSupport: "project-and-prompt", installed: false, recommended: false },
           { id: "grok-cli", name: "Grok Build", provider: "xAI", launchSupport: "project-and-prompt", installed: false, recommended: false },
         ],
       };
     }
     renderAiSurfaces();
-    const readyCount = aiSurfaceInventory.surfaces.filter((surface) => surface.installed).length;
+    const readyCount = EAIWizard.visibleAiSurfaces(aiSurfaceInventory).filter((surface) => surface.installed).length;
     setJourneyStage("ai", "active", readyCount ? `${readyCount} AI workspace${readyCount === 1 ? " is" : "s are"} ready to open.` : "Choose an AI workspace to install.");
     return true;
-  } catch (error) {
+  } catch (_error) {
     aiSurfaceStatus.innerHTML = "<strong>AI workspace check needs attention</strong><p>You can close setup and run <code>eai start</code> from the project folder.</p>";
-    showOutput("Your app is ready, but AI workspace detection did not finish.", String(error));
+    showOutput("Your app is ready, but AI workspace detection did not finish.", "Try Check again, choose another workspace, or run eai start from the project folder.");
     setJourneyStage("ai", "error", "AI workspace detection did not finish. The app remains ready.");
     return false;
   }
@@ -1053,13 +1128,19 @@ async function refreshAiSurfaces() {
   }
 }
 
-async function startAiSurface() {
-  const surface = aiSurfaceInventory?.surfaces.find((item) => item.id === selectedAiSurfaceId);
+async function startAiSurface(surfaceId = selectedAiSurfaceId) {
+  const surface = EAIWizard.visibleAiSurfaces(aiSurfaceInventory).find((item) => item.id === surfaceId);
   if (!surface || !createdProjectDirectory) {
     showOutput("Choose an AI workspace first.");
     return;
   }
-  startAiButton.disabled = true;
+  const now = Date.now();
+  if (aiSurfaceLaunchInProgress || now - aiSurfaceLastLaunchAt < aiSurfaceLaunchCooldownMs) return;
+  aiSurfaceLastLaunchAt = now;
+  setAiPromptToCopy();
+  setAiSurfaceLaunchBusy(true);
+  selectedAiSurfaceId = surface.id;
+  updateAiSurfaceControls(surface);
   const copy = aiSurfaceCopy(surface);
   setActivity(surface.installed ? `Opening ${copy.label}` : `Opening ${copy.label} download`, surface.installed ? copy.ready : copy.notInstalled, null, true, "", "Opening");
   try {
@@ -1071,23 +1152,55 @@ async function startAiSurface() {
       return;
     }
     const result = await invoke("start_ai_surface", { directory: createdProjectDirectory, surfaceId: surface.id });
-    setActivity(`${copy.label} opened`, copy.ready, 100, false, "", "Ready");
-    completeMessage.textContent = `${copy.label} is open. Complete its sign-in or project connection step to start building.`;
+    if (result?.action !== "launch" || result?.launched !== true || result?.surfaceId !== surface.id) {
+      throw new Error("The AI workspace did not confirm the requested project handoff.");
+    }
+    const launchMessage = aiSurfaceLaunchMessage(surface, result, EAIWizard.cleanText(result.message) || copy.ready);
+    setAiPromptToCopy(result.preparedPrompt === true ? null : result.promptToCopy);
+    setActivity(`${copy.label} opened`, launchMessage, 100, false, "", "Ready");
+    completeMessage.textContent = launchMessage;
     startAiButton.textContent = `Open ${copy.label} again`;
-    showOutput(`${copy.label} opened.`, copy.ready);
-    setJourneyStage("ai", "done", `${copy.label} opened with this project.`);
+    showOutput(`${copy.label} opened.`, launchMessage);
+    setJourneyStage("ai", "done", result.preparedPrompt === true
+      ? `${copy.label} opened with this project and the first message ready.`
+      : result?.promptToCopy
+        ? `${copy.label} opened; choose its project folder if needed, then choose Copy first message, paste it into ${copy.label}, and press Send.`
+        : `${copy.label} opened; follow its project selection step to continue.`);
   } catch (error) {
     setJourneyStage("ai", "error", "The selected AI workspace could not be opened.");
     setActivity("AI workspace could not start", "The selected AI workspace could not be opened. Your app remains ready.", 0, false, "", "Error");
     showOutput("Your app is safe and complete.", `Run eai start from ${createdProjectDirectory} or try another workspace.`);
   } finally {
-    startAiButton.disabled = false;
+    const cooldownRemaining = aiSurfaceLaunchCooldownMs - (Date.now() - aiSurfaceLastLaunchAt);
+    if (cooldownRemaining > 0) {
+      await new Promise((resolvePromise) => window.setTimeout(resolvePromise, cooldownRemaining));
+    }
+    setAiSurfaceLaunchBusy(false);
   }
 }
 
 async function runAction(action) {
   if (action === "start") return startSetup();
   if (action === "detect") return detect();
+  if (action === "copy-ai-prompt") {
+    if (!currentAiPromptToCopy) {
+      showOutput("There is no first message waiting to be copied.");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(currentAiPromptToCopy);
+      copyAiPromptButton.textContent = "First message copied";
+      const pasteShortcut = aiSurfaceInventory?.platform === "darwin" ? "Command-V" : "Ctrl-V";
+      const selectedSurface = aiSurfaceInventory?.surfaces?.find((surface) => surface.id === selectedAiSurfaceId);
+      const pasteTarget = aiSurfaceCopy(selectedSurface).label;
+      showOutput("First message copied.", `Return to ${pasteTarget}, click its message box, press ${pasteShortcut}, then press Send.`);
+    } catch {
+      const selectedSurface = aiSurfaceInventory?.surfaces?.find((surface) => surface.id === selectedAiSurfaceId);
+      const pasteTarget = aiSurfaceCopy(selectedSurface).label;
+      showOutput("Copy was blocked by this computer.", `Select and copy this first message, then paste it into ${pasteTarget} and press Send: ${currentAiPromptToCopy}`);
+    }
+    return;
+  }
   if (action === "install-all") return installPrerequisites();
   if (action === "login") return runLogin();
   if (action === "retry-workspaces") {

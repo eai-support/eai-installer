@@ -12,7 +12,7 @@ use std::process::{Child, Command, Stdio};
 use std::os::windows::process::CommandExt;
 use std::thread;
 use std::time::Duration;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use uuid::Uuid;
 
 #[derive(Serialize)]
@@ -87,6 +87,8 @@ struct AiSurface {
     install_url: String,
     launch_support: String,
     installed: bool,
+    #[serde(default)]
+    supports_app_bridge: bool,
     recommended: bool,
     previously_used: bool,
     status: String,
@@ -97,6 +99,7 @@ struct AiSurface {
 #[serde(rename_all = "camelCase")]
 struct AiSurfaceInventory {
     contract_version: String,
+    launch_contract_version: Option<String>,
     platform: String,
     project_directory: String,
     preferred_surface: Option<String>,
@@ -113,6 +116,10 @@ struct AiLaunchResult {
     surface_name: String,
     project_directory: String,
     prepared_prompt: bool,
+    #[serde(default)]
+    prompt_to_copy: Option<String>,
+    #[serde(default)]
+    prompt_insertion_status: Option<String>,
     message: String,
 }
 
@@ -128,12 +135,14 @@ struct E2eConfiguration {
 }
 
 const EAI_SIGNUP_URL: &str = "https://www.enterpriseaigroup.com/signup/developer";
+const AI_SURFACE_CONTRACT_VERSION: &str = "eai.ai-surfaces/v1";
+const AI_LAUNCH_CONTRACT_VERSION: &str = "eai.ai-launch/v1";
 
-// This is the minimum CLI version known to be compatible with this installer
-// release. The installer updates an older CLI during bootstrap, but local
-// readiness must not depend on a live npm metadata request: an offline check
-// must distinguish "not compatible yet" from "not installed" deterministically.
-const MIN_EAI_CLI_VERSION: (u64, u64, u64) = (3, 15, 2);
+// This is the semantic floor for the setup commands used by this installer.
+// AI launcher readiness is checked independently through the additive launch
+// contract so a previously released CLI cannot be mistaken for the fixed one.
+// Neither offline readiness check depends on a live npm metadata request.
+const MIN_EAI_CLI_VERSION: (u64, u64, u64) = (3, 15, 9);
 
 fn usable_home_path(path: PathBuf) -> Option<PathBuf> {
     if path.is_absolute() && path.parent().is_some() && path != Path::new("/") {
@@ -766,10 +775,19 @@ fn semantic_version(value: &str) -> Option<(u64, u64, u64)> {
     ))
 }
 
+#[cfg(test)]
+fn has_supported_ai_launch_contract(output: &str) -> bool {
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(output) else { return false; };
+    value.get("contractVersion").and_then(serde_json::Value::as_str) == Some(AI_SURFACE_CONTRACT_VERSION)
+        && value.get("launchContractVersion").and_then(serde_json::Value::as_str) == Some(AI_LAUNCH_CONTRACT_VERSION)
+}
+
 fn eai_cli_version() -> Option<String> {
     let current = version("eai", &["--version"])?;
     let current_version = semantic_version(&current)?;
-    (current_version >= MIN_EAI_CLI_VERSION).then_some(current)
+    let local_development_override = cfg!(debug_assertions)
+        && env::var("EAI_SETUP_ALLOW_LOCAL_CLI").ok().as_deref() == Some("1");
+    (current_version >= MIN_EAI_CLI_VERSION || local_development_override).then_some(current)
 }
 
 fn macos_git_ready() -> bool {
@@ -1610,8 +1628,8 @@ fn run_bootstrap_sync(app: AppHandle, step: String, project_name: Option<String>
                         return command_result("eai-cli", false, &format!("The EAI CLI installed, but its user command path could not be configured: {error}"), Some("Open a new terminal after adding ~/.eai-setup/npm-global/bin to PATH"), None, true);
                     }
                     emit_progress(&app, "eai-cli", "EAI CLI ready", "Verifying the eai command.", Some(90), Some(5));
-                    if version("eai", &["--version"]).is_none() {
-                        return command_result("eai-cli", false, "npm finished, but the installed EAI CLI could not be started.", Some("Choose Try again. If the problem continues, repair Node.js and rerun setup."), Some(format!("{stdout}\n{stderr}")), true);
+                    if eai_cli_version().is_none() {
+                        return command_result("eai-cli", false, "npm finished, but the installed EAI CLI could not be started or does not include the current AI workspace launcher.", Some("Choose Try again after the current EAI CLI release is available."), Some(format!("{stdout}\n{stderr}")), true);
                     }
                     let command = if cfg!(target_os = "windows") {
                         "npm install --global --prefix %APPDATA%\\npm @enterpriseai/cli"
@@ -1765,29 +1783,87 @@ fn open_signup() -> Result<String, String> {
     result.map(|_| EAI_SIGNUP_URL.to_string())
 }
 
+fn parse_ai_surface_inventory(stdout: &str) -> Result<AiSurfaceInventory, String> {
+    serde_json::from_str(stdout).map_err(|_| {
+        "EAI_SETUP_AI_INVALID_RESPONSE: EAI could not read the installed AI workspaces.".to_string()
+    })
+}
+
+fn parse_ai_launch_result(stdout: &str) -> Result<AiLaunchResult, String> {
+    serde_json::from_str(stdout).map_err(|_| {
+        "EAI_SETUP_AI_HANDOFF_INVALID_RESPONSE: EAI could not confirm the AI workspace handoff."
+            .to_string()
+    })
+}
+
+fn focus_setup_window(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.set_focus();
+    }
+}
+
 #[tauri::command]
-fn detect_ai_surfaces(directory: String) -> Result<AiSurfaceInventory, String> {
-    let (stdout, stderr) = run_program("eai", &["start", &directory, "--check", "--format", "json"])?;
-    let inventory: AiSurfaceInventory = serde_json::from_str(&stdout).map_err(|error| {
-        let detail = if stderr.is_empty() { stdout } else { stderr };
-        format!("EAI could not read the installed AI workspaces: {error}. {detail}")
+async fn detect_ai_surfaces(directory: String) -> Result<AiSurfaceInventory, String> {
+    let (stdout, _stderr) = tauri::async_runtime::spawn_blocking(move || {
+        run_program("eai", &["start", &directory, "--check", "--format", "json"])
+    })
+    .await
+    .map_err(|_| {
+        "EAI_SETUP_AI_DETECT_UNEXPECTED: The AI workspace check stopped unexpectedly.".to_string()
+    })?
+    .map_err(|_| {
+        "EAI_SETUP_AI_DETECT_FAILED: EAI could not check the installed AI workspaces.".to_string()
     })?;
-    if inventory.contract_version != "eai.ai-surfaces/v1" {
+    let inventory = parse_ai_surface_inventory(&stdout)?;
+    if inventory.contract_version != AI_SURFACE_CONTRACT_VERSION {
         return Err(format!("EAI returned an unsupported AI workspace contract: {}", inventory.contract_version));
+    }
+    if inventory.launch_contract_version.as_deref() != Some(AI_LAUNCH_CONTRACT_VERSION) {
+        return Err("The installed EAI CLI uses an older AI workspace launcher. Run setup again to update it.".to_string());
     }
     Ok(inventory)
 }
 
+fn ai_surface_start_args<'a>(directory: &'a str, surface_id: &'a str) -> Vec<&'a str> {
+    let mut args = vec!["start", directory, "--surface", surface_id];
+    if surface_id == "copilot-desktop" {
+        args.push("--allow-copilot-prompt-insertion");
+    }
+    args.extend(["--format", "json"]);
+    args
+}
+
 #[tauri::command]
-fn start_ai_surface(directory: String, surface_id: String) -> Result<AiLaunchResult, String> {
-    let (stdout, stderr) = run_program(
-        "eai",
-        &["start", &directory, "--surface", &surface_id, "--format", "json"],
-    )?;
-    serde_json::from_str(&stdout).map_err(|error| {
-        let detail = if stderr.is_empty() { stdout } else { stderr };
-        format!("EAI could not confirm the AI workspace handoff: {error}. {detail}")
+async fn start_ai_surface(app: AppHandle, directory: String, surface_id: String) -> Result<AiLaunchResult, String> {
+    let task = tauri::async_runtime::spawn_blocking(move || {
+        let args = ai_surface_start_args(&directory, &surface_id);
+        let (stdout, _stderr) = run_program("eai", &args).map_err(|_| {
+            "EAI_SETUP_AI_HANDOFF_FAILED: EAI could not open the selected AI workspace."
+                .to_string()
+        })?;
+        parse_ai_launch_result(&stdout)
     })
+    .await;
+
+    let result = match task {
+        Ok(Ok(result)) => result,
+        Ok(Err(error)) => {
+            focus_setup_window(&app);
+            return Err(error);
+        }
+        Err(_) => {
+            focus_setup_window(&app);
+            return Err(
+                "EAI_SETUP_AI_HANDOFF_UNEXPECTED: The AI workspace handoff stopped unexpectedly."
+                    .to_string(),
+            );
+        }
+    };
+
+    if !result.prepared_prompt && result.prompt_to_copy.is_some() {
+        focus_setup_window(&app);
+    }
+    Ok(result)
 }
 
 #[tauri::command]
@@ -1851,6 +1927,48 @@ mod tests {
         assert_eq!(usable_home_path(PathBuf::from("relative/home")), None);
         #[cfg(unix)]
         assert_eq!(usable_home_path(PathBuf::from("/Users/example")), Some(PathBuf::from("/Users/example")));
+    }
+
+    #[test]
+    fn ai_launcher_readiness_requires_the_current_additive_contract() {
+        let current = r#"{"contractVersion":"eai.ai-surfaces/v1","launchContractVersion":"eai.ai-launch/v1"}"#;
+        let stale = r#"{"contractVersion":"eai.ai-surfaces/v1"}"#;
+        assert!(has_supported_ai_launch_contract(current));
+        assert!(!has_supported_ai_launch_contract(stale));
+        assert!(!has_supported_ai_launch_contract("not json"));
+    }
+
+    #[test]
+    fn copilot_prompt_insertion_requires_the_explicit_desktop_opt_in() {
+        let copilot = ai_surface_start_args("/work/app", "copilot-desktop");
+        assert_eq!(copilot, vec![
+            "start", "/work/app", "--surface", "copilot-desktop",
+            "--allow-copilot-prompt-insertion", "--format", "json",
+        ]);
+        for surface in [
+            "vscode-copilot", "copilot-cli", "claude-desktop", "claude-cli",
+            "codex-desktop", "codex-cli", "grok-cli",
+        ] {
+            assert!(!ai_surface_start_args("/work/app", surface)
+                .contains(&"--allow-copilot-prompt-insertion"));
+        }
+    }
+
+    #[test]
+    fn ai_handoff_parse_errors_never_echo_cli_output() {
+        let sensitive = r#"not-json /Users/example/private/app ✨ Get started with EAI ✨ token=secret"#;
+        let inventory_error = parse_ai_surface_inventory(sensitive)
+            .err()
+            .expect("invalid inventory output should be rejected");
+        let launch_error = parse_ai_launch_result(sensitive)
+            .err()
+            .expect("invalid launch output should be rejected");
+
+        for error in [inventory_error, launch_error] {
+            assert!(!error.contains("/Users/example/private/app"));
+            assert!(!error.contains("Get started with EAI"));
+            assert!(!error.contains("token=secret"));
+        }
     }
 
     #[test]

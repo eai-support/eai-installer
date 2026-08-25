@@ -201,12 +201,20 @@
     return required.every((command) => report.tools.some((tool) => tool.command === command && tool.version));
   }
 
+  const hiddenAiSurfaceIds = new Set(["grok-cli"]);
+
+  function visibleAiSurfaces(inventory) {
+    if (!inventory || !Array.isArray(inventory.surfaces)) return [];
+    return inventory.surfaces.filter((surface) => !hiddenAiSurfaceIds.has(surface.id));
+  }
+
   function chooseAiSurface(inventory) {
-    if (!inventory || !Array.isArray(inventory.surfaces)) return null;
-    const readyIds = new Set(inventory.surfaces.filter((surface) => surface.installed).map((surface) => surface.id));
+    if (!inventory) return null;
+    const surfaces = visibleAiSurfaces(inventory);
+    const readyIds = new Set(surfaces.filter((surface) => surface.installed).map((surface) => surface.id));
     if (inventory.preferredSurface && readyIds.has(inventory.preferredSurface)) return inventory.preferredSurface;
     if (inventory.recommendedSurface && readyIds.has(inventory.recommendedSurface)) return inventory.recommendedSurface;
-    return inventory.surfaces.find((surface) => surface.installed)?.id || inventory.surfaces[0]?.id || null;
+    return surfaces.find((surface) => surface.installed)?.id || surfaces[0]?.id || null;
   }
 
   const aiSurfaceRecommendationScores = Object.freeze({
@@ -236,6 +244,7 @@
     initButtonLabel,
     isKebabCase,
     prerequisitesReady,
+    visibleAiSurfaces,
     chooseAiSurface,
     aiSurfaceRecommendation,
     retryActionLabel,

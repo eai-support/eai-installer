@@ -49,16 +49,31 @@ commands.
 - Gofer and the app template are fetched by `eai init`, so the CLI's supported
   provenance and compatibility checks remain in charge.
 - Supported AI workspaces are detected through `eai start --check --format
-  json`. Detection reads installed command and application metadata only.
+  json`. Detection reads installed command and application metadata plus the
+  selected project's Git root and origin URL, but not its source files.
 - The first use asks the user which ready AI workspace to use. Later uses may
   preselect the last workspace that opened successfully, while still allowing
   the user to switch.
 - The GitHub Copilot app, GitHub Copilot CLI, and GitHub Copilot in VS Code are
-  separate choices. The app requires the user to sign in and connect the local
-  project; the CLI is the terminal/headless installation option but still
-  requires first-use GitHub sign-in; VS Code requires the Copilot extension.
+  separate choices. When available, GitHub's supported CLI app bridge opens the
+  exact project and a new desktop session. On macOS, clicking the Copilot row
+  authorizes a bounded one-click handoff: EAI first verifies that Copilot's
+  official confirmation names the exact selected folder and exposes one unique
+  Allow button, then presses only that button. EAI next targets only the
+  verified app's single focused, empty Message field, inserts the fixed first
+  message, verifies it, and never presses Send. The installer supplies the
+  explicit `--allow-copilot-prompt-insertion` CLI opt-in only for that selected
+  Copilot Desktop handoff; other workspaces and older callers never receive
+  automation permission. A verified `github.com` origin can instead use the
+  installed app's documented deep link. Permission failures and other project-only fallbacks
+  expose a Copy first message button, while older connections may still require
+  manual project selection. The CLI is the
+  terminal/headless installation option but still requires first-use GitHub
+  sign-in; VS Code requires the Copilot extension.
 - GitHub Copilot in VS Code is the default recommendation when no supported
-  workspace is installed. Claude, Codex, and Grok remain explicit choices.
+  workspace is installed. Claude and Codex remain explicit choices. Grok stays
+  available to the CLI for backwards compatibility but is temporarily hidden
+  from the guided desktop setup.
 - The recommendation score is shown as a four-quarter Harvey ball. It scores
   automatic project opening, automatic delivery of the EAI first request,
   repository-owned EAI/Gofer instruction support, and an integrated visual

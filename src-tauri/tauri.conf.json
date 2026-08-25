@@ -30,6 +30,7 @@
     ],
     "macOS": {
       "signingIdentity": "-",
+      "entitlements": "./Entitlements.plist",
       "dmg": {
         "background": "icons/dmg-background.png",
         "windowSize": {

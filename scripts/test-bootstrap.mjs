@@ -12,7 +12,7 @@ for (const file of files) {
   if (/curl\s+[^\n|]*\|\s*(sh|bash)/i.test(text)) throw new Error(`${file}: unsafe curl pipe install found`);
 }
 const macDevSmoke = await readFile(new URL("../scripts/test-macos-dev.sh", import.meta.url), "utf8");
-for (const value of ["codesign --force --deep --sign -", "codesign --verify --deep --strict", "xattr -dr com.apple.quarantine", "Contents/MacOS/eai-setup"]) {
+for (const value of ["--options runtime --entitlements", "src-tauri/Entitlements.plist", "codesign --verify --deep --strict", "xattr -dr com.apple.quarantine", "Contents/MacOS/eai-setup"]) {
   if (!macDevSmoke.includes(value)) throw new Error(`macOS development smoke test is missing: ${value}`);
 }
 
@@ -70,8 +70,13 @@ if ((rust.match(/env::var_os\("HOME"\)/g) ?? []).length !== 1 || rust.includes('
 for (const value of ['command.env("HOME", &home)', 'command.env("npm_config_cache", home.join(".eai-setup/npm-cache"))', 'command.env_remove("HOME")', 'command.env_remove("npm_config_cache")']) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter lets a GUI child process inherit an invalid home: ${value}`);
 }
-for (const value of ["MIN_EAI_CLI_VERSION", "@enterpriseai/cli", "eai_cli_version()", "user_npm_global_exec_dirs", "current_version >= MIN_EAI_CLI_VERSION", "fn eai_cli_script", "APPDATA", "run_program_in_directory_with_env(\"node\", &node_args, directory, environment)"] ) {
+for (const value of ["MIN_EAI_CLI_VERSION", "@enterpriseai/cli", "eai_cli_version()", "eai.ai-launch/v1", "EAI_SETUP_ALLOW_LOCAL_CLI", "debug_assertions", "user_npm_global_exec_dirs", "current_version >= MIN_EAI_CLI_VERSION", "fn eai_cli_script", "APPDATA", "run_program_in_directory_with_env(\"node\", &node_args, directory, environment)"] ) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter does not verify the canonical EAI CLI release: ${value}`);
+}
+const manifestCliVersion = manifest.prerequisites.find((item) => item.id === "eai-cli")?.minimumVersion;
+const rustCliVersion = rust.match(/const MIN_EAI_CLI_VERSION: \(u64, u64, u64\) = \((\d+), (\d+), (\d+)\);/)?.slice(1).join(".");
+if (!manifestCliVersion || rustCliVersion !== manifestCliVersion) {
+  throw new Error(`EAI CLI minimum version mismatch: manifest=${manifestCliVersion}, rust=${rustCliVersion}`);
 }
 if (rust.includes("latest_eai_cli_requirement") || rust.includes('version("npm", &["view", "@enterpriseai/cli"')) {
   throw new Error("Tauri adapter must not use live npm metadata to decide whether the installed EAI CLI is ready");
@@ -98,8 +103,40 @@ if (!windowsManifest.includes('name="Microsoft.Windows.Common-Controls"') || !wi
 for (const step of ["homebrew", "git", "node", "eai-cli", "login", "init", "start"]) {
   if (!rust.includes(`\"${step}\"`)) throw new Error(`Tauri adapter is missing ${step}`);
 }
-for (const value of ["detect_ai_surfaces", "start_ai_surface", "install_ai_surface", "AiSurfaceInventory", "eai", "start", "--check"]) {
+for (const value of ["detect_ai_surfaces", "start_ai_surface", "install_ai_surface", "AiSurfaceInventory", "prompt_to_copy", "prompt_insertion_status", "--allow-copilot-prompt-insertion", "eai", "start", "--check"]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing AI workspace handoff: ${value}`);
+}
+const aiStartArgsSource = rust.slice(rust.indexOf("fn ai_surface_start_args"), rust.indexOf("async fn start_ai_surface"));
+if (!aiStartArgsSource.includes('surface_id == "copilot-desktop"') || !aiStartArgsSource.includes('args.push("--allow-copilot-prompt-insertion")')) {
+  throw new Error("Tauri adapter does not limit Copilot prompt-insertion permission to the explicitly selected desktop surface");
+}
+if (!rust.includes("async fn detect_ai_surfaces") || !/async fn detect_ai_surfaces[\s\S]*spawn_blocking/.test(rust)) {
+  throw new Error("Tauri adapter blocks the main thread while AI workspaces are detected");
+}
+if (!rust.includes("async fn start_ai_surface") || !/async fn start_ai_surface[\s\S]*spawn_blocking/.test(rust)) {
+  throw new Error("Tauri adapter blocks the main thread while an AI workspace opens");
+}
+const aiHandoffSource = rust.slice(rust.indexOf("fn parse_ai_surface_inventory"), rust.indexOf("fn install_ai_surface"));
+if (aiHandoffSource.includes("{stdout}") || aiHandoffSource.includes("{stderr}") || aiHandoffSource.includes("{error}")) {
+  throw new Error("Tauri adapter can expose raw AI workspace CLI output in a user-facing error");
+}
+if (!aiHandoffSource.includes("!result.prepared_prompt && result.prompt_to_copy.is_some()") || !/Ok\(Err\(error\)\)[\s\S]*focus_setup_window/.test(aiHandoffSource) || !/Err\(_\)[\s\S]*focus_setup_window/.test(aiHandoffSource)) {
+  throw new Error("Tauri adapter does not return focus to Setup for every manual-copy fallback and handoff failure");
+}
+if (!rust.includes("supports_app_bridge: bool")) {
+  throw new Error("Tauri adapter drops the Copilot CLI app-bridge capability before the wizard can choose honest launch guidance");
+}
+const automationTauriConfig = JSON.parse(await readFile(new URL("../src-tauri/tauri.conf.json", import.meta.url), "utf8"));
+const macInfoPlist = await readFile(new URL("../src-tauri/Info.plist", import.meta.url), "utf8");
+const macEntitlements = await readFile(new URL("../src-tauri/Entitlements.plist", import.meta.url), "utf8");
+if (automationTauriConfig.bundle?.macOS?.entitlements !== "./Entitlements.plist") {
+  throw new Error("macOS bundle does not apply the prompt-insertion Apple Events entitlement");
+}
+if (!macInfoPlist.includes("NSAppleEventsUsageDescription") || !macInfoPlist.includes("GitHub Copilot")) {
+  throw new Error("macOS bundle does not explain why EAI may automate the Copilot message field");
+}
+if (!macEntitlements.includes("com.apple.security.automation.apple-events")) {
+  throw new Error("macOS bundle cannot request permission to automate the Copilot message field");
 }
 for (const value of ["get_company_tenants", "get_company_apps", "list_company_apps", "app", "tenant", "list", "--format", "json", "directMembership", "app_key", "--app-key"]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing company workspace discovery: ${value}`);
@@ -157,13 +194,13 @@ const appSource = await readFile(new URL("../ui/app.js", import.meta.url), "utf8
 for (const value of ["let e2eAppCreated = false", "e2eAppCreated = Boolean(result?.app_created)", "appCreated: e2eAppCreated", 'e2eAppCreated ? "project" : "app"']) {
   if (!appSource.includes(value)) throw new Error(`Desktop release receipt does not preserve app creation evidence: ${value}`);
 }
-if (!rust.includes('inventory.contract_version != "eai.ai-surfaces/v1"')) {
+if (!rust.includes("inventory.contract_version != AI_SURFACE_CONTRACT_VERSION") || !rust.includes("inventory.launch_contract_version.as_deref() != Some(AI_LAUNCH_CONTRACT_VERSION)")) {
   throw new Error("Tauri adapter does not enforce the versioned AI surface contract");
 }
 for (const value of ["Homebrew.pkg", "/usr/sbin/pkgutil", "--check-signature", "with administrator privileges", "--stdinpass", "No Terminal window will open"]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing native macOS installation control: ${value}`);
 }
-for (const value of ["windows_package_bin_dirs", "windows_resolved_path", "env::split_paths", "ProgramW6432", "ProgramFiles(Arm)", "ProgramFiles(x86)", "CREATE_NO_WINDOW", "creation_flags", "APPDATA", "windows_shell_arg", "ComSpec", "ends_with(\".cmd\")", "command_line.push_str", "call {}", "windows_package_install_result", "windows_vc_runtime_version", "Microsoft.VCRedist.2015+", "npm_version", "run_npm_in_directory(&[\"--version\"], None)", "Node.js and npm are already installed and ready.", "installed EAI CLI could not be started."]) {
+for (const value of ["windows_package_bin_dirs", "windows_resolved_path", "env::split_paths", "ProgramW6432", "ProgramFiles(Arm)", "ProgramFiles(x86)", "CREATE_NO_WINDOW", "creation_flags", "APPDATA", "windows_shell_arg", "ComSpec", "ends_with(\".cmd\")", "command_line.push_str", "call {}", "windows_package_install_result", "windows_vc_runtime_version", "Microsoft.VCRedist.2015+", "npm_version", "run_npm_in_directory(&[\"--version\"], None)", "Node.js and npm are already installed and ready.", "installed EAI CLI could not be started or does not include the current AI workspace launcher."]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing Windows prerequisite safety support: ${value}`);
 }
 for (const value of ["xcode-select", "full Xcode is not required", "softwareupdate", "latest_command_line_tools_label", "refresh_macos_command_line_tools_catalog", "Refreshing Apple Software Update", "with administrator privileges", "secure administrator dialog", "native administrator install", "latest_node_artifact", "nodejs.org/dist/index.json", "osx-arm64-pkg", "osx-x64-pkg", "osx-arm64-tar", "osx-x64-tar", "SHASUMS256.txt", "shasum", "uname", "--prefix", "expose_user_npm_bin", "NVM_DIR", "versions/node", "NVM_BIN", "nvm_node_bin_dirs", "macos_package_bin_dirs"]) {
@@ -259,6 +296,7 @@ for (const obsolete of ["progress-area", "Step 3 of 6", "Step ${index + 1} of ${
 }
 if (!wizard.includes('id="retry-install"')) throw new Error("wizard: failed installation has no retry control");
 if (!wizard.includes('id="retry-install" data-action="install-all" type="button"')) throw new Error("wizard: install retry control can accidentally submit a form");
+if (!wizard.includes('id="copy-ai-prompt" data-action="copy-ai-prompt" hidden')) throw new Error("wizard: project-only Copilot handoff has no Copy first message action");
 for (const control of ["id=\"activity\"", "id=\"activity-title\"", "id=\"activity-step\"", "id=\"activity-detail\"", "id=\"activity-eta\"", "id=\"activity-heartbeat\"", "id=\"setup-stages\"", "id=\"build-summary\"", "id=\"activity-log\"", "id=\"admin-password\"", "id=\"admin-password-submit\""]) {
   if (!wizard.includes(control)) throw new Error(`wizard: missing activity status: ${control}`);
 }
@@ -273,12 +311,57 @@ if (app.includes("console.info(result.output)")) throw new Error("wizard: raw in
 if (app.split("\n").some((line) => line.includes("setActivity(") && line.includes("String(error)"))) {
   throw new Error("wizard: raw exception details must not be written to the build summary");
 }
+const aiDetectionSource = app.slice(app.indexOf("async function loadAiSurfaces"), app.indexOf("async function refreshAiSurfaces"));
+if (aiDetectionSource.includes("String(error)") || aiDetectionSource.includes("String(_error)")) {
+  throw new Error("wizard: raw AI workspace detection errors must not be shown to the user");
+}
 if (app.includes("initialComputerCheck")) throw new Error("wizard: repeat computer checks can leave the stage active");
 if (!app.includes("setActivity") || !app.includes("Installation complete") || !app.includes("listenForBootstrapProgress") || !app.includes("eventApi.listen") || !app.includes("setDetectionState") || !app.includes("phaseForTitle") || !app.includes("async function startSetup") || !app.includes("window.setTimeout(() => startSetup(), 250)") || !app.includes("setStep(4)") || !app.includes("async function runSignup") || !app.includes("open_signup") || !app.includes("dialog.open") || !app.includes("choose-folder") || !app.includes("get_company_tenants") || !app.includes("get_company_apps") || !app.includes("loadCompanyApps") || !app.includes("describeWorkspaceFailure") || !app.includes("companyTenantId") || !app.includes("appKey") || !app.includes("renderCompanyApps") || !app.includes("open_project") || !app.includes("projectPath") || !app.includes("initInProgress") || !app.includes("setInitButtonBusy") || !app.includes("aria-busy") || !app.includes("describeInitFailure") || !app.includes('showOutput(failure.title, `${failure.detail} Next: ${failure.next}`)')) {
   throw new Error("wizard: live activity status updates are missing");
 }
-for (const value of ["loadAiSurfaces", "renderAiSurfaces", "startAiSurface", "refreshAiSurfaces", "updateAiSurfaceControls", "createHarveyBall", "aiSurfaceRecommendation", "showModal", "aiSurfaceGuidance", "GitHub Copilot app", "GitHub Copilot CLI", "copilot-desktop", "copilot-cli", "detect_ai_surfaces", "start_ai_surface", "install_ai_surface"]) {
+for (const value of ["loadAiSurfaces", "renderAiSurfaces", "startAiSurface", "refreshAiSurfaces", "updateAiSurfaceControls", "setAiPromptToCopy", "promptToCopy", "navigator.clipboard.writeText", "Copy first message", "createHarveyBall", "aiSurfaceRecommendation", "showModal", "aiSurfaceGuidance", "GitHub Copilot app", "GitHub Copilot CLI", "copilot-desktop", "copilot-cli", "detect_ai_surfaces", "start_ai_surface", "install_ai_surface"]) {
   if (!app.includes(value)) throw new Error(`wizard: AI workspace behavior is missing ${value}`);
+}
+if (!app.includes("EAIWizard.visibleAiSurfaces(aiSurfaceInventory)")) {
+  throw new Error("wizard: hidden AI workspaces are not filtered from the completion screen");
+}
+if (!/input\.addEventListener\("click", \(\) => \{[\s\S]*startAiSurface\(surface\.id\)/.test(app)) {
+  throw new Error("wizard: clicking an AI workspace does not open that workspace immediately");
+}
+for (const value of ["aiSurfaceLastLaunchAt", "setAiSurfaceLaunchBusy", 'result?.action !== "launch"', "result?.launched !== true", "result?.surfaceId !== surface.id", "result.message", "result.preparedPrompt"]) {
+  if (!app.includes(value)) throw new Error(`wizard: AI workspace launch confirmation is incomplete: ${value}`);
+}
+const startAiSurfaceSource = app.slice(app.indexOf("async function startAiSurface"), app.indexOf("async function runAction"));
+if (!startAiSurfaceSource.includes(": result?.promptToCopy") || !startAiSurfaceSource.includes("choose its project folder if needed") || !startAiSurfaceSource.includes("paste it into ${copy.label}") || startAiSurfaceSource.includes('surface.launchSupport === "project-only"')) {
+  throw new Error("wizard: Copilot Copy fallback summary still depends on the pre-launch support label instead of the launch result");
+}
+const copyPromptActionSource = app.slice(app.indexOf('if (action === "copy-ai-prompt")'), app.indexOf('if (action === "install-all")'));
+if (!copyPromptActionSource.includes("const pasteTarget = aiSurfaceCopy(selectedSurface).label") || !copyPromptActionSource.includes("Return to ${pasteTarget}") || copyPromptActionSource.includes("Return to GitHub Copilot")) {
+  throw new Error("wizard: Copy first message instructions do not name the workspace the user actually opened");
+}
+if (!app.includes('surface?.launchSupport === "manual-project"') || !app.includes("manualReady")) {
+  throw new Error("wizard: desktop fallback copy still promises a project-and-prompt handoff");
+}
+const automaticCopilotGuidance = app.match(/automaticProjectReady:\s*"([^"]+)"/)?.[1] ?? "";
+if (!app.includes('surface?.launchSupport === "project-only"') || !app.includes("projectOnlyReady") || !app.includes("copilotPromptInsertionReady") || !automaticCopilotGuidance.includes("EAI will confirm") || !automaticCopilotGuidance.includes("this exact folder") || !automaticCopilotGuidance.includes("Clicking this workspace gives EAI permission") || !automaticCopilotGuidance.includes("EAI will not press Send")) {
+  throw new Error("wizard: project-only Copilot handoff does not explain confirmation and safe prompt insertion");
+}
+const aiSurfaceCopySource = app.slice(app.indexOf("function aiSurfaceCopy"), app.indexOf("function copilotPromptInsertionReady"));
+if (!aiSurfaceCopySource.includes("if (guidance.automaticProjectReady && copilotPromptInsertionReady(surface))") || aiSurfaceCopySource.indexOf("automaticProjectReady") > aiSurfaceCopySource.indexOf('launchSupport === "manual-project"')) {
+  throw new Error("wizard: the confirmed local Copilot app bridge does not take precedence over generic launch-support copy");
+}
+if (/Choose\s+Allow/.test(automaticCopilotGuidance)) {
+  throw new Error("wizard: one-click Copilot handoff still asks the user to confirm the verified folder dialog manually");
+}
+if (!app.includes("promptInsertionStatus") || !app.includes("Privacy & Security > Accessibility") || !app.includes("Nothing is broken")) {
+  throw new Error("wizard: macOS Copilot permission fallback is not understandable or actionable");
+}
+if (!app.includes("choose Copy first message") || !app.includes("paste it into Copilot") || !app.includes("press Send")) {
+  throw new Error("wizard: project-only Copilot handoff has no manual fallback when prompt insertion is unavailable");
+}
+const installerContract = await readFile(new URL("../docs/installer-contract.md", import.meta.url), "utf8");
+for (const value of ["clicking the Copilot row", "exact selected folder", "one unique", "presses only that button", "never presses Send", "--allow-copilot-prompt-insertion", "older callers never receive"]) {
+  if (!installerContract.includes(value)) throw new Error(`installer contract is missing the bounded one-click Copilot rule: ${value}`);
 }
 for (const value of ["setInterval(refreshActivityHeartbeat, 1000)", "Elapsed ${elapsed}s", "Screen updated every second", "Last installer update", "Waiting for your input", "waitingDetails", "activityEvents", "Stopped with error", "Checking the required tools", "journeyStages", "renderJourneyStages", "setJourneyStage", "bootstrap-summary", "recordSafeSummary", "summarizeCommandOutput"]) {
   if (!app.includes(value)) throw new Error(`wizard: per-second progress feedback is missing: ${value}`);
@@ -303,6 +386,7 @@ const wizardState = await readFile(new URL("../ui/wizard-state.js", import.meta.
 if (!wizardState.includes("prerequisitesReady") || !wizardState.includes("isKebabCase") || !wizardState.includes("describeInitFailure") || !wizardState.includes("Windows dependency setup needs attention") || !wizardState.includes("App dependencies need attention") || !wizardState.includes("initButtonLabel")) {
   throw new Error("wizard: state validation contract is missing");
 }
+if (!wizardState.includes("visibleAiSurfaces")) throw new Error("wizard: hidden AI workspace policy is missing");
 const styles = await readFile(new URL("../ui/styles.css", import.meta.url), "utf8");
 if (!styles.includes(".setup-stage summary::marker") || !styles.includes(".activity-log-heading::marker")) {
   throw new Error("wizard: accordion markers are not hidden consistently across desktop webviews");
