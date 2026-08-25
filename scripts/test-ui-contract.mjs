@@ -141,6 +141,19 @@ if (!/\.mk\.busy\s*\{[^}]*display:\s*block/s.test(css)) {
 if (!/\.eai-row \.mk \{[^}]*min-width:\s*16px/s.test(css)) {
   fail("the row marker lost its fixed width, so a spinner can resize the column");
 }
+/* A list divider separates one option from the next. On the row it
+   separates an option's title from its own explanation instead, and
+   leaves nothing between that option and the one below it. */
+if (!/\.i4-list \.i4-pick \{[^}]*border-bottom:\s*1px/s.test(css)) {
+  fail("the AI tool list's divider is not on the option, so an open option has no line below it");
+}
+if (!/\.i4-list \.i4-pick \.i4-row \{[^}]*border-bottom:\s*none/s.test(css)) {
+  fail("the row inside an option still draws a divider, which lands between its title and its explanation");
+}
+if (/\.i4-pick-alert \{[^}]*border-top:/s.test(css)) {
+  fail("the option's alert draws a line above itself, separating it from the row it belongs to");
+}
+
 if (!css.includes("summary::marker") || !css.includes("summary::-webkit-details-marker")) {
   fail("the disclosure triangle is not hidden consistently across desktop webviews");
 }

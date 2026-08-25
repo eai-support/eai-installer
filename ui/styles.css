@@ -659,13 +659,22 @@ button, input { font-family: inherit; }
 
 .i4-pick { display: block; }
 .i4-pick .i4-row:focus-visible { outline: none; }
-.i4-list .i4-pick .i4-row { border-bottom: 1px solid var(--color-border); }
-.i4-list .i4-pick:last-child .i4-row { border-bottom: none; }
-.i4-list .i4-pick.on .i4-row { border-bottom: none; }
+/* The divider separates one option from the next, so it belongs to the
+   option — not to the row inside it.
+
+   The prototype draws it on the row, which means an open option gets a
+   line between its own title and its own explanation, and none between
+   itself and the option below. The line then reads as a boundary
+   between two things that are one thing, and its absence reads as two
+   things that are one. Moving it to the wrapper puts it under the whole
+   option, alert and all, which is where a list divider goes. */
+.i4-list .i4-pick { border-bottom: 1px solid var(--color-border); }
+.i4-list .i4-pick:last-child { border-bottom: none; }
+.i4-list .i4-pick .i4-row { border-bottom: none; }
+
 .i4-pick:not(.on) .i4-pick-alert { display: none; }
 .i4-pick .i4-pick-alert {
   border: none;
-  border-top: 1px solid var(--color-border);
   border-radius: 0;
   margin: 0 16px 12px;
   width: calc(100% - 32px);
