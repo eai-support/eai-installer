@@ -55,7 +55,7 @@ hands control to the normal EAI CLI flow.
 ## Review the screens without installing anything
 
 ```bash
-npm run prototype
+npm run prototype        # then open http://localhost:4321/
 ```
 
 Opens every state the setup app can be in — seven screens, ten

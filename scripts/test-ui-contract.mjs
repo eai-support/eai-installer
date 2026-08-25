@@ -204,6 +204,23 @@ for (const name of await readdir(new URL("../ui/", import.meta.url))) {
   }
 }
 
+/* The rail is the prototype's, not one invented here. These are the
+   class names and the shapes assets/states.css defines; a rewrite that
+   drifts back to bordered option boxes or a coloured field is a rail
+   that reviews the app in somebody else's design language. */
+const railCss = await readFile(new URL("../prototype/rail.css", import.meta.url), "utf8");
+for (const name of ["st-rail", "st-title", "st-flows", "st-stage", "st-cap", "st-frame",
+  "rl-group", "rl-label", "rl-note", "rl-select", "rl-opt", "rl-tick", "rl-pill", "rl-chip"]) {
+  if (!railCss.includes(`.${name}`)) fail(`the playground rail has lost the prototype's .${name}`);
+}
+if (!/\.rl-opt \{[^}]*border:\s*none/s.test(railCss)) {
+  fail("the rail's options have grown a box again — in the prototype the chosen one is simply the one you can read");
+}
+if (!railCss.includes(".rl-tick .box.radio::after")) {
+  fail("the rail's radios tick instead of filling — a tick in a radio is a checkbox wearing the wrong shape");
+}
+if (!/grid-template-columns:\s*296px/.test(railCss)) fail("the rail is no longer the prototype's width");
+
 /* Two: the rail can express every state the app can be put into. A
    parameter the app reads and the rail never writes is a state nobody
    can review; a parameter the rail writes and the app ignores is a

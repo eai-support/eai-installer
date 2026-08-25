@@ -1,10 +1,13 @@
-# The statemachine playground
+# The statemachine
 
 Every state EAI Setup can be in, on one page, with a rail to reach them.
 
 ```bash
-npm run prototype        # http://localhost:4321/
+npm run prototype
 ```
+
+Then open **http://localhost:4321/** — that is the statemachine. It is
+the only address you need; the app on its own is a link inside the page.
 
 This is a review tool. It is **not** in the release: Tauri bundles `ui/`
 and nothing else, and `scripts/test-ui-contract.mjs` fails the build if
@@ -31,6 +34,19 @@ Two things follow from that, and both are checked by `npm test`:
   can review.
 - A parameter the rail sets that the app ignores is a control that does
   nothing.
+
+## The rail
+
+Ported from the prototype's own `assets/states.css` and its `renderRail`
+— same class names, same shapes, same reasoning. The options are not
+boxed, because the chosen one is simply the one you can read and the
+rest are still there. The failures carry a square when they combine and
+a circle when they cannot, so the difference is read rather than
+discovered by clicking. `npm test` fails if any of that drifts back.
+
+Two things differ from the original and both are forced: it uses system
+fonts rather than fetching Geist from Google, and the frame carries the
+shadow because an iframe cannot be styled from outside.
 
 ## What the rail asks
 

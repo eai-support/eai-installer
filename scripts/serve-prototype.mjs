@@ -88,7 +88,14 @@ const server = createServer(async (request, response) => {
 });
 
 server.listen(port, "127.0.0.1", () => {
-  console.log(`EAI Setup statemachine  →  http://localhost:${port}/`);
-  console.log("The app itself          →  http://localhost:%d/ui/index.html?screen=signin", port);
-  console.log("\nThis is a review tool. It is not in the bundle — Tauri ships ui/ only.");
+  /* One address, and it is the statemachine.
+
+     The banner used to print two — the page and the app on its own —
+     and the second one is the trap: open it and you get the installer
+     with no rail, which looks like the tool is broken rather than like
+     you opened the wrong thing. The app is still reachable, from a link
+     inside the page, which is where a link to it belongs. */
+  console.log(`\n  EAI Setup — statemachine\n\n  →  http://localhost:${port}/\n`);
+  console.log("  Every screen and every failure, in the real app, with a rail to reach them.");
+  console.log("  A review tool: it is outside ui/, so it is not in the bundle.\n");
 });
