@@ -34,7 +34,7 @@ if (!matrix.includes("known-issues.md")) {
   throw new Error("scenario matrix does not point at the log of what was deliberately left out");
 }
 const known = await readFile(new URL("../docs/known-issues.md", import.meta.url), "utf8");
-for (const id of ["KI-01", "KI-02", "KI-03", "KI-04", "KI-05"]) {
+for (const id of ["KI-01", "KI-02", "KI-03", "KI-04", "KI-05", "KI-06"]) {
   if (!known.includes(`## ${id}`)) throw new Error(`known issues log is missing ${id}`);
 }
 if (!known.includes("app name") || !known.includes("read-only")) {

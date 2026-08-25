@@ -135,3 +135,43 @@ the rail stays put, which was the point.
 A hairline appears above the rail only when something is scrolling
 underneath it. A rule under content that ends above it is a rule drawing
 a box for no reason.
+
+---
+
+## KI-06 · "Setup details" is an addition, and undecided
+
+**Status:** open, a decision to make · **Raised by:** Gareth, 2026-08-25
+
+**What it is.** A shut disclosure along the bottom of every screen, with
+a running record of what the installer actually did — each bootstrap
+step, each safe summary line from the CLI, and every failure with the
+message that came back. It replaced the old wizard's "Build summary"
+panel.
+
+**Why it is not obviously right.** It is not in the tested prototype and
+it is not in the Paper frames. The app is meant to be seven screens and
+nothing else, and this is an eighth thing on all of them. It also spends
+most of its life saying **"nothing yet"** — a control advertising its
+own emptiness — and it costs about 33px of every screen, on an app that
+has run into fit problems twice in one afternoon.
+
+**Why it might be.** It is the only record of what happened. When the
+designed sentence is not enough — the one support call in fifty where
+somebody needs to know which command failed and what it printed — there
+is otherwise nothing to look at, and the alternative is asking a
+non-technical person to reproduce it with a terminal open.
+
+**Four ways to settle it, cheapest first:**
+
+1. **Show it only once it has something to say.** Hidden while the
+   record is empty, which removes the "nothing yet" frame entirely and
+   costs nothing on the screens where it has nothing. A few lines.
+2. **Show it only after a failure.** The record exists throughout;
+   the strip appears when something has gone wrong.
+3. **Move it off the screens.** Keep the record, reach it by keyboard
+   shortcut or a menu item, so it costs no vertical space at all.
+4. **Remove it.** The seven screens and nothing else. Support falls back
+   to asking for the CLI's own output.
+
+Nothing has been changed pending the decision. (1) is the smallest thing
+that answers the specific frame this was raised against.
