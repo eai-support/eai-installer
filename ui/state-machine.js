@@ -167,7 +167,7 @@
       ],
       exclusive: true,
       why: "One at a time: with no workspace, there's no name field to have a name taken in.",
-      faultIds: ["workspace", "apps", "name"],
+      faultIds: ["workspace", "name"],
     },
     {
       id: "running",
@@ -310,17 +310,6 @@
         + "An EAI admin can add you, then sign in again.",
       note: () => "The account exists but belongs to nobody. Everything below question one stays down, because there is nothing to answer it about.",
       out: () => "Nothing they can do here — an EAI admin adds them, then they sign in again.",
-    },
-
-    apps: {
-      id: "apps",
-      screen: "setup",
-      name: "The workspace's apps would not load",
-      head: () => "EAI could not list the apps in this workspace.",
-      body: (platform, context = {}) => "Your sign-in is complete and the workspace is there, but its app list did not come back. "
-        + `Try again — nothing has been created.${context.detail ? ` ${context.detail}` : ""}`,
-      note: () => "A workspace with unreadable apps is not the same as a workspace with none: the questions below stay down until we know which it is.",
-      out: () => "Try again. If it keeps failing, an EAI admin can check the workspace.",
     },
 
     name: {
@@ -507,36 +496,52 @@
   /* --- Set up ---------------------------------------------------------
 
      The reveal, as a set of booleans. `stage` is the prototype's four
-     moments; the questions themselves are named so an extra one — the
-     app picker, which the prototype never had because self-serve
-     sign-up has no existing apps — can be slotted in without the rest
-     of the screen learning about it. */
+     moments across three questions: nothing answered, the name
+     revealed, the location revealed, the location answered. */
 
   /**
    * Which questions are on screen and which are answered.
    *
-   * `hasApps` adds the one question the prototype does not have. It is
-   * inserted after the workspace because that is what it depends on:
-   * you cannot pick an app until you have said whose apps they are.
+   * Three, always, exactly as the tested design has them. There was a
+   * fourth for a while — "new app, or one you already have" — because
+   * the platform can hold apps a project could be connected to. EAI
+   * Setup only ever creates from the EAI template, so that question had
+   * one real answer and asking it was asking somebody to confirm a
+   * decision they were never given.
+   *
+   * It also took the app name hostage: connecting to an existing app
+   * locked the name field, which is wrong even when the question
+   * exists. See docs/known-issues.md.
    */
-  function setupSteps(state, { hasApps = false, appAnswered = false } = {}) {
+  function setupSteps(state) {
     const upto = stageOf(state);
-    const steps = [
+    return [
       { id: "workspace", shown: upto >= 1, answered: upto >= 1 },
-    ];
-    if (hasApps) steps.push({ id: "app", shown: upto >= 1, answered: appAnswered });
-    steps.push(
       { id: "name", shown: upto >= 2, answered: upto >= 3 },
       { id: "folder", shown: upto >= 3, answered: upto >= 4 },
-    );
-    return steps.map((step, index) => ({ ...step, number: String(index + 1) }));
+    ].map((step, index) => ({ ...step, number: String(index + 1) }));
   }
 
-  /** Numbering has to follow the list, because the list changes length. */
-  function setupComplete(state, options = {}) {
+  function setupComplete(state) {
     if (faultsInForce(state).length) return false;
-    const steps = setupSteps(state, options);
-    return steps.every((step) => step.shown && step.answered);
+    return setupSteps(state).every((step) => step.shown && step.answered);
+  }
+
+  /**
+   * The two shapes of the location question.
+   *
+   * Before an answer it is one button, at the left, because somebody
+   * reads the heading and wants to go and choose. A greyed path sitting
+   * there instead reads as a value that is already filled in, and the
+   * question looks answered when it is not.
+   *
+   * After an answer it is the path, with the way to change it on the
+   * right. Derived from the stage rather than from whether a folder
+   * happens to be set, so the screen is a function of the state and the
+   * two can never disagree about which question is being asked.
+   */
+  function locationShape(state) {
+    return stageOf(state) >= 4 ? "chosen" : "choose";
   }
 
   /**
@@ -548,7 +553,7 @@
    */
   function setupSub(state, context = {}) {
     const who = context.account ? `Signed in as ${context.account}.` : "Signed in.";
-    if (isBroken(state, "workspace") || isBroken(state, "apps")) return `${who} One thing is in the way.`;
+    if (isBroken(state, "workspace")) return `${who} One thing is in the way.`;
     return `${who} Your workspace came with you — a few things, and your app exists.`;
   }
 
@@ -881,6 +886,7 @@
     runRowsComplete,
     screenById,
     setupComplete,
+    locationShape,
     setupSteps,
     setupSub,
     signinButtonLabel,

@@ -330,29 +330,44 @@ if (machine.looksLikeTakenName("the template could not be downloaded")) {
 {
   const state = machine.createState();
   machine.goTo(state, "setup", { stage: 1 });
-  let steps = machine.setupSteps(state);
-  if (steps.length !== 3) fail("the form without an app picker is not three questions");
+  const steps = machine.setupSteps(state);
+  if (steps.length !== 3) fail(`the form is not three questions: ${steps.length}`);
+  if (steps.map((step) => step.id).join(",") !== "workspace,name,folder") {
+    fail(`the form's questions are not the tested three: ${steps.map((step) => step.id)}`);
+  }
   if (steps.map((step) => step.number).join("") !== "123") fail("the three questions are not numbered 1-2-3");
   if (steps[1].shown || steps[2].shown) fail("the first stage reveals questions that have not been reached");
 
-  steps = machine.setupSteps(state, { hasApps: true });
-  if (steps.length !== 4) fail("an account with existing apps is not asked which one");
-  if (steps.map((step) => step.id).join(",") !== "workspace,app,name,folder") {
-    fail("the app question is not asked straight after the workspace it belongs to");
+  /* The app picker is gone on purpose: EAI Setup creates from the EAI
+     template every time, so "new app, or one you already have" had one
+     real answer. A fourth question reappearing means the scope crept
+     back. See docs/known-issues.md. */
+  if (machine.setupSteps(state, { hasApps: true }).length !== 3) {
+    fail("the form still grows a fourth question when it is told about existing apps");
   }
-  if (steps.map((step) => step.number).join("") !== "1234") fail("adding the app question does not renumber the form");
 
-  // The form is not complete until the app question has an explicit answer.
   machine.goTo(state, "setup", { stage: 4 });
-  if (!machine.setupComplete(state)) fail("a fully answered three-question form is not complete");
-  if (machine.setupComplete(state, { hasApps: true, appAnswered: false })) {
-    fail("the form completes with the app question unanswered — a new app could be created by accident");
-  }
-  if (!machine.setupComplete(state, { hasApps: true, appAnswered: true })) {
-    fail("answering the app question does not complete the form");
-  }
+  if (!machine.setupComplete(state)) fail("a fully answered form is not complete");
   machine.raise(state, "name");
   if (machine.setupComplete(state)) fail("a form with a failure on it reports itself complete");
+}
+
+/* The location question has two shapes, and which one is drawn follows
+   the state rather than whether a folder happens to be set. That
+   divergence is what made "Location — choose" draw its answered shape:
+   a greyed path and Change location, on the stage whose whole point is
+   that nothing has been picked. */
+{
+  const state = machine.createState();
+  machine.goTo(state, "setup", { stage: 1 });
+  for (const stage of [1, 2, 3]) {
+    state.stage = stage;
+    if (machine.locationShape(state) !== "choose") {
+      fail(`stage ${stage} draws the location question as answered before anybody has chosen`);
+    }
+  }
+  state.stage = 4;
+  if (machine.locationShape(state) !== "chosen") fail("the answered location question does not show the answer");
 }
 
 /* ==================== 6. CREATING, AS ROWS ====================== */

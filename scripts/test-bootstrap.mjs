@@ -258,14 +258,25 @@ for (const value of ['id="welcomeMark"', 'id="welcomeTitle"', 'id="welcomeSub"',
 }
 
 // The form, revealed downwards, with its questions and its rail.
-for (const value of ['data-step="workspace"', 'data-step="app"', 'data-step="name"', 'data-step="folder"', 'id="wsRows"', 'id="appRows"', 'id="projName"', 'id="projFolder"', 'id="chooseFolder"', 'id="chooseFolderStart"', 'id="createApp"', 'id="setupBack"']) {
+for (const value of ['data-step="workspace"', 'data-step="name"', 'data-step="folder"', 'id="wsRows"', 'id="projName"', 'id="projFolder"', 'id="chooseFolder"', 'id="chooseFolderStart"', 'id="createApp"', 'id="setupBack"']) {
   if (!wizard.includes(value)) throw new Error(`wizard: the setup form is missing ${value}`);
+}
+/* Three questions, and the app picker is not one of them: EAI Setup
+   creates from the EAI template every time, so "new app, or one you
+   already have" had one real answer. See docs/known-issues.md. */
+if (wizard.includes('data-step="app"') || wizard.includes('id="appRows"')) {
+  throw new Error("wizard: the app picker is back — the installer only ever creates from the EAI template");
+}
+if ((wizard.match(/data-step="/g) || []).length !== 3) {
+  throw new Error("wizard: the setup form is no longer the three questions of the tested design");
+}
+/* The location question has two shapes and both have to exist: one
+   button before an answer, the path and a way to change it after. */
+if (!wizard.includes('id="chooseFolderStart">Choose location') || !wizard.includes('id="chooseFolder">Change location')) {
+  throw new Error("wizard: the location question has lost one of its two shapes, or the two disagree about the noun");
 }
 if (!wizard.includes("Kebab case only")) throw new Error("wizard: the app name question does not say what shape a name is");
 if (!wizard.includes("Choose a workspace")) throw new Error("wizard: missing company workspace selection");
-if (!wizard.includes("Connect this project to an app that already exists")) {
-  throw new Error("wizard: existing apps can no longer be connected to a project");
-}
 if (!wizard.includes('id="createApp" disabled')) {
   throw new Error("wizard: the primary is enabled before the form has been answered");
 }
@@ -278,7 +289,7 @@ if (!wizard.includes('id="wsNote"') || !wizard.includes('id="wsRetry"')) {
   throw new Error("wizard: a failed workspace check has no retry beside the question it blocks");
 }
 const wsQuestionStart = wizard.indexOf('data-step="workspace"');
-const wsQuestionEnd = wizard.indexOf('data-step="app"');
+const wsQuestionEnd = wizard.indexOf('data-step="name"');
 if (wizard.indexOf('id="wsRetry"') < wsQuestionStart || wizard.indexOf('id="wsRetry"') > wsQuestionEnd) {
   throw new Error("wizard: workspace retry has drifted away from the workspace question");
 }

@@ -53,7 +53,6 @@ const fixtures = {
   step: "git",            // which prerequisite failed
   busy: null,             // the quiet fix-up, mid-run
   admin: false,           // macOS asking for the password
-  apps: false,            // the workspace already has apps
   workspaces: 1,
   reached: "template",    // how far the creating screen has got
   signin: null,           // waiting · waiting-long
@@ -113,10 +112,7 @@ function address() {
     if (fixtures.link) query.set("link", "1");
   }
   if (state.screen === "running") query.set("reached", fixtures.reached);
-  if (state.screen === "setup") {
-    if (fixtures.apps) query.set("apps", "1");
-    if (fixtures.workspaces === 2) query.set("workspaces", "2");
-  }
+  if (state.screen === "setup" && fixtures.workspaces === 2) query.set("workspaces", "2");
   return `../ui/index.html?${query}`;
 }
 
@@ -375,25 +371,13 @@ function runProgress() {
 /* --- the shapes of the form only company accounts ever see ---------- */
 
 function formShape() {
-  const node = group("This account", "Self-serve sign-up sees neither of these: one workspace, no apps.");
-  node.append(option("One workspace, no apps", fixtures.workspaces === 1 && !fixtures.apps, () => {
+  const node = group("This account", "Self-serve sign-up never sees the second of these.");
+  node.append(option("One workspace", fixtures.workspaces === 1, () => {
     fixtures.workspaces = 1;
-    fixtures.apps = false;
     show();
   }));
-  node.append(option("Two workspaces", fixtures.workspaces === 2 && !fixtures.apps, () => {
+  node.append(option("Two workspaces", fixtures.workspaces === 2, () => {
     fixtures.workspaces = 2;
-    fixtures.apps = false;
-    show();
-  }));
-  node.append(option("One workspace, two apps", fixtures.workspaces === 1 && fixtures.apps, () => {
-    fixtures.workspaces = 1;
-    fixtures.apps = true;
-    show();
-  }));
-  node.append(option("Two workspaces, two apps", fixtures.workspaces === 2 && fixtures.apps, () => {
-    fixtures.workspaces = 2;
-    fixtures.apps = true;
     show();
   }));
   return node;
@@ -575,7 +559,6 @@ if (initial.get("waiting") === "1") fixtures.waiting = true;
 if (initial.has("step")) fixtures.step = initial.get("step");
 if (initial.has("busy")) fixtures.busy = initial.get("busy");
 if (initial.get("admin") === "1") fixtures.admin = true;
-if (initial.get("apps") === "1") fixtures.apps = true;
 if (initial.get("workspaces") === "2") fixtures.workspaces = 2;
 if (initial.has("reached")) fixtures.reached = initial.get("reached");
 if (initial.has("signin")) fixtures.signin = initial.get("signin");
