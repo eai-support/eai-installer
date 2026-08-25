@@ -133,9 +133,30 @@ const surfaceInventory = {
     { id: "claude-desktop", installed: true },
   ],
 };
+if (wizard.chooseAiSurface(null) !== null) throw new Error("wizard cannot safely handle a missing AI workspace inventory");
 if (wizard.chooseAiSurface(surfaceInventory) !== "claude-desktop") throw new Error("wizard does not remember a ready AI surface");
 surfaceInventory.surfaces[1].installed = false;
 if (wizard.chooseAiSurface(surfaceInventory) !== "vscode-copilot") throw new Error("wizard does not fall back from a stale AI surface preference");
+
+const inventoryWithHiddenGrok = {
+  preferredSurface: "grok-cli",
+  recommendedSurface: "grok-cli",
+  surfaces: [
+    { id: "grok-cli", installed: true },
+    { id: "codex-desktop", installed: true },
+    { id: "claude-desktop", installed: true },
+  ],
+};
+const visibleAiSurfaces = wizard.visibleAiSurfaces(inventoryWithHiddenGrok);
+if (visibleAiSurfaces.some((surface) => surface.id === "grok-cli")) {
+  throw new Error("wizard still shows the temporarily hidden Grok workspace");
+}
+if (visibleAiSurfaces.map((surface) => surface.id).join(",") !== "codex-desktop,claude-desktop") {
+  throw new Error("wizard changed the order of visible AI workspaces while hiding Grok");
+}
+if (wizard.chooseAiSurface(inventoryWithHiddenGrok) !== "codex-desktop") {
+  throw new Error("wizard can still select the hidden Grok workspace");
+}
 
 const expectedRecommendationScores = {
   "vscode-copilot": 4,

@@ -62,7 +62,7 @@
     {
       "id": "eai-cli",
       "command": "eai",
-      "minimumVersion": "3.15.2",
+      "minimumVersion": "3.15.9",
       "required": true,
       "installers": {
         "all": "npm install --global @enterpriseai/cli"

@@ -124,8 +124,10 @@ To run the development check manually on a Mac after mounting a test DMG:
 scripts/test-macos-dev.sh "/Volumes/EAI Setup/EAI Setup.app"
 ```
 
-The script makes a disposable copy, so it does not alter the mounted image or
-the original app. It does not weaken Gatekeeper for normal applications.
+The script makes a disposable copy, preserves the app's macOS automation
+entitlement while applying its development signature, and does not alter the
+mounted image or the original app. It does not weaken Gatekeeper for normal
+applications.
 
 Development builds declare Tauri's `signingIdentity` as `-`, which creates a
 valid ad-hoc bundle signature. The release workflow overrides that identity

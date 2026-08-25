@@ -33,10 +33,13 @@ hands control to the normal EAI CLI flow.
    GitHub Copilot in VS Code when the user needs to choose one. The GitHub
    Copilot app, Copilot CLI, and Copilot in VS Code are shown as separate
    choices.
-9. After one clear provider-access confirmation, opens the project in GitHub
-   Copilot, Claude, Codex, or Grok with an EAI first request prepared where the
-   provider supports it. The desktop Copilot app explains that the user must
-   sign in and connect the local folder. Copilot CLI is the headless/terminal
+9. After one clear provider-access confirmation, clicking a workspace opens the
+   project in GitHub Copilot, Claude, or Codex with an EAI first request prepared where the
+   provider supports it. For a local GitHub Copilot app session on macOS,
+   clicking the Copilot row authorizes EAI to verify that Copilot's official
+   confirmation names the exact folder, press only its unique Allow button,
+   and insert the first message into the verified empty composer. EAI never
+   presses Send. Copilot CLI is the headless/terminal
    option, but its first use still requires GitHub sign-in. If a workspace is
    missing, the installer opens only that provider's fixed official page and
    provides a **Check again** action after installation.
@@ -94,6 +97,27 @@ private key belongs in this repository. The updater is deliberately disabled
 until its public key is configured in the release environment.
 
 ## Development
+
+To build the sibling `eai` checkout, install it into EAI Setup's private local
+test location, and open the real desktop app:
+
+```bash
+npm run dev
+```
+
+Close the EAI Setup window to stop the local app. The helper leaves the local
+CLI connected to the sibling checkout so repeated tests use the latest build.
+To restore the published CLI afterward, run:
+
+```bash
+npm install --global --prefix "$HOME/.eai-setup/npm-global" @enterpriseai/cli
+```
+
+For production, release the compatible `eai` CLI before releasing this
+installer. The installer intentionally refuses an older published CLI rather
+than silently falling back to incomplete workspace launching.
+
+Automated checks remain available separately:
 
 ```bash
 npm test

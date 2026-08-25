@@ -2,8 +2,14 @@
 set -euo pipefail
 
 app="${1:?usage: test-macos-dev.sh /path/to/EAI\ Setup.app}"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+entitlements="${script_dir}/../src-tauri/Entitlements.plist"
 if [[ "$app" != *.app || ! -d "$app" ]]; then
   echo "Expected a macOS .app bundle: $app" >&2
+  exit 2
+fi
+if [[ ! -f "$entitlements" ]]; then
+  echo "Expected macOS entitlements: $entitlements" >&2
   exit 2
 fi
 
@@ -14,7 +20,7 @@ copy="$staging/EAI Setup.app"
 # CI builds are intentionally unsigned. Re-sign only this disposable copy so
 # codesign can validate the bundle before the runtime smoke test.
 ditto "$app" "$copy"
-codesign --force --deep --sign - "$copy"
+codesign --force --deep --options runtime --entitlements "$entitlements" --sign - "$copy"
 codesign --verify --deep --strict --verbose=2 "$copy"
 xattr -dr com.apple.quarantine "$copy" 2>/dev/null || true
 

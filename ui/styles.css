@@ -112,7 +112,8 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .column-help:hover:not(:disabled) { border-color: transparent; }
 .help-icon { display: inline-grid; width: 16px; height: 16px; place-items: center; border: 1px solid currentColor; border-radius: 50%; font-size: 10px; line-height: 1; }
 .surface-options { display: grid; gap: 8px; }
-.surface-option { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 11px 12px; border: 1px solid #c9d4d9; border-radius: 6px; background: #fff; }
+.surface-option { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 11px 12px; border: 1px solid #c9d4d9; border-radius: 6px; background: #fff; cursor: pointer; }
+.surface-field[aria-busy="true"] .surface-option { opacity: .65; cursor: progress; pointer-events: none; }
 .surface-option:has(input:checked) { border-color: #1b6d50; box-shadow: 0 0 0 2px rgba(27, 109, 80, .12); }
 .surface-option input { margin: 0; padding: 0; }
 .surface-option strong { display: block; font-size: 13px; }

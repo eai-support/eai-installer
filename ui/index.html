@@ -103,7 +103,7 @@
           <h2 id="complete-title">Choose how to work with AI</h2>
           <p class="lead" id="complete-message">Your EAI app is ready. Choose an AI workspace, then follow the short sign-in step it shows.</p>
           <div class="completion-location" id="complete-location" hidden></div>
-          <div id="ai-surface-status" class="callout"><strong>Finding your AI workspaces</strong><p>EAI is checking this computer. No provider account or project content is read.</p></div>
+          <div id="ai-surface-status" class="callout"><strong>Finding your AI workspaces</strong><p>EAI is checking installed apps and this project's Git connection. No provider account or source file is read.</p></div>
           <fieldset id="ai-surface-field" class="surface-field" hidden>
             <legend>Choose an AI workspace</legend>
             <div class="surface-columns">
@@ -118,6 +118,7 @@
           <p id="ai-surface-next" class="surface-next" hidden></p>
           <p id="ai-surface-consent" class="quiet" hidden>The selected provider can read this project and use your provider account. EAI does not see or store that account.</p>
           <div class="panel-actions end">
+            <button class="secondary" id="copy-ai-prompt" data-action="copy-ai-prompt" hidden>Copy first message</button>
             <button class="secondary" id="open-project" data-action="open-project" hidden>Open project folder</button>
             <button class="secondary" id="refresh-ai" data-action="refresh-ai" hidden>Check again</button>
             <button class="secondary" data-action="finish">Close setup</button>
