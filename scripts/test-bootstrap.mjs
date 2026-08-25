@@ -391,6 +391,20 @@ for (const value of [
 if (!/function paint\(\)[\s\S]{0,900}?\breset\(\);/.test(app)) {
   throw new Error("wizard: paint() no longer resets before it draws, so a state can be half-applied");
 }
+/* Readiness attempts every missing prerequisite and reports them
+   together, rather than stopping at the first. The one exception is a
+   tool that needed the failed one: the EAI CLI is installed with npm, so
+   blaming it when Node is missing names the wrong thing. */
+if (!/for \(const step of missingSteps\(\)\)[\s\S]{0,600}?failed\.push\(step\)/.test(app)) {
+  throw new Error("wizard: the readiness sweep no longer collects the failures it finds");
+}
+if (!app.includes('raise("prereq", { steps: failed })')) {
+  throw new Error("wizard: the prerequisite failure no longer names every tool that failed");
+}
+if (!/step === "eai-cli" && failed\.includes\("node"\)/.test(app)) {
+  throw new Error("wizard: the EAI CLI is attempted after Node failed, which blames the wrong tool");
+}
+
 // The waiting box promises the screen updates by itself. It has to.
 if (!app.includes("setInterval") || !app.includes("waitingForSurfaceId")) {
   throw new Error("wizard: the waiting state does not actually watch for the tool to land");

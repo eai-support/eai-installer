@@ -50,7 +50,7 @@ const fixtures = {
   installed: [],          // surface ids on this machine — [] is the empty one
   pick: null,             // which one is selected, null = the app decides
   waiting: false,         // away on somebody else's website
-  step: "git",            // which prerequisite failed
+  steps: ["git"],         // which prerequisites failed — more than one can
   busy: null,             // the quiet fix-up, mid-run
   admin: false,           // macOS asking for the password
   workspaces: 1,
@@ -103,7 +103,7 @@ function address() {
     if (fixtures.waiting) query.set("waiting", "1");
   }
   if (state.screen === "signin") {
-    if (machine.isBroken(state, "prereq")) query.set("step", fixtures.step);
+    if (machine.isBroken(state, "prereq")) query.set("step", fixtures.steps.join(","));
     if (fixtures.busy) query.set("busy", fixtures.busy);
     if (fixtures.admin) query.set("admin", "1");
   }
@@ -320,6 +320,12 @@ function renderRail() {
         else machine.raise(state, id);
         show();
       }));
+      /* Which prerequisites, hung off the failure they belong to rather
+         than floating as a group of their own further down the rail.
+         They are values of that checkbox, so they are checkboxes: a
+         machine locked down enough to refuse Git usually refuses Node
+         too, and the screen can hold both. */
+      if (id === "prereq" && machine.isBroken(state, "prereq")) faults.append(prerequisites());
     }
     if (screen.why) {
       const why = document.createElement("div");
@@ -341,7 +347,10 @@ function renderRail() {
       state.platform = value;
       // Windows is the only platform with a fourth prerequisite, so a
       // selection naming it cannot survive a move away from Windows.
-      if (value !== "windows" && fixtures.step === "windows-runtime") fixtures.step = "git";
+      if (value !== "windows") {
+        const kept = fixtures.steps.filter((step) => step !== "windows-runtime");
+        fixtures.steps = kept.length ? kept : ["git"];
+      }
       show();
     }));
   }
@@ -365,7 +374,10 @@ function renderRail() {
 
   if (state.screen === "running") rail.append(runProgress());
   if (state.screen === "setup") rail.append(formShape());
-  if (state.screen === "signin") rail.append(signinDetail());
+  if (state.screen === "signin") {
+    const detail = signinDetail();
+    if (detail) rail.append(detail);
+  }
   if (state.screen === "welcome") rail.append(welcomeDetail());
   if (uses("harness")) rail.append(harnessDetail());
 }
@@ -411,18 +423,40 @@ function formShape() {
 
 /* --- what the sign-in screen is actually doing ---------------------- */
 
-function signinDetail() {
-  if (machine.isBroken(state, "prereq")) {
-    const node = group("Which prerequisite");
-    for (const [text, value] of PREREQ_STEPS) {
-      if (value === "windows-runtime" && state.platform !== "windows") continue;
-      node.append(option(text, fixtures.step === value, () => {
-        fixtures.step = value;
-        show();
-      }));
-    }
-    return node;
+/**
+ * The prerequisites, under the failure that owns them.
+ *
+ * Not a group: a group is a question about the state, and this is the
+ * detail of an answer already given. It is indented to the failure's own
+ * text so the nesting is read rather than inferred.
+ */
+function prerequisites() {
+  const node = document.createElement("div");
+  node.className = "rl-under";
+  const label = document.createElement("div");
+  label.className = "rl-label";
+  label.textContent = "Which one";
+  node.append(label);
+
+  for (const [text, value] of PREREQ_STEPS) {
+    if (value === "windows-runtime" && state.platform !== "windows") continue;
+    node.append(tickbox(text, fixtures.steps.includes(value), "checkbox", () => {
+      const next = fixtures.steps.includes(value)
+        ? fixtures.steps.filter((step) => step !== value)
+        : [...fixtures.steps, value];
+      // Unticking the last one is the same as saying it was something
+      // else, and a failure has to be about something.
+      fixtures.steps = next.length ? next : [value];
+      show();
+    }));
   }
+  return node;
+}
+
+function signinDetail() {
+  // The prerequisites moved under the failure they belong to; what is
+  // left here is the screen before anything has failed.
+  if (machine.isBroken(state, "prereq")) return null;
 
   const node = group("Readiness");
   node.append(option("Finished — the tick", !fixtures.busy && !fixtures.admin, () => {
@@ -536,7 +570,7 @@ function harnessDetail() {
    describes is directly below, saying it better. */
 function renderCaption() {
   const written = machine.caption(state, {
-    step: fixtures.step,
+    step: fixtures.steps[0],
     host: "api.au.myenterprise.ai",
     account: "you@example.com",
     projectName: "contract-renewals",
@@ -581,7 +615,7 @@ if (initial.has("installed")) {
 }
 if (initial.has("pick")) fixtures.pick = initial.get("pick");
 if (initial.get("waiting") === "1") fixtures.waiting = true;
-if (initial.has("step")) fixtures.step = initial.get("step");
+if (initial.has("step")) fixtures.steps = initial.get("step").split(",").filter(Boolean);
 if (initial.has("busy")) fixtures.busy = initial.get("busy");
 if (initial.get("admin") === "1") fixtures.admin = true;
 if (initial.get("workspaces") === "2") fixtures.workspaces = 2;

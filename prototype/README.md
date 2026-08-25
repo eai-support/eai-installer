@@ -68,7 +68,7 @@ shadow because an iframe cannot be styled from outside.
 | Answered so far | How far the form has been revealed | Set up |
 | This account | One workspace or two, with apps or without | Set up |
 | Before anyone presses anything | The quiet fix-up, mid-run; the Mac password | Sign in |
-| Which prerequisite | Git, Node, the CLI, the Windows runtime, or a check that never finished | Sign in, when broken |
+| Which one | Which prerequisites failed — checkboxes, under the failure they belong to, because more than one can | Sign in, when broken |
 | The moment | Signed in, waiting, or waiting long enough to worry | Signed in |
 | How far it has got | Which of the four rows is running or failed | Creating |
 | AI tools on this computer | Nothing, one, two, or all of them | Choose a harness, Hand-off, Built |
