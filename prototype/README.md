@@ -9,6 +9,16 @@ npm run prototype
 Then open **http://localhost:4321/** — that is the statemachine. It is
 the only address you need; the app on its own is a link inside the page.
 
+**Leave the tab open.** The server watches `ui/`, `prototype/` and
+`tauri.conf.json` and reloads any tab it is serving when one of them
+changes, so a change lands in front of you without a refresh and without
+restarting anything. Running it a second time says so rather than
+failing on the port.
+
+The reload client is added to HTML *responses*, never to the files, so
+nothing on disk knows the server exists and `ui/` is bundled exactly as
+it is written — `npm test` fails if any of it ever lands in a file.
+
 This is a review tool. It is **not** in the release: Tauri bundles `ui/`
 and nothing else, and `scripts/test-ui-contract.mjs` fails the build if
 anything named like this folder ever appears inside `ui/`.
