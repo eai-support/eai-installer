@@ -62,9 +62,11 @@ const facts = {
   connectivity: null,       // { ok, host }
   tenants: [],
   selectedTenantId: null,
-  selectedAppKey: null,     // null = create a new app
-  appAnswered: false,       // an explicit choice, not the default
-  appsLoadFailedFor: null,
+  /* Only the release test ever sets this. EAI Setup creates from the
+     EAI template every time, so there is no app question in the form —
+     see docs/known-issues.md. The plumbing stays because the CLI takes
+     --app-key and the guest-machine gate can be pointed at a fixed app. */
+  selectedAppKey: null,
   projectName: "",
   projectFolder: "",
   projectPath: null,
@@ -258,14 +260,15 @@ function reset() {
   el("wsRows").replaceChildren();
   el("wsNote").hidden = true;
   el("wsActs").hidden = true;
-  el("appRows").replaceChildren();
   el("folderHelp").textContent = dev.chooserNote;
   // Only when it differs: assigning `value` moves the caret to the end,
   // and the reveal repaints while somebody is still typing the name.
   if (el("projName").value.trim() !== facts.projectName) el("projName").value = facts.projectName;
-  el("projFolder").value = facts.projectFolder;
-  el("locCombo").hidden = !facts.projectFolder;
-  el("chooseFolderStart").hidden = Boolean(facts.projectFolder);
+  // The location question's two shapes are PAINT.setup's, because they
+  // follow the stage. Reset only puts it back to the unanswered one.
+  el("projFolder").value = "";
+  el("locCombo").hidden = true;
+  el("chooseFolderStart").hidden = false;
   for (const field of document.querySelectorAll(".eai-field")) {
     const error = field.querySelector(".eai-err");
     if (error) error.hidden = true;
@@ -436,32 +439,27 @@ const PAINT = {
     const fault = faults[0] || null;
     el("setupSub").textContent = machine.setupSub(state, { account: facts.account });
 
-    if (fault?.id === "workspace" || fault?.id === "apps") {
+    if (fault?.id === "workspace") {
       /* "No workspace for this account" underneath a green tick naming a
-         workspace is the screen contradicting itself in two lines. The
-         apps failure is different — the workspace is real and its name
-         is the context for what did not load — so only the first one
-         takes the row away. */
-      if (fault.id === "apps") renderWorkspaceRows();
-      else el("wsRows").replaceChildren();
+         workspace is the screen contradicting itself in two lines, so
+         the row goes rather than sitting above the thing that says there
+         isn't one. */
+      el("wsRows").replaceChildren();
       const node = stepNode("workspace");
       node.hidden = false;
-      el("wsNoteTitle").textContent = fault.name;
-      el("wsNoteBody").textContent = fault.body(platform(), {
-        account: facts.account,
-        detail: facts.failureContext[fault.id]?.detail,
-      });
+      const context = facts.failureContext.workspace || {};
+      el("wsNoteTitle").textContent = context.title || fault.name;
+      el("wsNoteBody").textContent = fault.body(platform(), { account: facts.account, detail: context.detail });
       el("wsNote").hidden = false;
-      // A workspace nobody can add you to has no retry; a list that did
-      // not load has one, and offering the wrong one is worse than
-      // offering neither.
-      el("wsActs").hidden = fault.id !== "apps";
+      /* A workspace nobody can add you to has no retry — an EAI admin
+         has to add them and then they sign in again. A list that timed
+         out has one. Offering the wrong one of those is worse than
+         offering neither, so it follows what the failure actually was. */
+      el("wsActs").hidden = !context.retryable;
       return;
     }
 
-    const hasApps = availableApps().length > 0;
-    const steps = machine.setupSteps(state, { hasApps, appAnswered: facts.appAnswered });
-    for (const step of steps) {
+    for (const step of machine.setupSteps(state)) {
       const node = stepNode(step.id);
       if (!node) continue;
       node.hidden = !step.shown;
@@ -469,26 +467,23 @@ const PAINT = {
       const numeral = node.querySelector(".i3-num");
       if (numeral) numeral.textContent = step.answered ? "✓" : step.number;
     }
-    // The app question only exists for accounts that have apps.
-    if (!hasApps) stepNode("app").hidden = true;
 
     renderWorkspaceRows();
-    if (hasApps) renderAppRows();
 
-    /* An existing app names its own project. Letting the two drift is how
-       a folder ends up pointing at a different app from the one it was
-       connected to, and nothing later in the flow can undo that. */
-    const named = Boolean(facts.selectedAppKey);
-    el("projName").readOnly = named;
-    el("nameHelp").textContent = named
-      ? "Taken from the app you chose, so the project and the app match."
-      : "Kebab case only. Example: workflow-name-here";
+    /* The location question, in whichever of its two shapes the state
+       says. Before an answer it is one button at the left, because
+       somebody reads the heading and wants to go and choose; a greyed
+       path sitting there instead reads as an answer that is already in. */
+    const chosen = machine.locationShape(state) === "chosen";
+    el("chooseFolderStart").hidden = chosen;
+    el("locCombo").hidden = !chosen;
+    if (chosen) el("projFolder").value = facts.projectFolder;
 
     if (fault?.id === "name") {
       setFieldError("name", fault.message(platform(), { projectName: facts.projectName }));
     }
 
-    el("createApp").disabled = !machine.setupComplete(state, { hasApps, appAnswered: facts.appAnswered });
+    el("createApp").disabled = !machine.setupComplete(state);
   },
 
   /* eai init, said in the words of the flow board. */
@@ -737,11 +732,6 @@ function selectedTenant() {
   return facts.tenants.find((tenant) => tenant.id === facts.selectedTenantId) || null;
 }
 
-function availableApps() {
-  const tenant = selectedTenant();
-  return Array.isArray(tenant?.apps) ? tenant.apps : [];
-}
-
 function renderWorkspaceRows() {
   const rows = el("wsRows");
   rows.replaceChildren();
@@ -766,25 +756,6 @@ function renderWorkspaceRows() {
       tenant.slug || "",
       tenant.id === facts.selectedTenantId,
       () => chooseTenant(tenant.id),
-    ));
-  }
-}
-
-function renderAppRows() {
-  const rows = el("appRows");
-  rows.replaceChildren();
-  rows.appendChild(pickRow(
-    "Create a new app",
-    "A new app in this workspace, named below.",
-    facts.appAnswered && !facts.selectedAppKey,
-    () => chooseApp(null),
-  ));
-  for (const app of availableApps()) {
-    rows.appendChild(pickRow(
-      app.displayName,
-      `${app.key} · ${app.status}`,
-      facts.selectedAppKey === app.key,
-      () => chooseApp(app.key),
     ));
   }
 }
@@ -1148,7 +1119,6 @@ async function loadWorkspaces() {
     facts.selectedTenantId = helpers.resolveTenantSelection(tenants, facts.selectedTenantId);
     note(`${tenants.length} workspace${tenants.length === 1 ? "" : "s"} available.`);
     goTo("setup");
-    if (facts.selectedTenantId) await loadApps(facts.selectedTenantId);
     syncStage();
     return true;
   } catch (error) {
@@ -1156,66 +1126,53 @@ async function loadWorkspaces() {
     note(`${failure.title}: ${failure.diagnostic}`, "error");
     facts.tenants = [];
     goTo("setup");
-    raise(/no active company workspaces|no company workspaces/i.test(failure.diagnostic) ? "workspace" : "apps", {
+    raise("workspace", {
       account: facts.account,
+      title: failure.title,
       detail: failure.next,
+      retryable: failure.retryable,
     });
     return false;
   }
 }
 
+/**
+ * The workspace's existing apps, for the release gate only.
+ *
+ * Nothing in the form reads this: EAI Setup creates from the EAI
+ * template every time. The guest-machine test can be pointed at a fixed
+ * app with EAI_SETUP_E2E_APP_KEY, and this is what proves that app is
+ * really there before the receipt claims it was used.
+ */
 async function loadApps(tenantId) {
   const tenant = facts.tenants.find((item) => item.id === tenantId);
   if (!tenant) return false;
-  if (tenant.appsLoaded) return true;
   try {
     tenant.apps = await invoke("get_company_apps", { tenantId });
-    tenant.appsLoaded = true;
-    facts.appsLoadFailedFor = null;
-    // No apps is not a question, so the form does not grow one.
-    if (!Array.isArray(tenant.apps) || !tenant.apps.length) facts.appAnswered = true;
     note(`${tenant.apps?.length || 0} existing app${tenant.apps?.length === 1 ? "" : "s"} in ${tenant.displayName}.`);
     return true;
   } catch (error) {
-    facts.appsLoadFailedFor = tenantId;
     const failure = helpers.describeAppFailure(error);
     note(`${failure.title}: ${failure.diagnostic}`, "error");
-    raise("apps", { detail: failure.next });
     return false;
   }
 }
 
 function chooseTenant(tenantId) {
   facts.selectedTenantId = tenantId;
-  facts.selectedAppKey = null;
-  facts.appAnswered = false;
-  const tenant = selectedTenant();
-  if (tenant) tenant.appsLoaded = tenant.appsLoaded || false;
   machine.clear(state);
-  syncStage();
-  paint();
-  loadApps(tenantId).then(() => { syncStage(); paint(); });
-}
-
-function chooseApp(appKey) {
-  facts.selectedAppKey = appKey;
-  facts.appAnswered = true;
-  // An existing app names the project: the folder has to match the app
-  // it is being connected to, and letting the two drift is how a project
-  // ends up pointing at the wrong app.
-  if (appKey) facts.projectName = appKey;
   syncStage();
   paint();
 }
 
 /** The reveal, recomputed from the answers rather than counted upwards. */
 function syncStage() {
-  const hasApps = availableApps().length > 0;
-  const workspaceAnswered = Boolean(facts.selectedTenantId) && (!hasApps || facts.appAnswered);
+  const workspace = Boolean(facts.selectedTenantId);
+  const name = workspace && helpers.isKebabCase(facts.projectName);
   state.stage = machine.stageForAnswers({
-    workspace: workspaceAnswered,
-    name: workspaceAnswered && helpers.isKebabCase(facts.projectName),
-    folder: workspaceAnswered && helpers.isKebabCase(facts.projectName) && Boolean(facts.projectFolder),
+    workspace,
+    name,
+    folder: name && Boolean(facts.projectFolder),
   });
 }
 
@@ -1501,7 +1458,6 @@ async function runE2eFlow() {
     return;
   }
   facts.selectedAppKey = e2eConfig.appKey || null;
-  facts.appAnswered = true;
   facts.projectName = e2eConfig.projectName || "eai-release-test";
   facts.projectFolder = e2eConfig.directory || "";
   syncStage();
@@ -1549,8 +1505,7 @@ el("welcomeCopy").addEventListener("click", async () => {
 el("wsRetry").addEventListener("click", () => {
   machine.clear(state);
   paint();
-  if (facts.appsLoadFailedFor) loadApps(facts.appsLoadFailedFor).then(() => { syncStage(); paint(); });
-  else loadWorkspaces();
+  loadWorkspaces();
 });
 
 /**
@@ -1568,10 +1523,7 @@ el("projName").addEventListener("input", (event) => {
   machine.clear(state, "name");
   syncStage();
   if (state.stage !== before || hadNameFault) paint();
-  else el("createApp").disabled = !machine.setupComplete(state, {
-    hasApps: availableApps().length > 0,
-    appAnswered: facts.appAnswered,
-  });
+  else el("createApp").disabled = !machine.setupComplete(state);
 });
 
 async function chooseFolder() {
@@ -1662,24 +1614,31 @@ function applyDevAddress() {
   facts.demo = true;
   facts.account = "you@example.com";
   facts.projectName = "contract-renewals";
-  facts.projectFolder = state.platform === "windows" ? "C:\\Users\\you\\Projects" : "/Users/you/Projects";
-  facts.projectPath = `${facts.projectFolder}${state.platform === "windows" ? "\\" : "/"}contract-renewals`;
+
+  /* The location, only once the form says it has been chosen.
+
+     Filling it in at every stage is what made "Location — choose"
+     unreviewable: the question drew its answered shape — a greyed path
+     and Change location — on the stage whose whole point is that
+     nothing has been picked yet. The fixture has to obey the same rule
+     the real app does, which is that the location is set when, and only
+     when, somebody has been to the chooser. */
+  const root = state.platform === "windows" ? "C:\\Users\\you\\Projects" : "/Users/you/Projects";
+  const separator = state.platform === "windows" ? "\\" : "/";
+  const locationChosen = state.screen !== "setup" || machine.locationShape(state) === "chosen";
+  facts.projectFolder = locationChosen ? root : "";
+  // The later screens open the folder, so they always have a path.
+  facts.projectPath = `${root}${separator}contract-renewals`;
   facts.projectDirectory = facts.projectPath;
-  facts.tenants = [{ id: "preview", displayName: "Northwind Group", slug: "northwind", active: true, apps: [], appsLoaded: true }];
+
+  facts.tenants = [{ id: "preview", displayName: "Northwind Group", slug: "northwind", active: true, apps: [] }];
   facts.selectedTenantId = "preview";
-  facts.appAnswered = true;
   facts.runReached = query.get("reached") || "template";
 
-  /* ?workspaces=2 and ?apps=1 reach the two shapes of the form that only
-     company accounts ever see, and that a self-serve tester never will. */
+  /* ?workspaces=2 reaches the one shape of the form a self-serve tester
+     never sees: an account that administers more than one workspace. */
   if (query.get("workspaces") === "2") {
-    facts.tenants.push({ id: "preview-2", displayName: "Northwind Retail", slug: "northwind-retail", active: true, apps: [], appsLoaded: true });
-  }
-  if (query.get("apps") === "1") {
-    facts.tenants[0].apps = [
-      { key: "contract-renewals", displayName: "Contract renewals", status: "active" },
-      { key: "supplier-intake", displayName: "Supplier intake", status: "active" },
-    ];
+    facts.tenants.push({ id: "preview-2", displayName: "Northwind Retail", slug: "northwind-retail", active: true, apps: [] });
   }
 
   /* Which AI tools are on this machine, as a list of ids.

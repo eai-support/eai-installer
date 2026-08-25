@@ -353,7 +353,11 @@ button, input { font-family: inherit; }
   font-family: var(--font-mono);
   font-size: 13px;
   line-height: 16px;
-  color: var(--color-muted-foreground);
+  /* The answer, not a hint. The prototype greys this, and greyed text
+     next to an empty-looking field is the thing people read as a
+     placeholder — which is what it looked like before the question had
+     two distinct shapes. It only ever holds a path somebody chose. */
+  color: var(--color-foreground);
 }
 
 .eai-inner {

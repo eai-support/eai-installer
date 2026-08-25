@@ -133,29 +133,12 @@
               </div>
             </section>
 
-            <!-- Not in the tested prototype, because self-serve sign-up
-                 has no existing apps to choose between. Company accounts
-                 do, and connecting a project to the wrong one is not
-                 something a later screen can undo, so it is a question
-                 rather than a guess. Hidden entirely when the workspace
-                 has no apps, which is the common case. -->
-            <section class="i3-step" data-step="app" hidden>
-              <div class="i3-step-head">
-                <span class="i3-num">2</span>
-                <div class="tx">
-                  <b>New app, or one you already have</b>
-                  <span>Connect this project to an app that already exists, or create a new one.</span>
-                </div>
-              </div>
-              <div class="eai-rows" id="appRows"></div>
-            </section>
-
             <section class="i3-step" data-step="name" hidden>
               <div class="i3-step-head">
                 <span class="i3-num">2</span>
                 <div class="tx">
                   <b>Name your app</b>
-                  <span id="nameHelp">Kebab case only. Example: workflow-name-here</span>
+                  <span>Kebab case only. Example: workflow-name-here</span>
                 </div>
               </div>
               <div class="eai-field" data-field="name">
@@ -176,7 +159,7 @@
                 <button class="eai-btn loc-start" type="button" id="chooseFolderStart">Choose location</button>
                 <div class="eai-combo" id="locCombo" hidden>
                   <input type="text" id="projFolder" readonly aria-label="The chosen location" />
-                  <button class="eai-inner" type="button" id="chooseFolder">Change folder</button>
+                  <button class="eai-inner" type="button" id="chooseFolder">Change location</button>
                 </div>
                 <div class="eai-err" hidden><i class="mk fail bang sm">!</i><span></span></div>
               </div>

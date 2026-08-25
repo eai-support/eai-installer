@@ -24,10 +24,10 @@ visible.
 | AUTH-05 | Sign in | Workspace discovery returns a temporary 502, 503, or 504 response | Setup retries the request, preserves the completed sign-in, and offers a workspace-only retry if the service remains unavailable. |
 | APP-01 | App | One company workspace is available | It is selected automatically and shown as the owner. |
 | APP-02 | App | Several company workspaces are available | The user chooses the owner explicitly before continuing. |
-| APP-03 | App | Selected workspace has no apps | The form offers creation of a new app. |
-| APP-04 | App | Selected workspace has existing apps | The user can choose an existing app or Create a new app. |
-| APP-05 | App | Workspace or app discovery fails | No initialization call is made; the user sees a retryable error. |
-| APP-06 | App | User administers many company workspaces | Setup loads the workspace list once and loads apps only for the selected workspace; one unrelated workspace cannot block the whole screen. |
+| APP-03 | App | Any workspace | The form always creates a new app from the EAI template; there is no app-type question. |
+| APP-04 | App | The workspace already has apps | They are not offered — the installer only creates from the template. Connecting to an existing app is CLI-only. See docs/known-issues.md KI-02. |
+| APP-05 | App | Workspace discovery fails | No initialization call is made; a temporary failure offers a retry beside the question, a missing-membership failure does not. |
+| APP-06 | App | User administers many company workspaces | The workspace question becomes a list; choosing one reveals the name question. No app list is fetched, so one unrelated workspace cannot block the screen. |
 | LOCATION-01 | Location | Enter a valid parent folder | The project folder will be created beneath that parent. |
 | LOCATION-02 | Location | Use Finder or File Explorer and cancel | The current folder value is unchanged and the user can continue. |
 | LOCATION-03 | Location | Select a parent folder whose name differs from the project | A new child folder with the project name is created. |
@@ -56,6 +56,9 @@ visible.
 | STATE-05 | Set up | Answer each question in turn | The next question appears under the answer with no Continue between them; Back and Create app are present from the first question. |
 | STATE-06 | Set up | Clear the app name after choosing a location | The location question closes again; Create app greys out. |
 | STATE-07 | Set up | The chosen name already exists in the chosen folder | The error is shown in the name field, on the form, not on the Creating screen. |
+| STATE-11 | Set up | The location has not been chosen yet | One button, at the left, reading Choose location. No path, no greyed text, and nothing that reads as an answer already in. |
+| STATE-12 | Set up | The location has been chosen | The path is shown, with Change location on the right of it. Both controls say "location", matching the question. |
+| STATE-13 | Set up | Any stage | The form is three questions — workspace, name, location. The app name is always editable. |
 | STATE-08 | Set up | The account has no workspace | No workspace row is shown beside the failure, and every question below stays down. |
 | STATE-09 | Creating | Initialization fails partway | The row that was running is marked failed, the rows after it stay pending, no fifth row appears, and Retry this step is offered. |
 | STATE-10 | Built | The harness opened on the project | The success overlay lands over the hand-off and offers Open the project folder and Done. |
