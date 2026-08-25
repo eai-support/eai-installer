@@ -257,6 +257,22 @@ body.st {
 .rl-tick.on .box svg { opacity: 1; transform: none; }
 .rl-tick.on .box.radio::after { transform: none; }
 
+/* --- what hangs off a failure ----------------------------------
+
+   Not a group of its own: a group is a question about the state, and
+   this is the detail of an answer already given. Indented to the
+   failure's own text — box plus gap — so the nesting is read rather
+   than inferred. */
+
+.rl-under {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  margin: 2px 0 6px 25px;
+}
+.rl-under .rl-label { margin-bottom: 4px; }
+
 /* --- the pill, for the two-way answers -------------------------
 
    The prototype fills the track grey and floats a white thumb on it.

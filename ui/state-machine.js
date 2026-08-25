@@ -141,7 +141,11 @@
       id: "signin",
       name: "Sign in",
       note: 'The app opens here. One status, with two faces: a tick saying the computer is ready, or a row for each thing in the way. Never both — "ready" is a claim that sign-in can proceed, so nothing that stops it may sit beside it.',
-      comboHead: "Two things are in the way.",
+      /* Counted, because more than one prerequisite can fail on the same
+         locked-down machine and each of them is a row. The old version
+         was the literal string "Two things are in the way", which was
+         right only while a fault could contribute exactly one row. */
+      comboHead: (count) => `${["", "One thing is", "Two things are", "Three things are", "Four things are", "Five things are"][count] || `${count} things are`} in the way.`,
       combo: "A managed computer that would not let Git install is often the same one that cannot reach the EAI API. Two rows, one list, and one Retry that has to be honest about fixing two different things.",
       faultIds: ["prereq", "network"],
       exclusive: false,
@@ -224,6 +228,12 @@
         const step = context.step || "git";
         const name = toolName(step);
         const detail = context.detail ? ` ${context.detail}` : "";
+        /* "Nothing else is waiting on it" is true of one failure and a
+           lie beside a second — the prototype names this as the problem
+           with the combination, and now that one failure can be two rows
+           it would be a lie twice on the same screen. The caller says
+           whether this row is the only thing in the way. */
+        const alone = context.alone !== false ? " Nothing else is waiting on it." : "";
         /* Nothing was being installed — the look itself did not finish.
            Offering the install advice here would send somebody to
            approve a prompt that was never shown. */
@@ -237,27 +247,27 @@
           return [
             `Windows would not install ${name}`,
             `winget could not install ${name} on this PC — it may be missing, blocked by policy, or still waiting on an approval prompt. `
-              + `Approve it, or install ${name} yourself, then choose Retry. Nothing else is waiting on it.${detail}`,
+              + `Approve it, or install ${name} yourself, then choose Retry.${alone}${detail}`,
           ];
         }
         if (platform === "linux") {
           return [
             `${name} could not be installed`,
             `The package manager needed a graphical authorisation prompt that this session did not get. `
-              + `Install ${name} with your distribution's package manager, then choose Retry. Nothing else is waiting on it.${detail}`,
+              + `Install ${name} with your distribution's package manager, then choose Retry.${alone}${detail}`,
           ];
         }
         if (step === "git") {
           return [
             "Apple needs your approval to install Git",
             "macOS blocked the Command Line Tools install, so Git is missing. Approve it from the prompt macOS showed, "
-              + `or run xcode-select --install in Terminal, then choose Retry. Nothing else is waiting on it.${detail}`,
+              + `or run xcode-select --install in Terminal, then choose Retry.${alone}${detail}`,
           ];
         }
         return [
           `${name} could not be installed`,
           `macOS stopped the install before it finished. Approve any prompt it showed, then choose Retry. `
-            + `Nothing else is waiting on it.${detail}`,
+            + `${alone.trim()}${detail}`,
         ];
       },
       note: (platform) => (platform === "windows"
@@ -480,8 +490,12 @@
     if (!faults.length) {
       return "Use the account you signed up with. Your browser opens for the password, and it stays there.";
     }
-    if (faults.length > 1) return screenById("signin").comboHead;
-    return faults[0].head(state.platform, context);
+    /* Counted in rows rather than faults. "Two things are in the way"
+       above three rows is the screen contradicting itself, and one fault
+       can now be two rows. */
+    const rows = signinProblems(state, context).length;
+    if (rows > 1) return screenById("signin").comboHead(rows);
+    return faults[0].head(state.platform, context[faults[0].id] || {});
   }
 
   function signinButtonLabel(state) {
@@ -489,8 +503,30 @@
   }
 
   /** The rows the sign-in screen shows instead of the tick. */
+  /**
+   * The rows the sign-in screen shows instead of the tick.
+   *
+   * A fault does not always mean a row. A machine locked down enough to
+   * refuse Git usually refuses Node too, and telling somebody about one
+   * of them, then the next after they have fixed it, is the drip-feed
+   * this screen exists to avoid — so the prerequisite failure carries a
+   * list and contributes a row for each thing on it.
+   */
   function signinProblems(state, context = {}) {
-    return faultsInForce(state).map((fault) => fault.problem(state.platform, context[fault.id] || {}));
+    const faults = faultsInForce(state);
+    const stepsOf = (fault) => {
+      const own = context[fault.id] || {};
+      return own.steps?.length ? own.steps : [own.step || "git"];
+    };
+    // Counted first, because each row's wording depends on whether it is
+    // the only one.
+    const rows = faults.reduce((total, fault) => total + (fault.id === "prereq" ? stepsOf(fault).length : 1), 0);
+
+    return faults.flatMap((fault) => {
+      const own = { ...(context[fault.id] || {}), alone: rows === 1 };
+      if (fault.id !== "prereq") return [fault.problem(state.platform, own)];
+      return stepsOf(fault).map((step) => fault.problem(state.platform, { ...own, step }));
+    });
   }
 
   /* --- Set up ---------------------------------------------------------

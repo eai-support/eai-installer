@@ -14,7 +14,7 @@ visible.
 | PRE-02 | Computer | Git is missing | Only Git is installed, then its version is rechecked. |
 | PRE-03 | Computer | Node.js or npm is missing | Node.js and npm are installed together, then both are rechecked. |
 | PRE-04 | Computer | EAI CLI is missing or below the supported release | The canonical CLI package is installed or updated, then `eai --version` is rechecked. |
-| PRE-05 | Sign in | A prerequisite installer fails or permission is cancelled | The tick is replaced by a row naming the exact item and its fix; the primary greys out and Retry appears. |
+| PRE-05 | Sign in | A prerequisite installer fails or permission is cancelled | The tick is replaced by a row naming each item that failed and its fix; the primary greys out and Retry appears. |
 | PRE-06 | Sign in | Choose Retry after fixing the prerequisite | Only the missing item is retried, and the tick returns when it lands. |
 | PRE-07 | Computer | WinGet reports that Node.js is already installed and no upgrade is available | Setup verifies the live `node` and `npm` commands and continues when they work; WinGet's no-change exit is not treated as an installation failure. |
 | AUTH-01 | Sign in | Browser sign-in succeeds | The company workspaces are loaded and app setup opens. |
@@ -53,6 +53,8 @@ visible.
 | STATE-02 | Sign in | A prerequisite failed and the EAI API is unreachable | Both rows appear in one list, chronologically, under "Two things are in the way"; the tick is not shown beside either. |
 | STATE-03 | Sign in | The network probe cannot run on this machine | Connectivity is treated as reachable and sign-in decides; the user is not sent to their VPN settings over a missing probe. |
 | STATE-04 | Sign in | A prerequisite install fails because the network is down | The screen reports the connection, not the prerequisite; the fix offered is the one that will work. |
+| STATE-17 | Sign in | Two prerequisites both fail | Both are attempted, both are reported as rows in the same list, and the heading counts rows. Neither row claims nothing else is waiting on it. |
+| STATE-18 | Sign in | Node.js fails and the EAI CLI is also missing | The CLI is not attempted, because it is installed with npm; the failure names Node.js and does not blame the CLI. |
 | STATE-05 | Set up | Answer each question in turn | The next question appears under the answer with no Continue between them; Back and Create app are present from the first question. |
 | STATE-06 | Set up | Clear the app name after choosing a location | The location question closes again; Create app greys out. |
 | STATE-07 | Set up | The chosen name already exists in the chosen folder | The error is shown in the name field, on the form, not on the Creating screen. |

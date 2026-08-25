@@ -941,7 +941,7 @@ async function runReadiness() {
 
     if (!await detect()) {
       facts.prereqBusy = null;
-      raise("prereq", { step: "detect", detail: "" });
+      raise("prereq", { steps: ["detect"] });
       return false;
     }
 
@@ -958,18 +958,40 @@ async function runReadiness() {
       return true;
     }
 
+    /* Every missing prerequisite is attempted, and every failure is
+       reported together.
+
+       This used to stop at the first one. On a machine locked down
+       enough to refuse Git — which is the machine this failure exists
+       for — Node and the CLI are usually refused too, so stopping at
+       Git meant telling somebody one thing, waiting while they fixed it,
+       and then telling them the next. Three round trips to learn what
+       was knowable on the first.
+
+       The one thing not attempted after a failure is a tool that needed
+       the failed one: the EAI CLI is installed with npm, so reporting
+       that it could not be installed when the real cause is that Node is
+       missing names the wrong thing. */
+    const failed = [];
     for (const step of missingSteps()) {
+      if (step === "eai-cli" && failed.includes("node")) {
+        note("Skipped the EAI CLI: it is installed with npm, and Node.js is not ready.");
+        continue;
+      }
       facts.prereqBusy = step;
       facts.prereqDetail = "";
       if (state.screen === "signin") paint();
-      if (!await runBootstrapStep(step)) return false;
+      if (!await runBootstrapStep(step, { collect: true })) failed.push(step);
       await detect();
     }
 
     facts.prereqBusy = null;
+    if (failed.length) {
+      raise("prereq", { steps: failed });
+      return false;
+    }
     if (!helpers.prerequisitesReady(facts.environment, facts.demo)) {
-      const stillMissing = missingSteps()[0] || "git";
-      raise("prereq", { step: stillMissing, detail: "" });
+      raise("prereq", { steps: missingSteps().length ? missingSteps() : ["git"] });
       return false;
     }
     note("Everything EAI needs is ready.");
@@ -980,14 +1002,26 @@ async function runReadiness() {
   }
 }
 
-async function runBootstrapStep(step) {
+/**
+ * One prerequisite.
+ *
+ * `collect` is for the readiness sweep, which attempts every missing
+ * tool and raises one failure naming all of them at the end. Without it
+ * each step would raise its own, and the screen would redraw itself
+ * around a single failure three times before showing the real answer.
+ */
+async function runBootstrapStep(step, { collect = false } = {}) {
+  const stop = (faultId, context) => {
+    facts.prereqBusy = null;
+    if (collect && faultId === "prereq") return false;
+    raise(faultId, context);
+    return false;
+  };
   let result;
   try {
     const adminPassword = step === "git" && platform() === "macos" ? await requestMacAdminPassword() : null;
     if (step === "git" && platform() === "macos" && !adminPassword) {
-      facts.prereqBusy = null;
-      raise("prereq", { step: "git", detail: "Approval was cancelled, so nothing was changed." });
-      return false;
+      return stop("prereq", { steps: ["git"], detail: "Approval was cancelled, so nothing was changed." });
     }
     result = await invoke("run_bootstrap", {
       step,
@@ -997,27 +1031,21 @@ async function runBootstrapStep(step) {
       companyTenantId: null,
     });
   } catch (error) {
-    facts.prereqBusy = null;
     const message = helpers.cleanText(error);
     note(`${machine.toolName(step)} could not be installed: ${message}`, "error");
-    raise(machine.classifyBootstrapFailure(step, message), {
-      step,
-      detail: "",
+    return stop(machine.classifyBootstrapFailure(step, message), {
+      steps: [step],
       host: facts.connectivity?.host || "the EAI API",
     });
-    return false;
   }
   if (result.output) recordCommandSummaries(result.output);
   if (!result.ok && !result.demo) {
-    facts.prereqBusy = null;
     const message = helpers.cleanText(result.message);
     note(`${machine.toolName(step)} could not be installed: ${message}`, "error");
-    raise(machine.classifyBootstrapFailure(step, message), {
-      step,
-      detail: "",
+    return stop(machine.classifyBootstrapFailure(step, message), {
+      steps: [step],
       host: facts.connectivity?.host || "the EAI API",
     });
-    return false;
   }
   note(`${machine.toolName(step)} is ready.`);
   return true;
@@ -1720,7 +1748,7 @@ function applyDevAddress() {
   };
 
   facts.failureContext = {
-    prereq: { step: query.get("step") || "git" },
+    prereq: { steps: (query.get("step") || "git").split(",").filter(Boolean) },
     network: { host: "api.au.myenterprise.ai" },
     init: initFailures[facts.runReached] || initFailures.template,
   };

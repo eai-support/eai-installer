@@ -133,7 +133,7 @@ function everySentence(platform) {
   for (const screen of machine.SCREENS) {
     machine.goTo(state, screen.id);
     lines.push(screen.name, screen.note);
-    if (screen.combo) lines.push(screen.comboHead, screen.combo);
+    if (screen.combo) lines.push(screen.comboHead(2), screen.combo);
     if (screen.why) lines.push(screen.why);
     for (const id of screen.faultIds) {
       state.faults = [id];
@@ -245,12 +245,78 @@ if (!machine.readyRow("windows").body.includes(String(machine.checkedTools("wind
 
   machine.raise(state, "network");
   const both = machine.signinHead(state, {});
-  if (both !== machine.screenById("signin").comboHead) fail("two failures do not get the combination sentence");
+  if (both !== machine.screenById("signin").comboHead(2)) fail("two failures do not get the combination sentence");
 
   const rows = machine.signinProblems(state, { prereq: { step: "git" }, network: { host: "api.example.com" } });
   if (rows.length !== 2) fail("two failures do not produce two rows");
   if (!rows[1][0].includes("api.example.com")) fail("the network row does not name the host it could not reach");
   if (rows.some(([title, body]) => !title || !body)) fail("a failure row is missing its title or its explanation");
+}
+
+/* One failure, more than one row.
+
+   A machine locked down enough to refuse Git usually refuses Node too.
+   Reporting one, waiting while somebody fixes it, then reporting the
+   next is three round trips to learn what was knowable on the first —
+   so the prerequisite failure carries a list and the screen counts
+   rows rather than faults. */
+{
+  const state = machine.createState();
+  machine.raise(state, "prereq");
+  const two = machine.signinProblems(state, { prereq: { steps: ["git", "node"] } });
+  if (two.length !== 2) fail(`two failed prerequisites gave ${two.length} rows`);
+  if (!two[0][0].includes("Git")) fail("the first row does not name Git");
+  if (!two[1][0].includes("Node")) fail("the second row does not name Node.js");
+  if (machine.signinHead(state, { prereq: { steps: ["git", "node"] } }) !== "Two things are in the way.") {
+    fail("two prerequisite rows do not get the combination sentence");
+  }
+
+  // And with the network down as well, that is three, not two.
+  machine.raise(state, "network");
+  const three = machine.signinProblems(state, { prereq: { steps: ["git", "node"] }, network: { host: "api.example.com" } });
+  if (three.length !== 3) fail(`two prerequisites and a network failure gave ${three.length} rows`);
+  if (machine.signinHead(state, { prereq: { steps: ["git", "node"] } }) !== "Three things are in the way.") {
+    fail("the head counts faults rather than the rows on the screen");
+  }
+
+  /* "Nothing else is waiting on it" is true of one failure and a lie
+     beside a second. The prototype names this as the flaw in the
+     combination; two prerequisite rows would have made it a lie twice on
+     one screen. */
+  for (const platform of PLATFORMS) {
+    const single = machine.signinProblems(Object.assign(machine.createState(), { platform, faults: ["prereq"] }),
+      { prereq: { steps: ["git"] } });
+    if (!single[0][1].includes("Nothing else is waiting on it")) {
+      fail(`a lone ${platform} prerequisite failure no longer says it is the only one`);
+    }
+    const pair = machine.signinProblems(Object.assign(machine.createState(), { platform, faults: ["prereq"] }),
+      { prereq: { steps: ["git", "node"] } });
+    for (const [, body] of pair) {
+      if (body.includes("Nothing else is waiting on it")) {
+        fail(`a ${platform} row claims nothing else is waiting while another row is beside it`);
+      }
+    }
+    // And beside the network failure, which is the prototype's own case.
+    const withNetwork = machine.signinProblems(
+      Object.assign(machine.createState(), { platform, faults: ["prereq", "network"] }),
+      { prereq: { steps: ["git"] }, network: { host: "api.example.com" } },
+    );
+    if (withNetwork[0][1].includes("Nothing else is waiting on it")) {
+      fail(`the ${platform} prerequisite row still says nothing else is waiting beside a network failure`);
+    }
+  }
+
+  // One is still one, and still says its own sentence.
+  machine.clear(state, "network");
+  const one = machine.signinProblems(state, { prereq: { steps: ["git"] } });
+  if (one.length !== 1) fail("one failed prerequisite is not one row");
+  if (machine.signinHead(state, { prereq: { steps: ["git"] } }) !== machine.FAULTS.prereq.head("macos", {})) {
+    fail("a single failure no longer says what it is");
+  }
+  // A context that names one step the old way still works.
+  if (machine.signinProblems(state, { prereq: { step: "node" } }).length !== 1) {
+    fail("a single-step context no longer produces a row");
+  }
 }
 
 /* The prerequisite row names the thing that actually failed. */
