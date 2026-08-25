@@ -61,6 +61,22 @@
      never declared, so four rules silently drop their font-weight. */
   --font-weight-semibold: 600;
 
+  /* The app's own width, and the design's.
+
+     The prototype states it where it shows the app on its own — the
+     statemachine page frames it at `width: min(100%, 900px)` and
+     `height: 720px`. I ported the screens and the window chrome and
+     missed the frame that holds them, so the content stretched to
+     whatever it was given: at a maximised window, or opened straight in
+     a browser, a two-button form ran the full width of a monitor.
+
+     The window opens at this size. When somebody makes it bigger the
+     content stays this wide and centres, which is what a desktop app
+     does — growing the window gives you more room around the thing, not
+     a wider thing. `src-tauri/tauri.conf.json` declares the same number
+     and scripts/test-ui-contract.mjs fails if the two disagree. */
+  --app-width: 900px;
+
   --spacing-2: 8px;
   --spacing-3: 12px;
   --spacing-4: 16px;
@@ -101,6 +117,9 @@ button, input { font-family: inherit; }
   flex: 1;
   flex-direction: column;
   min-height: 0;
+  width: 100%;
+  max-width: var(--app-width);
+  margin-inline: auto;
   overflow-y: auto;
   padding: 26px 34px 28px;
   font-family: var(--font-sans);
@@ -923,6 +942,16 @@ button, input { font-family: inherit; }
   font-size: 12px;
   color: var(--color-muted-foreground);
 }
+/* The strip spans the window — it is the app's own footer — but what is
+   written on it lines up with the content column above, so its two ends
+   are not stranded at the edges of a wide window. */
+.eai-diag summary,
+.eai-diag-log,
+.eai-diag-foot {
+  width: 100%;
+  max-width: var(--app-width);
+  margin-inline: auto;
+}
 .eai-diag summary {
   display: flex;
   align-items: center;
@@ -952,7 +981,7 @@ button, input { font-family: inherit; }
 .eai-diag-log li { display: grid; grid-template-columns: 62px 1fr; gap: 8px; }
 .eai-diag-log time { color: var(--color-quiet); }
 .eai-diag-log li[data-kind="error"] span { color: var(--color-destructive); }
-.eai-diag-foot { margin: 0; padding: 0 34px 10px; font-size: 11px; color: var(--color-quiet); }
+.eai-diag-foot { margin-block: 0; padding: 0 34px 10px; font-size: 11px; color: var(--color-quiet); }
 
 /* ===================== quieter machines ========================== */
 

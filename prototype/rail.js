@@ -136,6 +136,8 @@ async function sizeFrame() {
     if (window_?.width && window_?.height) {
       frame.style.width = `${window_.width}px`;
       frame.style.height = `${window_.height}px`;
+      // The caption above the app measures itself from the same number.
+      document.documentElement.style.setProperty("--app-width", `${window_.width}px`);
       return;
     }
     throw new Error("tauri.conf.json declares no window size");

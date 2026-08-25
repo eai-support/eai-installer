@@ -164,12 +164,15 @@ kbd {
   overflow: auto;
 }
 
+/* Caption and app share one column and one width, and that width comes
+   from tauri.conf.json via rail.js — a caption wider than the thing it
+   describes reads as a different page. */
 .st-cap {
   display: flex;
   flex-direction: column;
   gap: 4px;
   width: 100%;
-  max-width: 900px;
+  max-width: var(--app-width, 900px);
 }
 .st-cap b { font-size: 15px; font-weight: 600; }
 .st-cap span { font-size: 12.5px; line-height: 1.6; color: var(--muted); }
@@ -180,6 +183,11 @@ kbd {
 .st-frame {
   position: relative;
   flex: none;
+  /* The window's declared size, capped to whatever room there is. A
+     fixed width would push the app off a laptop screen once the rail
+     took its 300px, and reviewing a design you have to scroll sideways
+     to see is reviewing a different design. */
+  max-width: 100%;
   overflow: hidden;
   border: 1px solid #d4d4d8;
   border-radius: 12px;

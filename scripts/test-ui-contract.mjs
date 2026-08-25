@@ -164,6 +164,27 @@ for (const match of html.matchAll(/<input\b[^>]*>/g)) {
   if (!labelled) fail(`the field ${id ? `#${id}` : tag} has no name a screen reader can read`);
 }
 
+/* The app has a width, and only one place may decide it.
+
+   The design states it where it shows the app on its own — the
+   prototype's statemachine page frames it at `min(100%, 900px)`. The
+   window opens at that width and the content is capped at it, so a
+   maximised window gives more room around the form rather than a wider
+   form. Two files carry the number; they have to agree. */
+const windowConfig = JSON.parse(await readFile(new URL("../src-tauri/tauri.conf.json", import.meta.url), "utf8"))
+  .app?.windows?.[0];
+const declaredCap = /--app-width:\s*(\d+)px/.exec(css)?.[1];
+if (!declaredCap) fail("ui/styles.css does not declare --app-width, so the content has no width to be capped at");
+if (Number(declaredCap) !== windowConfig?.width) {
+  fail(`the content is capped at ${declaredCap}px but the window opens at ${windowConfig?.width}px — one of them is wrong`);
+}
+if (!/\.eai-body \{[^}]*max-width:\s*var\(--app-width\)/s.test(css)) {
+  fail("the content column is not capped, so a maximised window stretches the form across the monitor");
+}
+if (!/\.eai-body \{[^}]*margin-inline:\s*auto/s.test(css)) {
+  fail("the content column is capped but not centred, so a wide window leaves it against one edge");
+}
+
 /* ========= 4. THE PLAYGROUND, AND WHERE IT MAY NOT LIVE ========= */
 
 /* The review playground drives the real app in a frame. Two things make
