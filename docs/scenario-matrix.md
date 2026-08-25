@@ -49,6 +49,8 @@ visible.
 | AI-02 | AI handoff | A supported AI workspace is installed | The user can start it with the project path. |
 | AI-03 | AI handoff | Choose an AI workspace download | Only the official provider page opens; no provider account or secret is collected. |
 | AI-04 | AI handoff | AI workspace start fails | The project remains safe and the user receives a command-free recovery explanation. |
+| STATE-19 | Every screen | Look at the bar across the top | Four stages, not seven screens; the one you are on and everything before it filled, the rest pale, exactly one marked current, and every bar named for a screen reader. |
+| STATE-20 | Every screen | A failure on the screen you are on | The stage you are on turns red on the bar, and no later stage looks reached. A bar that only fills would say everything is fine while the screen says the opposite. |
 | STATE-01 | Every screen | Walk the seven screens in order | Sign in, Signed in, Set up, Creating, Choose a harness, Hand-off and Built each appear once, in that order, with one visible at a time. |
 | STATE-02 | Sign in | A prerequisite failed and the EAI API is unreachable | Both rows appear in one list, chronologically, under "Two things are in the way"; the tick is not shown beside either. |
 | STATE-03 | Sign in | The network probe cannot run on this machine | Connectivity is treated as reachable and sign-in decides; the user is not sent to their VPN settings over a missing probe. |

@@ -18,6 +18,13 @@
     <div class="skin-setup eai" id="setupApp">
       <div class="eai-body">
 
+        <!-- Where you are, across the top of every screen. Four bars for
+             four things somebody does — the seven screens are the
+             machine's count, not a person's. Built by app.js from
+             ui/state-machine.js, so the stages and the screens cannot
+             disagree about which one you are on. -->
+        <ol class="eai-steps" id="steps" aria-label="Setup progress"></ol>
+
         <!-- A · Sign in.
 
              One status, with two faces. #checkRows is the whole of it:

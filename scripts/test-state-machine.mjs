@@ -105,6 +105,65 @@ for (const screen of machine.SCREENS.filter((item) => item.exclusive && item.fau
   if (order !== "prereq,network") fail(`sign-in faults are not in chronological order: ${order}`);
 }
 
+/* ============= 1b. THE BAR ACROSS THE TOP ======================
+
+   Four stages, not seven screens. Two of the seven are not steps
+   anybody takes — the signed-in beat is a moment inside signing in, and
+   the hand-off is the last breath of choosing a tool — so the bar
+   counts what somebody does. */
+{
+  if (machine.STEPS.length !== 4) fail(`the bar is ${machine.STEPS.length} stages, not four`);
+
+  // Every screen belongs to exactly one stage, or the bar has a state
+  // in which nothing is current.
+  for (const id of machine.SCREEN_ORDER) {
+    const owners = machine.STEPS.filter((step) => step.screens.includes(id));
+    if (owners.length !== 1) fail(`the screen "${id}" belongs to ${owners.length} stages`);
+  }
+
+  const state = machine.createState();
+  for (const [screen, expected] of [
+    ["signin", "reached,upcoming,upcoming,upcoming"],
+    ["welcome", "reached,upcoming,upcoming,upcoming"],
+    ["setup", "reached,reached,upcoming,upcoming"],
+    ["running", "reached,reached,reached,upcoming"],
+    ["done", "reached,reached,reached,reached"],
+    ["handoff", "reached,reached,reached,reached"],
+    ["built", "reached,reached,reached,reached"],
+  ]) {
+    machine.goTo(state, screen);
+    const shape = machine.stepper(state).map((step) => step.status).join(",");
+    if (shape !== expected) fail(`the bar on ${screen} is ${shape}, not ${expected}`);
+    if (machine.stepper(state).filter((step) => step.current).length !== 1) {
+      fail(`the bar on ${screen} does not have exactly one current stage`);
+    }
+  }
+
+  /* The third state, which the sign-up dialog this is borrowed from does
+     not have. A form cannot stop; this flow can, and a bar that only
+     ever fills would say everything is fine while the screen below says
+     the opposite. */
+  for (const screen of machine.SCREEN_ORDER) {
+    const faults = machine.screenById(screen).faultIds;
+    if (!faults.length) continue;
+    machine.goTo(state, screen);
+    machine.raise(state, faults[0]);
+    const bar = machine.stepper(state);
+    const failed = bar.filter((step) => step.status === "failed");
+    if (failed.length !== 1) fail(`a failure on ${screen} marks ${failed.length} stages, not one`);
+    if (!failed[0].current) fail(`a failure on ${screen} marks a stage nobody is on`);
+    if (bar.some((step, index) => index > bar.indexOf(failed[0]) && step.status !== "upcoming")) {
+      fail(`a failure on ${screen} leaves a later stage looking reached`);
+    }
+  }
+
+  // Every stage has a name, because the bars carry no text of their own.
+  machine.goTo(state, "signin");
+  for (const step of machine.stepper(state)) {
+    if (!step.name || !step.id) fail("a stage on the bar has no name for a screen reader to read");
+  }
+}
+
 /* ============ 2. NOTHING CALLS A WINDOWS PC A MAC ================ */
 
 const MAC_WORDS = /\b(mac|macos|finder|xcode-select|command line tools|apple)\b/i;
