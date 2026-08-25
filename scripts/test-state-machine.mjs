@@ -352,6 +352,42 @@ if (machine.looksLikeTakenName("the template could not be downloaded")) {
   if (machine.setupComplete(state)) fail("a form with a failure on it reports itself complete");
 }
 
+/* Stage and answers are the same fact read two ways, so they have to
+   round-trip. Anything that draws this screen from a stage rather than
+   from real answers — the preview, a review page — reads it through
+   `answersForStage`, and a fixture that fills a field the stage says is
+   empty is what makes a screen look finished with its next question
+   still hidden. */
+{
+  const state = machine.createState();
+  machine.goTo(state, "setup");
+  /* Two to four, not one to four. Stage one and stage two hold the same
+     answers — the workspace, which is answered on arrival — and differ
+     only by the name question having appeared. The real app never rests
+     in stage one, so the round trip starts where it can. */
+  for (let stage = 2; stage <= 4; stage += 1) {
+    state.stage = stage;
+    const answers = machine.answersForStage(state);
+    if (machine.stageForAnswers(answers) !== stage) {
+      fail(`stage ${stage} does not survive a round trip through its own answers`);
+    }
+  }
+
+  state.stage = 1;
+  if (machine.answersForStage(state).name) fail("the workspace-only stage claims there is already a name");
+  if (machine.answersForStage(state).folder) fail("the workspace-only stage claims there is already a location");
+  state.stage = 2;
+  const naming = machine.answersForStage(state);
+  if (naming.name) fail("the stage where the name question has just appeared claims it is already answered");
+  if (naming.folder) fail("the stage where the name question has just appeared claims a location too");
+  state.stage = 3;
+  if (!machine.answersForStage(state).name) fail("the stage after the name was given claims there is no name");
+  if (machine.answersForStage(state).folder) fail("the stage where the chooser is still offered claims a location");
+  state.stage = 4;
+  const done = machine.answersForStage(state);
+  if (!done.workspace || !done.name || !done.folder) fail("the finished form is missing an answer");
+}
+
 /* The location question has two shapes, and which one is drawn follows
    the state rather than whether a folder happens to be set. That
    divergence is what made "Location — choose" draw its answered shape:

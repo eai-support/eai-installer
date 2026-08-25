@@ -483,7 +483,9 @@ const PAINT = {
       setFieldError("name", fault.message(platform(), { projectName: facts.projectName }));
     }
 
-    el("createApp").disabled = !machine.setupComplete(state);
+    /* Every question answered, and the name actually usable. The reveal
+       is happy with any name; the button that creates a folder is not. */
+    el("createApp").disabled = !machine.setupComplete(state) || !helpers.isKebabCase(facts.projectName);
   },
 
   /* eai init, said in the words of the flow board. */
@@ -714,6 +716,13 @@ function setFieldError(name, message) {
   error.querySelector("span").textContent = message;
   error.hidden = false;
   field.classList.add("invalid");
+}
+
+function clearFieldError(name) {
+  const field = document.querySelector(`.eai-field[data-field="${name}"]`);
+  if (!field) return;
+  field.querySelector(".eai-err").hidden = true;
+  field.classList.remove("invalid", "shake");
 }
 
 function pickRow(label, meta, selected, onPick) {
@@ -1165,10 +1174,22 @@ function chooseTenant(tenantId) {
   paint();
 }
 
-/** The reveal, recomputed from the answers rather than counted upwards. */
+/**
+ * The reveal, recomputed from the answers rather than counted upwards.
+ *
+ * The name counts as answered when there is one, not when it is a valid
+ * kebab-case one. Those are different questions and tying the reveal to
+ * validity makes the location question flap: typing "contract-renewals"
+ * passes through "contract-", which is not valid, so the question below
+ * would close on the hyphen and reopen on the next letter.
+ *
+ * Whether the name is any good is a separate matter, and it is what
+ * decides the primary rather than the reveal — see the Create app line
+ * in PAINT.setup.
+ */
 function syncStage() {
   const workspace = Boolean(facts.selectedTenantId);
-  const name = workspace && helpers.isKebabCase(facts.projectName);
+  const name = workspace && facts.projectName.length > 0;
   state.stage = machine.stageForAnswers({
     workspace,
     name,
@@ -1516,14 +1537,27 @@ el("wsRetry").addEventListener("click", () => {
  * repainted when something about it actually changed: the reveal moved
  * on, or a taken-name error is no longer true.
  */
+/* A disabled primary with nothing explaining it is a dead end. The name
+   is checked when they leave the field rather than on every keystroke,
+   because "contract-" is not wrong, it is half-typed. */
+el("projName").addEventListener("blur", () => {
+  if (!facts.projectName || helpers.isKebabCase(facts.projectName)) return;
+  setFieldError("name", "Use lowercase words separated by hyphens, for example customer-portal.");
+});
+
 el("projName").addEventListener("input", (event) => {
   facts.projectName = event.target.value.trim();
   const before = state.stage;
   const hadNameFault = machine.isBroken(state, "name");
   machine.clear(state, "name");
+  /* Typing clears the complaint, the way the taken-name error does:
+     nothing was attempted, so there is nothing to retry. Cleared here
+     rather than by a repaint, because most keystrokes change nothing
+     else on the screen and do not earn one. */
+  clearFieldError("name");
   syncStage();
   if (state.stage !== before || hadNameFault) paint();
-  else el("createApp").disabled = !machine.setupComplete(state);
+  else el("createApp").disabled = !machine.setupComplete(state) || !helpers.isKebabCase(facts.projectName);
 });
 
 async function chooseFolder() {
@@ -1613,20 +1647,31 @@ function applyDevAddress() {
   facts.environment = { platform: state.platform, architecture: "preview", tools: [] };
   facts.demo = true;
   facts.account = "you@example.com";
-  facts.projectName = "contract-renewals";
+  /* The form's answers, and only the ones the stage says are in.
 
-  /* The location, only once the form says it has been chosen.
+     This is the rule the fixture kept breaking: filling a field at a
+     stage whose whole point is that it is empty. It made "Name appears"
+     look finished with the location question still hidden underneath,
+     and "Location — choose" draw its answered shape before anybody had
+     chosen. `answersForStage` is the same mapping the form itself uses,
+     so the preview cannot disagree with it.
 
-     Filling it in at every stage is what made "Location — choose"
-     unreviewable: the question drew its answered shape — a greyed path
-     and Change location — on the stage whose whole point is that
-     nothing has been picked yet. The fixture has to obey the same rule
-     the real app does, which is that the location is set when, and only
-     when, somebody has been to the chooser. */
+     Every screen after Set up has been through the form, so they get
+     the finished answers regardless. */
   const root = state.platform === "windows" ? "C:\\Users\\you\\Projects" : "/Users/you/Projects";
   const separator = state.platform === "windows" ? "\\" : "/";
-  const locationChosen = state.screen !== "setup" || machine.locationShape(state) === "chosen";
-  facts.projectFolder = locationChosen ? root : "";
+  const answered = state.screen !== "setup"
+    ? { workspace: true, name: true, folder: true }
+    /* A workspace failure takes everything below question one off the
+       screen, so nothing below it has been answered. Leaving a name in a
+       hidden field means it appears out of nowhere the moment the
+       failure clears. */
+    : machine.isBroken(state, "workspace")
+      ? { workspace: false, name: false, folder: false }
+      : machine.answersForStage(state);
+
+  facts.projectName = answered.name ? "contract-renewals" : "";
+  facts.projectFolder = answered.folder ? root : "";
   // The later screens open the folder, so they always have a path.
   facts.projectPath = `${root}${separator}contract-renewals`;
   facts.projectDirectory = facts.projectPath;

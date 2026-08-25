@@ -528,6 +528,29 @@
   }
 
   /**
+   * Which questions the stage says have been answered.
+   *
+   * Anything drawing this screen from a stage rather than from real
+   * answers — the preview, a review page — has to be able to ask "at
+   * this stage, is there a name yet?" and get the same answer the form
+   * would give. Filling a field in at a stage whose whole point is that
+   * it is empty is how a screen ends up looking finished with its next
+   * question still hidden.
+   *
+   * The workspace is answered from the first stage, which is the
+   * prototype's own model: there is one, and a question with one
+   * possible answer is not a question. That makes stage one and stage
+   * two the same set of answers seen a moment apart — the name question
+   * appearing is the difference — so `stageForAnswers` maps that answer
+   * set to two. The real app passes straight through stage one; it is
+   * the frame before the reveal, not a state anybody rests in.
+   */
+  function answersForStage(state) {
+    const at = stageOf(state);
+    return { workspace: true, name: at >= 3, folder: at >= 4 };
+  }
+
+  /**
    * The two shapes of the location question.
    *
    * Before an answer it is one button, at the left, because somebody
@@ -541,7 +564,7 @@
    * two can never disagree about which question is being asked.
    */
   function locationShape(state) {
-    return stageOf(state) >= 4 ? "chosen" : "choose";
+    return answersForStage(state).folder ? "chosen" : "choose";
   }
 
   /**
@@ -886,6 +909,7 @@
     runRowsComplete,
     screenById,
     setupComplete,
+    answersForStage,
     locationShape,
     setupSteps,
     setupSub,
