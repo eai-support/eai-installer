@@ -77,25 +77,6 @@ body.st {
 }
 .st-title a:hover { color: #18181b; border-bottom-color: #18181b; }
 
-.st-flows {
-  display: block;
-  margin-top: 8px;
-  font-size: 12px;
-  line-height: 16px;
-  color: #71717a;
-}
-.st-flows a { color: #18181b; }
-.st-flows button {
-  padding: 0;
-  border: none;
-  border-bottom: 1px solid #e4e4e7;
-  background: none;
-  font: inherit;
-  color: #18181b;
-  cursor: pointer;
-}
-.st-flows button:hover { border-bottom-color: #18181b; }
-
 /* The one bit of chrome the removed bar was carrying that is worth
    keeping: that the arrow keys do something. It sits under the control
    they drive rather than in a bar announcing itself. */
@@ -153,9 +134,12 @@ body.st {
   width: 100%;
   margin-top: 2px;
   padding: 9px 34px 9px 12px;
-  border: 1px solid #e4e4e7;
+  border: 1px solid transparent;
   border-radius: 9px;
-  background: #ffffff no-repeat right 11px center / 12px 12px;
+  /* Filled, so it reads as something you open rather than as the heading
+     of the list below it. It is the only control on the page that hides
+     its options, and the fill is what says so. */
+  background: #f4f4f5 no-repeat right 11px center / 12px 12px;
   /* The chevron, inline so there is no request for it. */
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M6 9.5l6 6 6-6' stroke='%2371717a' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   font: inherit;
@@ -168,11 +152,10 @@ body.st {
   -webkit-appearance: none;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
-.rl-select:hover { border-color: #d4d4d8; }
+.rl-select:hover { background-color: #ebebed; }
 .rl-select:focus-visible {
   outline: none;
   border-color: #a1a1aa;
-  box-shadow: 0 0 0 3px #f4f4f5;
 }
 
 /* --- the stacked list. The chosen one is simply the one you can read,
@@ -403,7 +386,13 @@ body.st {
   .rl-tick .box.radio::after { transition: none; }
 }
 
-/* When it does not come up there is nothing to show, so say why. */
+/* When it does not come up there is nothing to show, so say why.
+
+   The original builds this panel at the moment it is needed. This page
+   ships it hidden, and `display: flex` on a class beats the browser's
+   own rule for [hidden] — so an empty bordered box has been sitting
+   under the app, making the stage scroll for no reason. */
+.st-dead[hidden] { display: none; }
 .st-dead {
   display: flex;
   flex-direction: column;

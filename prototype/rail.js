@@ -528,6 +528,12 @@ function harnessDetail() {
    failure, the way out, which is the one thing a screenshot of an error
    cannot tell you and half of these do not have. */
 
+/* The name of the state, and nothing else.
+
+   `caption()` still returns the sentence describing the screen and the
+   way out of a failure — it is part of the machine's contract and the
+   tests read it — but this page no longer prints it. The screen it
+   describes is directly below, saying it better. */
 function renderCaption() {
   const written = machine.caption(state, {
     step: fixtures.step,
@@ -538,7 +544,6 @@ function renderCaption() {
     projectPath: "/Users/you/Projects/contract-renewals",
   });
   document.getElementById("capName").textContent = written.name;
-  document.getElementById("capNote").textContent = written.note;
 }
 
 /* ========================= 6. GOING ============================= */
@@ -565,21 +570,6 @@ window.addEventListener("keydown", (event) => {
   if (focused instanceof Element && focused.matches("input, textarea, select")) return;
   if (event.key === "ArrowLeft") stepBy(-1);
   if (event.key === "ArrowRight") stepBy(1);
-});
-
-/* This page's own address, not the frame's. A state worth discussing is
-   a state worth sending somebody, and what they should get is the rail
-   with the state selected — not the app on its own with no way back. */
-document.getElementById("copyLink").addEventListener("click", async (event) => {
-  const url = location.href;
-  const label = "Copy this state\u2019s link";
-  try {
-    await navigator.clipboard.writeText(url);
-    event.target.textContent = "Copied";
-    setTimeout(() => { event.target.textContent = label; }, 1500);
-  } catch {
-    event.target.textContent = url;
-  }
 });
 
 /* Reload of a state, from its own address. A state worth discussing is a

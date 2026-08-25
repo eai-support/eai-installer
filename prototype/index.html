@@ -34,19 +34,13 @@
        be reached by accident and every one can be linked to. -->
 
 <aside class="st-rail">
+  <!-- The name, and the way to the app on its own. There was a sentence
+       under the name describing the page, and a line of shortcuts under
+       that; both were the page explaining itself to somebody already
+       looking at it. The rail below is the explanation. -->
   <div class="st-title">
     <b>EAI Setup — statemachine</b>
-    <span>Seven screens, nine ways to break, and the fact about the machine that changes the last three.</span>
     <a id="playFlow" href="../ui/index.html?screen=signin">Open the app on its own &rarr;</a>
-    <span class="st-flows">
-      Sign in: <a href="?screen=signin&amp;fault=prereq">Prerequisite</a> ·
-      <a href="?screen=signin&amp;fault=prereq,network">Both at once</a> ·
-      Set up: <a href="?screen=setup&amp;stage=2">Naming</a> ·
-      <a href="?screen=setup&amp;stage=3">Choose location</a> ·
-      Harness: <a href="?screen=done&amp;installed=claude-cli">Claude here</a> ·
-      <a href="?screen=done&amp;installed=none">Nothing here</a><br />
-      <button id="copyLink" type="button">Copy this state&rsquo;s link</button>
-    </span>
   </div>
 
   <!-- Built by rail.js, because every group is a question about the
@@ -55,9 +49,11 @@
 </aside>
 
 <main class="st-stage">
+  <!-- The state's name, and nothing under it. The paragraph that used to
+       sit here said what the screen was for; the screen is directly
+       below saying it better. -->
   <div class="st-cap">
     <b id="capName">Sign in</b>
-    <span id="capNote"></span>
   </div>
 
   <!-- The real app, at the real window size, read from tauri.conf.json

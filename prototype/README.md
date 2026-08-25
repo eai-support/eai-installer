@@ -69,9 +69,9 @@ that would not let Git install is often the same one that cannot reach
 the EAI API, and the screen that has to hold both is a different screen
 from either alone.
 
-`←` and `→` step through the screens in order. **Copy the app's link**
-gives you the frame's own URL, so a state worth discussing is a link
-rather than four instructions.
+`←` and `→` step through the screens in order. The address bar holds the
+state you are looking at, so a state worth discussing is a link rather
+than four instructions — copy it from there.
 
 ## What it cannot show you
 
