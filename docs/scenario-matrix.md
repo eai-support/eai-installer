@@ -72,6 +72,7 @@ visible.
 | HARNESS-01 | Choose a harness | A supported tool is already installed | It is listed first under "Ready on this <device>", it is preselected, there is no alert, and the button reads Next. |
 | HARNESS-02 | Choose a harness | Nothing is installed | Only the "Not installed" group is drawn, and the chosen option opens into three numbered steps: their site, their account, come back. |
 | HARNESS-07 | Choose a harness | Any option is chosen | Its name is the primary colour and semibold; every option not chosen stays muted. |
+| HARNESS-09 | Choose a harness | Any state | No row says whether it is installed — the group heading above it already does. |
 | HARNESS-08 | Choose a harness | A not-installed option is chosen | The step numbers sit in the tile's column, 44px from the row's left edge, so the block reads as belonging to that row. |
 | HARNESS-03 | Choose a harness | Choose Get and leave for the vendor site | The waiting box appears, the alert is withdrawn, the button is disabled and reads Waiting for <tool>. |
 | HARNESS-04 | Choose a harness | The tool is installed while the waiting box is up | The screen updates by itself within a few seconds and the button becomes Next; the poll stops. |

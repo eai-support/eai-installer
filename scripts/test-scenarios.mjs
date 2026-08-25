@@ -7,7 +7,7 @@ const requiredIds = [
   "LOCATION-01", "LOCATION-02", "LOCATION-03", "LOCATION-04", "LOCATION-05", "INIT-01", "INIT-02",
   "STATE-01", "STATE-02", "STATE-03", "STATE-04", "STATE-05", "STATE-06", "STATE-07", "STATE-08", "STATE-09", "STATE-10",
   "STATE-11", "STATE-12", "STATE-13", "STATE-14", "STATE-15", "STATE-16", "STATE-17", "STATE-18", "STATE-19", "STATE-20",
-  "HARNESS-01", "HARNESS-02", "HARNESS-03", "HARNESS-04", "HARNESS-05", "HARNESS-06", "HARNESS-07", "HARNESS-08",
+  "HARNESS-01", "HARNESS-02", "HARNESS-03", "HARNESS-04", "HARNESS-05", "HARNESS-06", "HARNESS-07", "HARNESS-08", "HARNESS-09",
   "PLATFORM-01", "PLATFORM-02", "PLATFORM-03", "PLATFORM-04",
   "INIT-03", "INIT-04", "INIT-05", "INIT-06", "INIT-07", "INIT-08", "INIT-09", "COMPLETE-01", "COMPLETE-02", "AI-01", "AI-02", "AI-03", "AI-04", "RELEASE-01",
 ];
@@ -34,7 +34,7 @@ if (!matrix.includes("known-issues.md")) {
   throw new Error("scenario matrix does not point at the log of what was deliberately left out");
 }
 const known = await readFile(new URL("../docs/known-issues.md", import.meta.url), "utf8");
-for (const id of ["KI-01", "KI-02", "KI-03", "KI-04"]) {
+for (const id of ["KI-01", "KI-02", "KI-03", "KI-04", "KI-05"]) {
   if (!known.includes(`## ${id}`)) throw new Error(`known issues log is missing ${id}`);
 }
 if (!known.includes("app name") || !known.includes("read-only")) {

@@ -836,11 +836,18 @@ function renderHarnessRows(surfaces) {
       const tile = tileFor(surface);
       const row = document.createElement("button");
       row.type = "button";
-      row.className = `eai-row i4-row${surface.installed ? " ready" : " missing"}${chosen ? " on" : ""}`;
+      /* `missing` and `on` only — both change how the name reads. There
+         was a `ready` too, and once the state column went it styled
+         nothing: a tool that is here is simply not muted. A class that
+         does nothing is a hook somebody will later assume is load-bearing. */
+      row.className = `eai-row i4-row${surface.installed ? "" : " missing"}${chosen ? " on" : ""}`;
+      /* No state on the row. The group heading above it already says
+         whether these are here or not, so a column repeating that on
+         every line is the same fact twice — once where it organises the
+         list, once where it only takes up the right edge. */
       row.innerHTML = `<span class="mark">${TICK_SVG}</span>`
         + `<span class="tile" data-tile="${tile.family}">${tile.svg}</span>`
-        + `<span class="nm">${escapeHtml(surface.name)}</span>`
-        + `<span class="state">${surface.installed ? "installed" : "not installed"}</span>`;
+        + `<span class="nm">${escapeHtml(surface.name)}</span>`;
       row.addEventListener("click", () => chooseSurface(surface.id));
       pick.appendChild(row);
 
