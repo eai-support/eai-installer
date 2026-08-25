@@ -401,15 +401,21 @@ const PAINT = {
 
          Try again is not offered here, and that is deliberate: the login
          command is still running and there is no way to stop it, so a
-         second one would race the first against the same account. What
-         is offered is the link, which is the thing that actually helps
-         when the browser never opened. */
-      const escape = facts.signinEscapeShown && Boolean(facts.signinUrl);
-      el("welcomeActs").hidden = !escape;
-      el("welcomeCopy").hidden = !escape;
+         second one would race the first against the same account.
+
+         The link is offered when we have one. Today the CLI only prints
+         it when it is given an explicit callback port, which the
+         installer does not do — so most of the time this is a sentence
+         rather than a button, and it says the true thing rather than
+         offering to copy something that does not exist. */
+      el("welcomeActs").hidden = !facts.signinEscapeShown;
+      el("welcomeCopy").hidden = !facts.signinUrl;
       el("welcomeRetry").hidden = true;
-      el("welcomeFine").hidden = !escape;
-      el("welcomeFine").textContent = "Still waiting. If your browser never opened, copy the link and paste it in yourself.";
+      el("welcomeFine").hidden = !facts.signinEscapeShown;
+      el("welcomeFine").textContent = facts.signinUrl
+        ? "Still waiting. If your browser never opened, copy the link and paste it in yourself."
+        : "Still waiting on your browser. Finish signing in there if the tab is still open — "
+          + "otherwise close this window and open EAI Setup again to start over. Nothing has been saved, so that is safe.";
       return;
     }
 
