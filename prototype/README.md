@@ -64,7 +64,7 @@ shadow because an iframe cannot be styled from outside.
 | --- | --- | --- |
 | Screen | Which of the seven | everywhere |
 | State | Working, or which specific failure | everywhere |
-| This computer | macOS, Windows or Linux | everywhere — it changes the wording of every screen |
+| This computer | macOS, Windows or Linux | first, and everywhere — it changes the wording of every screen rather than which one you see. A tab group, because there will not be a fourth |
 | Answered so far | How far the form has been revealed | Set up |
 | This account | One workspace or two, with apps or without | Set up |
 | Before anyone presses anything | The quiet fix-up, mid-run; the Mac password | Sign in |

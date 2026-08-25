@@ -14,13 +14,15 @@
    a screen or a failure added to the app appears here on the next
    reload without anybody editing this file.
 
-   The rail is four questions, and only the first is about screens:
+   The rail is three questions and then whatever the current screen
+   actually reads:
 
+     This computer · macOS, Windows or Linux. First, because it has the
+                     shortest answer and the widest reach — it changes
+                     the wording of every screen rather than which one
+                     you are looking at
      Screen        · which of the seven
      State         · working, or the specific thing that broke
-     This computer · macOS, Windows or Linux — the question three
-                     screens change their wording for
-     ...and then whatever the current screen actually reads.
 
    A group the screen does not read is not offered. The old version of
    this idea kept every control visible and dimmed, which is two groups
@@ -253,6 +255,39 @@ function renderRail() {
   const screen = machine.screenById(state.screen);
   rail.replaceChildren();
 
+  /* --- the machine, first ---
+
+     Above the screen selector because it is the question with the
+     shortest answer and the widest reach: it changes the wording of
+     every screen rather than which one you are looking at. Three
+     answers, and there will not be a fourth — a tab group says that,
+     where a stacked list says "there may be more". */
+  const platform = group("This computer");
+  const tabs = document.createElement("div");
+  tabs.className = "rl-pill wide";
+  for (const [text, value] of PLATFORMS) {
+    const tab = document.createElement("button");
+    tab.type = "button";
+    tab.className = `rl-chip${state.platform === value ? " on" : ""}`;
+    tab.setAttribute("role", "tab");
+    tab.setAttribute("aria-selected", String(state.platform === value));
+    tab.textContent = text;
+    tab.addEventListener("click", () => {
+      state.platform = value;
+      // Windows is the only platform with a fourth prerequisite, so a
+      // selection naming it cannot survive a move away from Windows.
+      if (value !== "windows") {
+        const kept = fixtures.steps.filter((step) => step !== "windows-runtime");
+        fixtures.steps = kept.length ? kept : ["git"];
+      }
+      show();
+    });
+    tabs.append(tab);
+  }
+  tabs.setAttribute("role", "tablist");
+  platform.append(tabs);
+  rail.append(platform);
+
   /* --- which screen ---
 
      A dropdown rather than seven stacked names. The list was the longest
@@ -335,26 +370,6 @@ function renderRail() {
     }
   }
   rail.append(faults);
-
-  /* --- the machine ---
-
-     Offered everywhere, because unlike the prototype's "This Mac" it
-     changes the wording of every screen rather than the shape of the
-     last three. It is the control this port exists to have. */
-  const platform = group("This computer");
-  for (const [text, value] of PLATFORMS) {
-    platform.append(option(text, state.platform === value, () => {
-      state.platform = value;
-      // Windows is the only platform with a fourth prerequisite, so a
-      // selection naming it cannot survive a move away from Windows.
-      if (value !== "windows") {
-        const kept = fixtures.steps.filter((step) => step !== "windows-runtime");
-        fixtures.steps = kept.length ? kept : ["git"];
-      }
-      show();
-    }));
-  }
-  rail.append(platform);
 
   /* --- how far through the reveal ---
 

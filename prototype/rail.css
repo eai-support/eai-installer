@@ -289,6 +289,12 @@ body.st {
   background: #ffffff;
 }
 
+/* A tab group, for a question whose answers are known and will not grow:
+   three platforms, sharing the width equally, so the shape says "these
+   are all of them" where a stacked list says "there may be more". */
+.rl-pill.wide { display: flex; width: 100%; margin-top: 2px; }
+.rl-pill.wide .rl-chip { flex: 1; padding: 7px 6px; text-align: center; }
+
 .rl-chip {
   padding: 7px 14px;
   border: 1px solid transparent;

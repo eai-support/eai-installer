@@ -91,6 +91,20 @@ if (stepsInMarkup.join(",") !== stepsInMachine.join(",")) {
   fail(`the form's questions differ between markup (${stepsInMarkup}) and machine (${stepsInMachine})`);
 }
 
+/* The bar across the top: markup for it, a rule for each of its three
+   states, and a way to read it without seeing it. */
+if (!html.includes('id="steps"')) fail("the app has no bar across the top");
+for (const rule of [".eai-steps", ".eai-step", ".eai-step.reached", ".eai-step.failed", ".sr-only"]) {
+  if (!css.includes(rule)) fail(`ui/styles.css has no rule for ${rule}`);
+}
+if (!app.includes("machine.stepper(state)")) fail("the bar is drawn from something other than the state machine");
+if (!app.includes('setAttribute("aria-current", "step")')) {
+  fail("the bar does not say which stage is current to a screen reader");
+}
+if (!/class="sr-only"|className = "sr-only"/.test(app)) {
+  fail("the bar's stages have no names — four unlabelled bars are four unlabelled bars out loud too");
+}
+
 /* ============ 3. EVERY CLASS THE APP WRITES IS STYLED =========== */
 
 /* Classes assigned from JavaScript never appear in the markup, so a
@@ -111,6 +125,7 @@ const DRIVEN_CLASSES = [
   "eai-diag", "eai-diag-log", "eai-diag-status", "eai-diag-foot",
   "eai-vid", "eai-vid-stage", "eai-vid-win", "eai-vid-play", "eai-vid-caret",
   "eai-vid-ok", "eai-vid-caption", "eai-vid-track", "playing", "replay",
+  "eai-step", "eai-steps", "reached", "upcoming", "sr-only",
 ];
 for (const name of DRIVEN_CLASSES) {
   if (!new RegExp(`\\.${name.replace(/[-]/g, "\\-")}\\b`).test(css)) {

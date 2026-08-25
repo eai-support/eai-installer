@@ -207,6 +207,51 @@
 
   const SCREEN_ORDER = SCREENS.map((screen) => screen.id);
 
+  /* =================== 3b. THE FOUR STAGES ========================
+
+     Seven screens is the machine's count, not a person's. Two of the
+     seven are not steps anybody takes: the signed-in beat is a moment
+     inside signing in, and the hand-off is the last breath of choosing
+     a tool. What is left is four things somebody does, and that is what
+     the bar across the top counts.
+
+     Borrowed from the sign-up dialog, which does the same thing with
+     two: a filled bar for what you have reached, a pale one for what
+     you have not. The addition here is a third state, because unlike a
+     sign-up form this flow can stop — and a bar that only ever fills is
+     a bar that says everything is fine while the screen underneath says
+     it is not. */
+
+  const STEPS = [
+    { id: "signin", name: "Sign in", screens: ["signin", "welcome"] },
+    { id: "setup", name: "Set up", screens: ["setup"] },
+    { id: "create", name: "Create", screens: ["running"] },
+    { id: "connect", name: "Connect your AI tool", screens: ["done", "handoff", "built"] },
+  ];
+
+  /**
+   * The bar across the top, as a list of segments.
+   *
+   * `reached` covers the step somebody is on and everything before it —
+   * the sign-up dialog draws no line between done and current and it
+   * does not need one, because the screen below already says where you
+   * are. `failed` is the step somebody is on when that screen has a
+   * failure in force, and it is the only thing on the bar that is not
+   * one of two greys.
+   */
+  function stepper(state) {
+    const at = STEPS.findIndex((step) => step.screens.includes(state.screen));
+    const broken = faultsInForce(state).length > 0;
+    return STEPS.map((step, index) => ({
+      id: step.id,
+      name: step.name,
+      current: index === at,
+      status: index === at && broken ? "failed"
+        : index <= at ? "reached"
+          : "upcoming",
+    }));
+  }
+
   /* ================== 4. THE WAYS IT BREAKS ======================
 
      One entry per fault. `head`/`problem`/`note`/`out` are functions of
@@ -913,6 +958,7 @@
   root.EAISetup = {
     SCREENS,
     SCREEN_ORDER,
+    STEPS,
     FAULTS,
     RUN_ROWS,
     DEVICES,
@@ -954,6 +1000,7 @@
     signinProblems,
     stageForAnswers,
     stageOf,
+    stepper,
     toolName,
     workingRow,
     writeAddress,

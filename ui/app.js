@@ -633,6 +633,28 @@ const PAINT = {
 
 /* ========================= 7. PAINT ============================== */
 
+/**
+ * The bar across the top, redrawn with everything else.
+ *
+ * Rebuilt rather than patched, like the rest of paint(): a bar whose
+ * segments are updated in place is a bar that can be left showing the
+ * last state's colours when a step is skipped.
+ */
+function renderSteps() {
+  const list = el("steps");
+  list.replaceChildren();
+  for (const step of machine.stepper(state)) {
+    const item = document.createElement("li");
+    item.className = `eai-step ${step.status}`;
+    if (step.current) item.setAttribute("aria-current", "step");
+    const name = document.createElement("span");
+    name.className = "sr-only";
+    name.textContent = step.status === "failed" ? `${step.name} — needs attention` : step.name;
+    item.append(name);
+    list.append(item);
+  }
+}
+
 function paint() {
   /* Which field somebody was in, so a repaint triggered by their own
      typing does not take the caret away from them. The reveal repaints
@@ -644,6 +666,7 @@ function paint() {
   reset();
   const screen = machine.screenById(state.screen);
   if (state.screen !== "built") screenNode(state.screen).hidden = false;
+  renderSteps();
   PAINT[state.screen](machine.faultsInForce(state));
   document.querySelector(".eai-body").scrollTop = 0;
 

@@ -125,6 +125,51 @@ button, input { font-family: inherit; }
   font-family: var(--font-sans);
 }
 
+/* --- where you are, across the top ------------------------------
+
+   The sign-up dialog's bar: filled for what you have reached, pale for
+   what you have not, and no line drawn between done and current because
+   the screen underneath already says where you are.
+
+   The third state is this app's own. A sign-up form cannot stop; this
+   flow can, and a bar that only ever fills would say everything is fine
+   while the screen below it says the opposite. */
+
+.eai-steps {
+  display: flex;
+  flex: none;
+  gap: 8px;
+  margin: 0 0 26px;
+  padding: 0;
+  list-style: none;
+}
+.eai-step {
+  flex: 1;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--color-border);
+  transition: background-color 0.2s ease;
+}
+/* All three written out, including the one that matches the base. A
+   state with no rule of its own is a state that changes the day
+   somebody edits the base and does not think to look. */
+.eai-step.upcoming { background: var(--color-border); }
+.eai-step.reached { background: var(--color-foreground); }
+.eai-step.failed { background: var(--color-destructive); }
+
+/* The bars carry no text, so the names go where a screen reader can
+   still reach them. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .eai-screen { display: flex; flex: 1 1 auto; flex-direction: column; }
 .eai-screen[hidden] { display: none; }
 .eai-screen.gap-8 { gap: var(--spacing-8); }
@@ -989,6 +1034,7 @@ button, input { font-family: inherit; }
   .eai-field.shake .eai-input,
   .eai-field.shake .eai-combo,
   .eai-vid-caret { animation: none; }
+  .eai-step { transition: none; }
   .i3-tick svg path { stroke-dashoffset: 0; }
   .mk.busy s { opacity: 0.5; }
 }
