@@ -18,7 +18,7 @@
    HTML parser.
 ------------------------------------------------------------------- */
 
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import vm from "node:vm";
 
 const html = await readFile(new URL("../ui/index.html", import.meta.url), "utf8");
@@ -151,7 +151,68 @@ for (const name of ["vscode", "copilot", "claude", "codex", "grok"]) {
   if (!css.includes(`[data-tile="${name}"]`)) fail(`the ${name} tile has no colour in the stylesheet`);
 }
 
-/* ============= 4. THE COPY LIVES IN THE MACHINE ================= */
+/* Every field a person types into has a name a screen reader can read.
+   A <label> that wraps an input but contains no text is a label in the
+   markup and nothing at all out loud. */
+for (const match of html.matchAll(/<input\b[^>]*>/g)) {
+  const tag = match[0];
+  if (/type="(hidden|button|submit)"/.test(tag)) continue;
+  const id = /\bid="([^"]+)"/.exec(tag)?.[1];
+  const labelled = /aria-label="/.test(tag)
+    || (id && new RegExp(`<label[^>]*for="${id}"[^>]*>\\s*[^<\\s]`).test(html))
+    || /placeholder="/.test(tag);
+  if (!labelled) fail(`the field ${id ? `#${id}` : tag} has no name a screen reader can read`);
+}
+
+/* ========= 4. THE PLAYGROUND, AND WHERE IT MAY NOT LIVE ========= */
+
+/* The review playground drives the real app in a frame. Two things make
+   that safe, and both are checked here because both are one careless
+   move away from being untrue. */
+
+const rail = await readFile(new URL("../prototype/rail.js", import.meta.url), "utf8");
+
+// One: it is outside ui/, which is the only folder Tauri bundles.
+const tauriConfig = JSON.parse(await readFile(new URL("../src-tauri/tauri.conf.json", import.meta.url), "utf8"));
+if (tauriConfig.build?.frontendDist !== "../ui") {
+  fail(`the bundle no longer ships ui/ alone (${tauriConfig.build?.frontendDist}) — check the playground cannot reach a signed build`);
+}
+for (const name of await readdir(new URL("../ui/", import.meta.url))) {
+  if (/prototype|statemachine|playground|rail\./i.test(name)) {
+    fail(`ui/${name} would be bundled into the signed app — the playground belongs outside ui/`);
+  }
+}
+
+/* Two: the rail can express every state the app can be put into. A
+   parameter the app reads and the rail never writes is a state nobody
+   can review; a parameter the rail writes and the app ignores is a
+   control that does nothing. */
+/* Two readers, because the address is read in two places: the machine
+   takes the four that are the state itself, and app.js takes the
+   fixtures. Missing the first set would let the rail lose the screen
+   selector and still pass. */
+const devAddress = app.slice(app.indexOf("function applyDevAddress"), app.indexOf("async function start()"));
+const readAddress = machineSource.slice(machineSource.indexOf("function readAddress"), machineSource.indexOf("function writeAddress"));
+const readByApp = new Set([
+  ...[...devAddress.matchAll(/query\.(?:get|has)\("([^"]+)"\)/g)].map((match) => match[1]),
+  ...[...readAddress.matchAll(/query\.get\("([^"]+)"\)/g)].map((match) => match[1]),
+]);
+const writtenByRail = new Set([
+  ...[...rail.matchAll(/query\.set\("([^"]+)"/g)].map((match) => match[1]),
+  ...[...rail.matchAll(/URLSearchParams\(\{\s*([a-z]+):/g)].map((match) => match[1]),
+]);
+// `harness` is the old spelling of `installed`, kept so links written
+// before the rail existed still open.
+const RETIRED = new Set(["harness"]);
+for (const name of readByApp) {
+  if (RETIRED.has(name)) continue;
+  if (!writtenByRail.has(name)) fail(`the app reads ?${name}, which the playground rail cannot set — that state is unreviewable`);
+}
+for (const name of writtenByRail) {
+  if (!readByApp.has(name)) fail(`the playground rail sets ?${name}, which the app ignores — that control does nothing`);
+}
+
+/* ============= 5. THE COPY LIVES IN THE MACHINE ================= */
 
 /* app.js is not allowed to say "this Mac". Anything that names the
    machine has to come from state-machine.js, where the Windows and
@@ -168,4 +229,4 @@ for (const line of html.split("\n")) {
   if (/\bthis Mac\b|>\s*Finder\b/.test(line)) fail(`ui/index.html hard-codes Mac copy: ${line.trim()}`);
 }
 
-console.log(`ui contract checks ok (${referenced.size} element references, ${screensInMarkup.size} screens, ${DRIVEN_CLASSES.length} runtime classes)`);
+console.log(`ui contract checks ok (${referenced.size} element references, ${screensInMarkup.size} screens, ${DRIVEN_CLASSES.length} runtime classes, ${readByApp.size} reviewable states)`);
