@@ -1,216 +1,428 @@
 /* ------------------------------------------------------------------
-   The room around the app.
+   The state machine's own chrome — and nothing else.
 
-   Deliberately not the app's stylesheet. Nothing in here may look like
-   EAI Setup: the whole value of the page is that the panel on the right
-   is obviously the product and everything else is obviously scaffolding.
-   A rail styled in the product's own palette makes a reviewer read the
-   two as one design.
+   Ported from the prototype's assets/states.css. Everything inside the
+   frame is the app's own stylesheet, loaded unchanged; this file draws
+   the room the app is standing in: a rail of controls on the left, the
+   app in the middle, a line above it saying what you are looking at.
+
+   It is deliberately quiet. The page is a viewer, and a viewer that
+   competes with what it is showing is a viewer that lies about it — so
+   there is no accent colour, nothing coloured that is not a state, and
+   the app is the only thing on the page with a shadow.
+
+   Two deviations from the original, both forced:
+
+   · **System fonts, not Geist.** The original loads it from Google. A
+     review tool that needs the network to look right is one that looks
+     wrong on a plane.
+   · **The frame carries the shadow.** The original puts it on the
+     window it lifts out of /signup. Here the app is in an iframe, which
+     cannot be styled from outside, so the frame wears it instead. Same
+     result, one element further out.
 ------------------------------------------------------------------- */
-
-:root {
-  color-scheme: light;
-  --ink: #18181b;
-  --muted: #71717a;
-  --quiet: #a1a1aa;
-  --line: #e4e4e7;
-  --paper: #fafafa;
-  --accent: #0099ff;
-  --rail: 300px;
-}
-
-* { box-sizing: border-box; }
 
 html, body {
   height: 100%;
+  overflow: hidden;
+}
+
+body.st {
   margin: 0;
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  color: var(--ink);
-  background: #f4f4f5;
-}
-
-body {
   display: grid;
-  grid-template-columns: var(--rail) minmax(0, 1fr);
+  grid-template-columns: 296px 1fr;
+  background: #ffffff;
+  color: #18181b;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
 }
 
-kbd {
-  padding: 1px 5px;
-  border: 1px solid var(--line);
-  border-bottom-width: 2px;
-  border-radius: 4px;
-  background: #fff;
-  font-family: inherit;
-  font-size: 10px;
-}
+/* ===================== the rail ================================== */
 
-/* ========================== the rail ============================= */
-
-.rl {
+.st-rail {
   display: flex;
   flex-direction: column;
-  min-height: 0;
-  padding: 20px 18px;
+  gap: 30px;
+  height: 100vh;
+  padding: 40px 28px 40px 40px;
   overflow-y: auto;
-  background: #fff;
-  border-right: 1px solid var(--line);
+  overscroll-behavior: contain;
 }
 
-.rl-title { display: flex; flex-direction: column; gap: 6px; padding-bottom: 18px; }
-.rl-title b { font-size: 14px; font-weight: 600; }
-.rl-title span { font-size: 12px; line-height: 1.5; color: var(--muted); }
+.st-rail::-webkit-scrollbar { width: 0; }
 
-.rl-group { display: flex; flex-direction: column; gap: 6px; padding: 16px 0; border-top: 1px solid var(--line); }
-.rl-label { font-size: 10px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--quiet); }
-.rl-note { font-size: 11px; line-height: 1.5; color: var(--muted); }
+.st-title {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.st-title b {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+}
+.st-title span {
+  font-size: 12.5px;
+  line-height: 18px;
+  color: #8a8a90;
+}
+.st-title a {
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: #8a8a90;
+  text-decoration: none;
+  border-bottom: 1px solid #e4e4e7;
+  align-self: flex-start;
+}
+.st-title a:hover { color: #18181b; border-bottom-color: #18181b; }
+
+.st-flows {
+  display: block;
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 16px;
+  color: #71717a;
+}
+.st-flows a { color: #18181b; }
+.st-flows button {
+  padding: 0;
+  border: none;
+  border-bottom: 1px solid #e4e4e7;
+  background: none;
+  font: inherit;
+  color: #18181b;
+  cursor: pointer;
+}
+.st-flows button:hover { border-bottom-color: #18181b; }
+
+/* The one bit of chrome the removed bar was carrying that is worth
+   keeping: that the arrow keys do something. It sits under the control
+   they drive rather than in a bar announcing itself. */
+.rl-note kbd {
+  display: inline-block;
+  min-width: 16px;
+  padding: 1px 4px;
+  border: 1px solid #e4e4e7;
+  border-radius: 4px;
+  background: #fafafa;
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 15px;
+  text-align: center;
+  color: #71717a;
+}
+
+#rail {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.rl-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.rl-label {
+  margin-bottom: 8px;
+  font-size: 11.5px;
+  font-weight: 400;
+  letter-spacing: 0.1px;
+  color: #8a8a90;
+}
+
+.rl-note {
+  max-width: 232px;
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  line-height: 17px;
+  color: #a1a1a8;
+}
+
+/* --- the screen, closed until you want it ------------------------
+
+   Seven names stacked open is the longest thing in the rail and six of
+   its lines are never the answer. A native select keeps the platform's
+   own list — keyboard, type-ahead, and no popover to build — and only
+   the chosen name takes up room. */
 
 .rl-select {
   width: 100%;
-  padding: 7px 9px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  background: #fff;
+  margin-top: 2px;
+  padding: 9px 34px 9px 12px;
+  border: 1px solid #e4e4e7;
+  border-radius: 9px;
+  background: #ffffff no-repeat right 11px center / 12px 12px;
+  /* The chevron, inline so there is no request for it. */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M6 9.5l6 6 6-6' stroke='%2371717a' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   font: inherit;
-  font-size: 13px;
-  color: var(--ink);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  color: #18181b;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
+.rl-select:hover { border-color: #d4d4d8; }
+.rl-select:focus-visible {
+  outline: none;
+  border-color: #a1a1aa;
+  box-shadow: 0 0 0 3px #f4f4f5;
+}
+
+/* --- the stacked list. The chosen one is simply the one you can read,
+       and the rest are still there. ------------------------------- */
 
 .rl-opt {
-  display: block;
-  width: 100%;
-  padding: 7px 9px;
-  border: 1px solid transparent;
-  border-radius: 7px;
-  background: none;
-  font: inherit;
-  font-size: 12.5px;
-  text-align: left;
-  color: var(--muted);
-  cursor: pointer;
-}
-.rl-opt:hover { background: var(--paper); }
-.rl-opt.on { border-color: var(--ink); background: var(--paper); color: var(--ink); font-weight: 500; }
-
-.rl-pill { display: flex; gap: 4px; padding: 3px; border: 1px solid var(--line); border-radius: 999px; }
-.rl-chip {
-  flex: 1;
-  padding: 5px 10px;
+  padding: 5px 0;
   border: none;
-  border-radius: 999px;
   background: none;
   font: inherit;
-  font-size: 12px;
-  color: var(--muted);
+  font-size: 15px;
+  line-height: 22px;
+  letter-spacing: -0.2px;
+  color: #b4b4ba;
+  text-align: left;
   cursor: pointer;
+  transition: color 0.15s ease;
 }
-.rl-chip.on { background: var(--ink); color: #fff; }
-.rl-chip:disabled { color: var(--quiet); cursor: default; }
+.rl-opt:hover { color: #6e6e76; }
+.rl-opt.on {
+  font-weight: 600;
+  color: #18181b;
+}
+.rl-opt:focus-visible {
+  outline: 2px solid #d4d4d8;
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* --- the failures, with a box in front of each -------------------
+
+   The box carries the whole message: a square means these combine, a
+   circle means they cannot. Same list either way, so the difference is
+   read rather than discovered by clicking. */
 
 .rl-tick {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  width: 100%;
-  padding: 6px 9px 6px 6px;
+  gap: 9px;
+  padding: 6px 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  line-height: 20px;
+  letter-spacing: -0.1px;
+  color: #8a8a90;
+  text-align: left;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+.rl-tick:hover { color: #4b4b52; }
+.rl-tick.on { color: #18181b; font-weight: 500; }
+.rl-tick:focus-visible {
+  outline: 2px solid #d4d4d8;
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.rl-tick .box {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  border: 1.5px solid #d4d4d8;
+  border-radius: 4px;
+  background: #ffffff;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.rl-tick .box.radio { border-radius: 50%; }
+
+.rl-tick .box svg {
+  width: 11px;
+  height: 11px;
+  opacity: 0;
+  transform: scale(0.7);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+/* The circle fills rather than ticks — a tick in a radio is a checkbox
+   wearing the wrong shape. */
+.rl-tick .box.radio svg { display: none; }
+.rl-tick .box.radio::after {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ffffff;
+  transform: scale(0);
+  transition: transform 0.12s ease;
+}
+
+.rl-tick:hover .box { border-color: #a1a1aa; }
+.rl-tick.on .box {
+  border-color: #18181b;
+  background: #18181b;
+}
+.rl-tick.on .box svg { opacity: 1; transform: none; }
+.rl-tick.on .box.radio::after { transform: none; }
+
+/* --- the pill, for the two-way answers ------------------------- */
+
+.rl-pill {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 10px;
+  background: #f4f4f5;
+}
+
+.rl-chip {
+  padding: 7px 14px;
   border: 1px solid transparent;
   border-radius: 7px;
   background: none;
   font: inherit;
-  font-size: 12.5px;
-  line-height: 1.4;
-  text-align: left;
-  color: var(--muted);
+  font-size: 13.5px;
+  font-weight: 500;
+  color: #8a8a90;
   cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
-.rl-tick:hover { background: var(--paper); }
-.rl-tick.on { color: var(--ink); }
-.rl-tick .box {
-  flex: 0 0 15px;
+.rl-chip:hover:not(.on):not(:disabled) { color: #4b4b52; }
+.rl-chip.on {
+  background: #ffffff;
+  border-color: #e4e4e7;
+  color: #18181b;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+.rl-chip:disabled {
+  color: #ccccd2;
+  cursor: default;
+}
+.rl-chip:focus-visible {
+  outline: 2px solid #d4d4d8;
+  outline-offset: 2px;
+}
+
+/* ===================== the stage ================================= */
+
+.st-stage {
   display: grid;
-  place-items: center;
-  width: 15px;
-  height: 15px;
-  margin-top: 1px;
-  border: 1.5px solid var(--quiet);
-  border-radius: 4px;
-}
-.rl-tick .box.radio { border-radius: 50%; }
-.rl-tick.on .box { border-color: var(--ink); background: var(--ink); }
-.rl-tick .box svg { width: 9px; height: 9px; opacity: 0; }
-.rl-tick.on .box svg { opacity: 1; }
-
-.rl-foot { display: flex; flex-direction: column; gap: 10px; margin-top: auto; padding-top: 18px; border-top: 1px solid var(--line); }
-.rl-copy {
-  padding: 7px 10px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  background: #fff;
-  font: inherit;
-  font-size: 12px;
-  color: var(--ink);
-  cursor: pointer;
-}
-.rl-copy:hover { background: var(--paper); }
-
-/* ========================== the stage ============================ */
-
-.st {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 14px;
-  min-height: 0;
-  padding: 24px;
-  overflow: auto;
+  grid-template-rows: auto 1fr;
+  gap: 20px;
+  height: 100vh;
+  min-width: 0;
+  padding: 40px 48px 40px 20px;
+  overflow-y: auto;
 }
 
-/* Caption and app share one column and one width, and that width comes
-   from tauri.conf.json via rail.js — a caption wider than the thing it
-   describes reads as a different page. */
+/* Caption and app share one column and one left edge. The app is the
+   widest thing on the page, so it is what the column is measured from —
+   a caption that starts somewhere else reads as a different page. */
+.st-cap,
+.st-frame {
+  width: min(100%, var(--app-width, 900px));
+  margin-inline: auto;
+}
+
 .st-cap {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  width: 100%;
-  max-width: var(--app-width, 900px);
+  gap: 5px;
 }
-.st-cap b { font-size: 15px; font-weight: 600; }
-.st-cap span { font-size: 12.5px; line-height: 1.6; color: var(--muted); }
+.st-cap b {
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.4px;
+}
+.st-cap span {
+  max-width: 700px;
+  font-size: 13px;
+  line-height: 20px;
+  color: #8a8a90;
+}
 
-/* The window, drawn as a window. Not the app's own chrome — the app has
-   none, because on a desktop the operating system draws it. This is the
-   page admitting that what it is showing is a window. */
+/* One window, one size, every state — the height is the prototype's own
+   reasoning, kept here because it is the thing most likely to be
+   "improved" by somebody sizing the window to its content:
+
+     Measured across every state the content runs from 270px to 844px, a
+     574px swing. Sized to its content the window grows and shrinks by
+     more than half its own height as you step through, which reads as a
+     web page reflowing rather than an application running. A window is
+     furniture: it is the size it is, and the content moves inside it.
+
+     720 is chosen so every state fits without scrolling except setup
+     with everything answered, which is the one screen whose content is
+     genuinely accumulating — scrolling there is honest.
+
+   The cost is real and worth naming: sign-in has slack below it. That is
+   what pinning the actions to the bottom edge is for. Fixed height and
+   anchored actions are one decision, not two. */
 .st-frame {
   position: relative;
-  flex: none;
-  /* The window's declared size, capped to whatever room there is. A
-     fixed width would push the app off a laptop screen once the rail
-     took its 300px, and reviewing a design you have to scroll sideways
-     to see is reviewing a different design. */
-  max-width: 100%;
-  overflow: hidden;
-  border: 1px solid #d4d4d8;
+  align-self: start;
+  max-height: 100%;
   border-radius: 12px;
-  background: #fff;
-  box-shadow: 0 24px 60px -24px rgba(9, 9, 11, 0.35);
-  animation: st-in 0.22s ease;
+  overflow: hidden;
+  background: #ffffff;
+  box-shadow: 0 24px 60px -18px rgba(16, 24, 40, 0.28), 0 0 0 1px rgba(16, 24, 40, 0.07);
 }
-@keyframes st-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 
-.st-frame iframe { display: block; width: 100%; height: 100%; border: 0; }
-
-.st-dead {
-  max-width: 640px;
-  padding: 16px 18px;
-  border: 1px solid #fca5a5;
-  border-radius: 10px;
-  background: #fef2f2;
-  font-size: 13px;
-  line-height: 1.6;
-  color: #7f1d1d;
+.st-frame iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
 }
-.st-dead code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
 
+/* The entrance, replayed on every state. Short enough that stepping
+   through seven states in a row does not feel like waiting. */
+.st-frame.st-in { animation: st-in 0.34s cubic-bezier(0.22, 1, 0.36, 1); }
+@keyframes st-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.994); }
+  to { opacity: 1; transform: none; }
+}
 @media (prefers-reduced-motion: reduce) {
-  .st-frame { animation: none; }
+  .st-frame.st-in { animation: none; }
+  .rl-tick .box,
+  .rl-tick .box svg,
+  .rl-tick .box.radio::after { transition: none; }
+}
+
+/* When it does not come up there is nothing to show, so say why. */
+.st-dead {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 460px;
+  margin: 60px auto;
+  padding: 28px;
+  border: 1px solid #e4e4e7;
+  border-radius: 12px;
+  user-select: text;
+}
+.st-dead b { font-size: 15px; font-weight: 600; }
+.st-dead span { font-size: 13px; line-height: 21px; color: #71717a; }
+.st-dead code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: #f4f4f5;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+
+/* Below this the rail and the app would be fighting for the same room,
+   and the app has to win. */
+@media (max-width: 1080px) {
+  body.st { grid-template-columns: 240px 1fr; }
+  .st-rail { padding: 28px 16px 28px 24px; }
+  .st-stage { padding: 28px 24px 24px 12px; }
 }

@@ -161,11 +161,12 @@ async function sizeFrame() {
 function showDead(error) {
   dead.hidden = false;
   dead.innerHTML = location.protocol === "file:"
-    ? "<b>This page needs a static server.</b> It loads the real app out of <code>../ui</code> rather than "
-      + "keeping a second copy, and a browser will not fetch a sibling folder over <code>file://</code>. "
-      + "Run <code>npm run prototype</code> from the repo root."
-    : `<b>The page loaded, but something under it failed.</b> The server is not the problem. `
-      + `<code>${String(error.message || error)}</code>`;
+    ? "<b>This page needs a static server.</b>"
+      + "<span>It loads the real app out of <code>../ui</code> rather than keeping a second copy, and a "
+      + "browser will not fetch a sibling folder over <code>file://</code>. Run <code>npm run prototype</code> "
+      + "from the repo root and open the address it prints.</span>"
+    : "<b>The page loaded, but something under it failed.</b>"
+      + `<span>The server is not the problem. <code>${String(error.message || error)}</code></span>`;
 }
 
 function show() {
@@ -176,6 +177,13 @@ function show() {
   if (app.dataset.at !== target) {
     app.dataset.at = target;
     app.src = target;
+    // Replay the entrance, the way the prototype's paint() does. The
+    // class has to come off and the layout be read before it goes back
+    // on, or the animation only ever runs once.
+    frame.classList.remove("st-in");
+    void frame.offsetWidth;
+    frame.classList.add("st-in");
+    document.getElementById("playFlow").href = target;
   }
   renderRail();
   renderCaption();
@@ -255,6 +263,13 @@ function renderRail() {
   }
   select.addEventListener("change", () => goTo(select.value));
   screens.append(select);
+
+  // Under the control they drive, rather than in a bar announcing itself.
+  const keys = document.createElement("div");
+  keys.className = "rl-note";
+  keys.innerHTML = "<kbd>&larr;</kbd> <kbd>&rarr;</kbd> steps through them in order";
+  screens.append(keys);
+
   rail.append(screens);
 
   /* --- working, or which of the breaks ---
@@ -533,17 +548,26 @@ function stepBy(by) {
 }
 
 window.addEventListener("keydown", (event) => {
-  if (event.target.matches("input, textarea, select")) return;
+  /* Arrows belong to a field or an open select while one has focus. The
+     guard checks for an Element first: a keydown whose target is the
+     document or the window has no `matches`, and reaching for it there
+     throws inside the handler, which takes the arrow keys with it. */
+  const focused = event.target;
+  if (focused instanceof Element && focused.matches("input, textarea, select")) return;
   if (event.key === "ArrowLeft") stepBy(-1);
   if (event.key === "ArrowRight") stepBy(1);
 });
 
+/* This page's own address, not the frame's. A state worth discussing is
+   a state worth sending somebody, and what they should get is the rail
+   with the state selected — not the app on its own with no way back. */
 document.getElementById("copyLink").addEventListener("click", async (event) => {
-  const url = new URL(address(), location.href).href;
+  const url = location.href;
+  const label = "Copy this state\u2019s link";
   try {
     await navigator.clipboard.writeText(url);
     event.target.textContent = "Copied";
-    setTimeout(() => { event.target.textContent = "Copy the app's link"; }, 1500);
+    setTimeout(() => { event.target.textContent = label; }, 1500);
   } catch {
     event.target.textContent = url;
   }
