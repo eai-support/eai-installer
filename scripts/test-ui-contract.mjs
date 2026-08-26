@@ -127,8 +127,14 @@ const DRIVEN_CLASSES = [
   "eai-vid-ok", "eai-vid-caption", "eai-vid-track", "playing", "replay",
   "eai-step", "eai-steps", "reached", "upcoming", "sr-only",
 ];
+/* Escape every character a regex gives meaning to, not just the hyphen.
+   Hand-rolling one character of escaping is the shape that reads as
+   sanitising and is not — the class names here are ours, but a check
+   that only half-escapes teaches the next person the wrong pattern. */
+const escapeForRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\-]/g, "\\$&");
+
 for (const name of DRIVEN_CLASSES) {
-  if (!new RegExp(`\\.${name.replace(/[-]/g, "\\-")}\\b`).test(css)) {
+  if (!new RegExp(`\\.${escapeForRegExp(name)}\\b`).test(css)) {
     fail(`ui/styles.css has no rule for .${name}, which the app assigns at runtime`);
   }
 }

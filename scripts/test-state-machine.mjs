@@ -307,7 +307,12 @@ if (!machine.readyRow("windows").body.includes(String(machine.checkedTools("wind
 
   const rows = machine.signinProblems(state, { prereq: { step: "git" }, network: { host: "api.example.com" } });
   if (rows.length !== 2) fail("two failures do not produce two rows");
-  if (!rows[1][0].includes("api.example.com")) fail("the network row does not name the host it could not reach");
+  /* The exact host, not a substring of the sentence. `includes` on
+     something host-shaped passes for "evil-api.example.com.attacker.net"
+     too, and a test that would accept that is teaching the wrong check. */
+  if (rows[1][0] !== "Can't reach api.example.com") {
+    fail(`the network row does not name the host it could not reach: ${rows[1][0]}`);
+  }
   if (rows.some(([title, body]) => !title || !body)) fail("a failure row is missing its title or its explanation");
 }
 
@@ -634,8 +639,14 @@ const emptyMac = installedMac.map((surface) => ({ ...surface, installed: false }
   if (machine.harnessSteps(installedMac[0])) fail("an installed tool is given steps for fetching it");
   const steps = machine.harnessSteps(installedMac[1]);
   if (steps.length !== 3) fail(`the round trip is ${steps.length} steps, not three`);
-  if (!steps[0].includes("github.com")) fail(`the first step does not name the site: ${steps[0]}`);
-  if (!steps[0].includes(installedMac[1].name)) fail("the first step does not name the tool");
+  /* The whole sentence, so the host is matched as the host rather than
+     as any run of characters inside it. */
+  if (steps[0] !== `Download and install ${installedMac[1].name} from github.com`) {
+    fail(`the first step is wrong: ${steps[0]}`);
+  }
+  if (machine.harnessOrigin(installedMac[1]).site !== "github.com") {
+    fail("the origin is not the host the step claims");
+  }
   if (!steps[1].includes("GitHub")) fail("the second step does not say whose account they will need");
   if (!/come back/i.test(steps[2])) fail("the third step does not say to come back");
 
