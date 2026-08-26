@@ -288,14 +288,49 @@ fn windows_resolved_path(program: &str) -> Option<PathBuf> {
     } else {
         format!("{program}.exe")
     };
-    let mut directories = windows_package_bin_dirs();
     if let Some(existing) = env::var_os("PATH") {
-        directories.extend(env::split_paths(&existing));
+        let mut directories = env::split_paths(&existing).collect::<Vec<_>>();
+        directories.extend(windows_package_bin_dirs());
+        return windows_best_candidate(program, directories, &filename);
     }
-    directories
+    windows_best_candidate(program, windows_package_bin_dirs(), &filename)
+}
+
+#[cfg(target_os = "windows")]
+fn windows_best_candidate(program: &str, directories: Vec<PathBuf>, filename: &str) -> Option<PathBuf> {
+    let candidates = directories
         .into_iter()
-        .map(|directory| directory.join(&filename))
-        .find(|path| path.is_file())
+        .map(|directory| directory.join(filename))
+        .filter(|path| path.is_file())
+        .collect::<Vec<_>>();
+    if program == "node" {
+        return candidates
+            .iter()
+            .find(|path| windows_node_candidate_is_supported(path))
+            .cloned()
+            .or_else(|| candidates.into_iter().next());
+    }
+    candidates.into_iter().next()
+}
+
+#[cfg(target_os = "windows")]
+fn windows_node_candidate_is_supported(path: &Path) -> bool {
+    let mut command = Command::new(path);
+    command.arg("--version");
+    command.stdin(Stdio::null());
+    command.stdout(Stdio::piped());
+    command.stderr(Stdio::piped());
+    command.creation_flags(0x08000000);
+    let Ok(output) = command.output() else { return false; };
+    if !output.status.success() {
+        return false;
+    }
+    let stdout = clean_process_output(&String::from_utf8_lossy(&output.stdout));
+    let stderr = clean_process_output(&String::from_utf8_lossy(&output.stderr));
+    let current = if stdout.is_empty() { stderr } else { stdout };
+    semantic_version(&current)
+        .map(|version| version.0 >= MIN_NODE_MAJOR_VERSION)
+        .unwrap_or(false)
 }
 
 fn user_npm_global_exec_dirs() -> Vec<PathBuf> {
