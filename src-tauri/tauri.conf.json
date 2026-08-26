@@ -4,7 +4,8 @@
   "version": "0.3.17",
   "identifier": "com.enterpriseai.eai-setup",
   "build": {
-    "frontendDist": "../ui"
+    "frontendDist": "../ui",
+    "beforeBuildCommand": "npm run vendor-shaders"
   },
   "app": {
     "withGlobalTauri": true,
@@ -19,7 +20,12 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost"
+      "csp": {
+        "default-src": "'self' asset:",
+        "connect-src": "'self' ipc: http://ipc.localhost https://asset.localhost",
+        "img-src": "'self' asset: blob: data:",
+        "style-src": "'self' 'unsafe-inline'"
+      }
     }
   },
   "bundle": {

@@ -49,8 +49,8 @@ const dead = document.getElementById("dead");
 const state = machine.createState();
 
 const fixtures = {
-  installed: [],          // surface ids on this machine — [] is the empty one
-  pick: null,             // which one is selected, null = the app decides
+  installed: [],          // surface ids on this machine
+  harnessInstalled: false, // whether the rail is in "installed" mode
   waiting: false,         // away on somebody else's website
   steps: ["git"],         // which prerequisites failed — more than one can
   busy: null,             // the quiet fix-up, mid-run
@@ -100,8 +100,9 @@ function address() {
   if (screen?.stages) query.set("stage", String(machine.stageOf(state)));
 
   if (uses("harness")) {
-    query.set("installed", fixtures.installed.length ? fixtures.installed.join(",") : "none");
-    if (fixtures.pick) query.set("pick", fixtures.pick);
+    query.set("installed", fixtures.harnessInstalled && fixtures.installed.length
+      ? fixtures.installed.join(",")
+      : "none");
     if (fixtures.waiting) query.set("waiting", "1");
   }
   if (state.screen === "signin") {
@@ -114,7 +115,9 @@ function address() {
     if (fixtures.link) query.set("link", "1");
   }
   if (state.screen === "running") query.set("reached", fixtures.reached);
-  if (state.screen === "setup" && fixtures.workspaces === 2) query.set("workspaces", "2");
+  if (state.screen === "setup" && fixtures.workspaces !== 1) {
+    query.set("workspaces", String(fixtures.workspaces));
+  }
   return `../ui/index.html?${query}`;
 }
 
@@ -425,14 +428,12 @@ function runProgress() {
 
 function formShape() {
   const node = group("This account");
-  node.append(option("One workspace", fixtures.workspaces === 1, () => {
-    fixtures.workspaces = 1;
-    show();
-  }));
-  node.append(option("Two workspaces", fixtures.workspaces === 2, () => {
-    fixtures.workspaces = 2;
-    show();
-  }));
+  for (const [label, count] of [["One workspace", 1], ["Two workspaces", 2], ["Ten workspaces", 10]]) {
+    node.append(option(label, fixtures.workspaces === count, () => {
+      fixtures.workspaces = count;
+      show();
+    }));
+  }
   return node;
 }
 
@@ -525,44 +526,52 @@ function welcomeDetail() {
        screens exist to answer ------------------------------------- */
 
 function harnessDetail() {
+  const sorted = [...SURFACES].sort((left, right) => left.name.localeCompare(right.name));
   const node = group("AI tools");
 
-  node.append(option("Nothing installed", fixtures.installed.length === 0, () => {
-    fixtures.installed = [];
-    fixtures.pick = null;
-    fixtures.waiting = false;
-    show();
-  }));
-  node.append(option("Claude Code only", fixtures.installed.join() === "claude-cli", () => {
-    fixtures.installed = ["claude-cli"];
-    fixtures.pick = null;
-    fixtures.waiting = false;
-    show();
-  }));
-  node.append(option("Claude Code and Codex CLI", fixtures.installed.join() === "claude-cli,codex-cli", () => {
-    fixtures.installed = ["claude-cli", "codex-cli"];
-    fixtures.pick = null;
-    fixtures.waiting = false;
-    show();
-  }));
-  node.append(option("All of them", fixtures.installed.length === SURFACES.length, () => {
-    fixtures.installed = SURFACES.map((surface) => surface.id);
-    fixtures.pick = null;
-    fixtures.waiting = false;
-    show();
-  }));
-
-  const chosen = group("Picked");
-  chosen.append(option("Whichever the app would pick", !fixtures.pick, () => { fixtures.pick = null; show(); }));
-  for (const surface of SURFACES) {
-    chosen.append(option(surface.name, fixtures.pick === surface.id, () => { fixtures.pick = surface.id; show(); }));
+  const pill = document.createElement("div");
+  pill.className = "rl-pill wide";
+  for (const [text, installedMode] of [["Nothing installed", false], ["Installed", true]]) {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = `rl-chip${fixtures.harnessInstalled === installedMode ? " on" : ""}`;
+    chip.textContent = text;
+    chip.addEventListener("click", () => {
+      fixtures.harnessInstalled = installedMode;
+      if (!installedMode) {
+        fixtures.installed = [];
+        fixtures.waiting = false;
+      }
+      show();
+    });
+    pill.append(chip);
   }
-  node.append(chosen);
+  node.append(pill);
+
+  if (fixtures.harnessInstalled) {
+    const installed = document.createElement("div");
+    installed.className = "rl-under";
+    const installedLabel = document.createElement("div");
+    installedLabel.className = "rl-label";
+    installedLabel.textContent = "Which ones";
+    installed.append(installedLabel);
+
+    for (const surface of sorted) {
+      installed.append(tickbox(surface.name, fixtures.installed.includes(surface.id), "checkbox", () => {
+        fixtures.installed = fixtures.installed.includes(surface.id)
+          ? fixtures.installed.filter((id) => id !== surface.id)
+          : [...fixtures.installed, surface.id];
+        if (fixtures.installed.length) fixtures.waiting = false;
+        show();
+      }));
+    }
+    node.append(installed);
+  }
 
   // Only reachable for something that is not here: waiting for a tool
   // that is already installed is not a state the app can be in.
-  const pickedId = fixtures.pick || SURFACES.find((surface) => fixtures.installed.includes(surface.id))?.id || SURFACES[0].id;
-  if (state.screen === "done" && !fixtures.installed.includes(pickedId) && !state.faults.length) {
+  const pickedId = sorted.find((surface) => fixtures.installed.includes(surface.id))?.id || sorted[0].id;
+  if (state.screen === "done" && fixtures.harnessInstalled && !fixtures.installed.includes(pickedId) && !state.faults.length) {
     node.append(tickbox("Away installing it", fixtures.waiting, "checkbox", () => {
       fixtures.waiting = !fixtures.waiting;
       show();
@@ -589,7 +598,7 @@ function renderCaption() {
     host: "api.au.myenterprise.ai",
     account: "you@example.com",
     projectName: "contract-renewals",
-    harnessName: SURFACES.find((surface) => surface.id === fixtures.pick)?.name || "the AI tool",
+    harnessName: SURFACES.find((surface) => fixtures.installed.includes(surface.id))?.name || "the AI tool",
     projectPath: "/Users/you/Projects/contract-renewals",
   });
   document.getElementById("capName").textContent = written.name;
@@ -626,14 +635,23 @@ window.addEventListener("keydown", (event) => {
 machine.readAddress(location.search, state);
 const initial = new URLSearchParams(location.search);
 if (initial.has("installed")) {
-  fixtures.installed = initial.get("installed").split(",").filter((id) => id && id !== "none");
+  const value = initial.get("installed");
+  if (!value || value === "none") {
+    fixtures.harnessInstalled = false;
+    fixtures.installed = [];
+  } else {
+    fixtures.harnessInstalled = true;
+    fixtures.installed = value.split(",").filter(Boolean);
+  }
 }
-if (initial.has("pick")) fixtures.pick = initial.get("pick");
 if (initial.get("waiting") === "1") fixtures.waiting = true;
 if (initial.has("step")) fixtures.steps = initial.get("step").split(",").filter(Boolean);
 if (initial.has("busy")) fixtures.busy = initial.get("busy");
 if (initial.get("admin") === "1") fixtures.admin = true;
-if (initial.get("workspaces") === "2") fixtures.workspaces = 2;
+if (initial.has("workspaces")) {
+  const count = Number.parseInt(initial.get("workspaces"), 10);
+  if (Number.isFinite(count) && count > 0) fixtures.workspaces = count;
+}
 if (initial.has("reached")) fixtures.reached = initial.get("reached");
 if (initial.has("signin")) fixtures.signin = initial.get("signin");
 if (initial.get("link") === "1") fixtures.link = true;
