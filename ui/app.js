@@ -286,10 +286,13 @@ function reset() {
 
   // Creating
   el("runTitle").textContent = `Creating ${facts.projectName || "your EAI app"}`;
-  el("runSub").textContent = "Downloading the app template into your folder.";
+  el("runSub").textContent = "This takes a couple of minutes. You can leave it running.";
+  el("runBar").hidden = true;
+  el("runBar").textContent = "";
   el("runLines").replaceChildren();
   el("runNote").hidden = true;
   el("runActs").hidden = true;
+  stopRunBar();
 
   // Choose a harness
   el("harnessRows").replaceChildren();
@@ -408,7 +411,7 @@ const PAINT = {
       mark.classList.add("waiting");
       mark.innerHTML = `<i class="mk busy">${SPINNER}</i>`;
       el("welcomeTitle").textContent = "Waiting for your browser";
-      el("welcomeSub").textContent = "Finish signing in there and this window carries on by itself. "
+      el("welcomeSub").textContent = "Finish signing in in the browser, then close that tab. This window carries on by itself. "
         + "Your password is only ever typed into the browser.";
       el("welcomeSub").classList.add("wide");
 
@@ -431,8 +434,8 @@ const PAINT = {
       el("welcomeFine").hidden = !facts.signinEscapeShown;
       el("welcomeFine").textContent = facts.signinUrl
         ? "Still waiting. If your browser never opened, copy the link and paste it in yourself."
-        : "Still waiting on your browser. Finish signing in there if the tab is still open — "
-          + "otherwise close this window and open EAI Setup again to start over. Nothing has been saved, so that is safe.";
+        : "Still waiting on your browser. Finish signing in there if the tab is still open, then close it — "
+          + "this window continues. Otherwise close this window and open EAI Setup again to start over. Nothing has been saved, so that is safe.";
       return;
     }
 
@@ -488,7 +491,7 @@ const PAINT = {
        says. Before an answer it is one button at the left, because
        somebody reads the heading and wants to go and choose; a greyed
        path sitting there instead reads as an answer that is already in. */
-    const chosen = machine.locationShape(state) === "chosen";
+    const chosen = machine.locationShape(state) === "chosen" && Boolean(facts.projectFolder);
     el("chooseFolderStart").hidden = chosen;
     el("locCombo").hidden = !chosen;
     if (chosen) el("projFolder").value = facts.projectFolder;
@@ -526,11 +529,15 @@ const PAINT = {
       el("runNoteBody").textContent = fault.noteBody(platform(), context);
       el("runNote").hidden = false;
       el("runActs").hidden = false;
+      el("runBar").hidden = true;
+      stopRunBar();
       return;
     }
 
     el("runTitle").textContent = `Creating ${facts.projectName}`;
     el("runSub").textContent = "This takes a couple of minutes. You can leave it running.";
+    el("runBar").hidden = false;
+    startRunBar();
   },
 
   /**
@@ -764,6 +771,38 @@ function addRunRow({ label, value, mark }) {
     + `<span class="lbl">${escapeHtml(label)}</span>`
     + `<span class="val">${escapeHtml(reported)}</span>`;
   el("runLines").appendChild(row);
+}
+
+let runBarTimer = null;
+let runBarTick = 0;
+
+function stopRunBar() {
+  if (!runBarTimer) return;
+  clearInterval(runBarTimer);
+  runBarTimer = null;
+}
+
+/**
+ * The ASCII bar on Creating. It is the only thing that has to move while
+ * the platform is silent, so it updates in place rather than through
+ * paint() — a full redraw would steal focus and reset the scroll.
+ */
+function startRunBar() {
+  const draw = () => {
+    el("runBar").textContent = machine.runProgressBar({ reached: facts.runReached, tick: runBarTick });
+  };
+  draw();
+  stopRunBar();
+  const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+  if (reduced) return;
+  runBarTimer = setInterval(() => {
+    if (state.screen !== "running" || machine.isBroken(state, "init")) {
+      stopRunBar();
+      return;
+    }
+    runBarTick += 1;
+    draw();
+  }, 450);
 }
 
 function setFieldError(name, message) {
@@ -1202,28 +1241,29 @@ async function loadWorkspaces() {
   if (facts.demo) {
     facts.tenants = [{ id: "preview", displayName: "Preview workspace", slug: "preview", active: true, apps: [] }];
     facts.selectedTenantId = "preview";
-    goTo("setup", { stage: machine.stageForAnswers({ workspace: true }) });
+    goToSetup();
     return true;
   }
   try {
     const tenants = await invoke("get_company_tenants");
     if (!Array.isArray(tenants) || tenants.length === 0) {
       facts.tenants = [];
-      goTo("setup");
+      facts.selectedTenantId = null;
+      goToSetup();
       raise("workspace", { account: facts.account });
       return false;
     }
     facts.tenants = tenants;
     facts.selectedTenantId = helpers.resolveTenantSelection(tenants, facts.selectedTenantId);
     note(`${tenants.length} workspace${tenants.length === 1 ? "" : "s"} available.`);
-    goTo("setup");
-    syncStage();
+    goToSetup();
     return true;
   } catch (error) {
     const failure = helpers.describeWorkspaceFailure(error);
     note(`${failure.title}: ${failure.diagnostic}`, "error");
     facts.tenants = [];
-    goTo("setup");
+    facts.selectedTenantId = null;
+    goToSetup();
     raise("workspace", {
       account: facts.account,
       title: failure.title,
@@ -1261,6 +1301,21 @@ function chooseTenant(tenantId) {
   machine.clear(state);
   syncStage();
   paint();
+}
+
+/**
+ * Arrive on Set up at the stage the answers actually support.
+ *
+ * `goTo("setup")` with no stage paints the last one — the finished form,
+ * Change location, empty path — and that is what a reviewer sees if the
+ * live path forgets to pass one. Demo and live both come through here.
+ */
+function goToSetup() {
+  goTo("setup", {
+    stage: machine.stageForAnswers({
+      workspace: Boolean(facts.selectedTenantId),
+    }),
+  });
 }
 
 /**
@@ -1308,9 +1363,12 @@ async function runInit() {
   }
 
   initInProgress = true;
-  facts.runReached = "workspace";
+  facts.runReached = "folder";
   facts.runFailedAt = null;
-  facts.runValues = {};
+  facts.runValues = {
+    workspace: selectedTenant()?.displayName || "",
+  };
+  runBarTick = 0;
   goTo("running");
   await listenForBootstrapProgress();
 
@@ -1372,10 +1430,11 @@ function failInit(message) {
     return false;
   }
   const failure = helpers.describeInitFailure(message, platform());
-  facts.runFailedAt = failure.title === "App dependencies need attention" || /dependenc/i.test(failure.title)
-    ? "dependencies"
-    : facts.runReached;
-  note(`${failure.title}: ${failure.detail}`, "error");
+  facts.runFailedAt = failure.failedAt
+    || (failure.title === "App dependencies need attention" || /dependenc/i.test(failure.title)
+      ? "dependencies"
+      : facts.runReached);
+  note(`${failure.title}: ${failure.diagnostic || failure.detail}`, "error");
   raise("init", { title: failure.title, detail: failure.detail, next: failure.next });
   return false;
 }

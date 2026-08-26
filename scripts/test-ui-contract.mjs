@@ -90,6 +90,12 @@ const stepsInMachine = machine.setupSteps(
 if (stepsInMarkup.join(",") !== stepsInMachine.join(",")) {
   fail(`the form's questions differ between markup (${stepsInMarkup}) and machine (${stepsInMachine})`);
 }
+if (!app.includes('locationShape(state) === "chosen" && Boolean(facts.projectFolder)')) {
+  fail("the location question can draw Change location with an empty path");
+}
+if (!app.includes("function goToSetup()")) {
+  fail("live setup entry does not derive its stage from the answers");
+}
 
 /* The bar across the top: markup for it, a rule for each of its three
    states, and a way to read it without seeing it. */
@@ -126,6 +132,7 @@ const DRIVEN_CLASSES = [
   "eai-vid", "eai-vid-stage", "eai-vid-win", "eai-vid-play", "eai-vid-caret",
   "eai-vid-ok", "eai-vid-caption", "eai-vid-track", "playing", "replay",
   "eai-step", "eai-steps", "reached", "upcoming", "sr-only",
+  "eai-run-bar",
 ];
 /* Escape every character a regex gives meaning to, not just the hyphen.
    Hand-rolling one character of escaping is the shape that reads as

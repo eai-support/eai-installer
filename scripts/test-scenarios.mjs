@@ -9,7 +9,7 @@ const requiredIds = [
   "STATE-11", "STATE-12", "STATE-13", "STATE-14", "STATE-15", "STATE-16", "STATE-17", "STATE-18", "STATE-19", "STATE-20", "STATE-21", "STATE-22",
   "HARNESS-01", "HARNESS-02", "HARNESS-03", "HARNESS-04", "HARNESS-05", "HARNESS-06", "HARNESS-07", "HARNESS-08", "HARNESS-09",
   "PLATFORM-01", "PLATFORM-02", "PLATFORM-03", "PLATFORM-04",
-  "INIT-03", "INIT-04", "INIT-05", "INIT-06", "INIT-07", "INIT-08", "INIT-09", "COMPLETE-01", "COMPLETE-02", "AI-01", "AI-02", "AI-03", "AI-04", "RELEASE-01",
+  "INIT-03", "INIT-04", "INIT-05", "INIT-06", "INIT-07", "INIT-08", "INIT-09", "INIT-10", "COMPLETE-01", "COMPLETE-02", "AI-01", "AI-02", "AI-03", "AI-04", "RELEASE-01",
 ];
 
 for (const id of requiredIds) {
@@ -34,7 +34,7 @@ if (!matrix.includes("known-issues.md")) {
   throw new Error("scenario matrix does not point at the log of what was deliberately left out");
 }
 const known = await readFile(new URL("../docs/known-issues.md", import.meta.url), "utf8");
-for (const id of ["KI-01", "KI-02", "KI-03", "KI-04", "KI-05", "KI-06"]) {
+for (const id of ["KI-01", "KI-02", "KI-03", "KI-04", "KI-05", "KI-06", "KI-07"]) {
   if (!known.includes(`## ${id}`)) throw new Error(`known issues log is missing ${id}`);
 }
 if (!known.includes("app name") || !known.includes("read-only")) {

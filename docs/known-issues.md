@@ -175,3 +175,29 @@ non-technical person to reproduce it with a terminal open.
 
 Nothing has been changed pending the decision. (1) is the smallest thing
 that answers the specific frame this was raised against.
+
+---
+
+## KI-07 · The browser says "return to the terminal"
+
+**Status:** open, needs a change in the `eai` CLI · **Found:** 2026-08-25
+
+**What somebody would observe.** After signing in, the browser tab
+shows a blank white page: "Login successful. Return to the terminal."
+They are not in a terminal. They are in EAI Setup, which is already
+telling them this window will continue by itself.
+
+**Why.** `eai login` starts a localhost callback server and, on success,
+responds with `text/plain`: "Login successful. Return to the terminal."
+The installer cannot replace that page. It only runs `eai login`, and
+must not bypass it.
+
+**What it costs.** A moment of confusion at the one point where the
+person is looking at the wrong window. The installer now says to close
+the tab; the tab still says "terminal".
+
+**What would have to change.** In the `eai` CLI, the callback response
+should be HTML: signed in, close this tab, return to **Enterprise AI
+Setup**. A CLI-only `eai login` can still mention the terminal. Optional:
+close the tab after a few seconds. The installer needs no further change
+once that ships.

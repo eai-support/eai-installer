@@ -554,6 +554,21 @@ if (machine.looksLikeTakenName("the template could not be downloaded")) {
   if (finished.some((row) => row.mark !== "done")) fail("a finished run leaves a row unticked");
 }
 
+{
+  if (machine.runProgressBar({ reached: "template", tick: 0 }) !== "[####=>--] Creating the app on EAI") {
+    fail(`the creating bar does not name the running row: ${machine.runProgressBar({ reached: "template", tick: 0 })}`);
+  }
+  if (machine.runProgressBar({ reached: "template", tick: 1 }) !== "[####>=--] Creating the app on EAI") {
+    fail("the creating bar does not march while the platform is silent");
+  }
+  if (machine.runProgressBar({ reached: "folder", tick: 0 }) !== "[##=>----] Creating the folder") {
+    fail(`creating starts on the folder row, not workspace: ${machine.runProgressBar({ reached: "folder", tick: 0 })}`);
+  }
+  if (!machine.runProgressBar({ reached: "done" }).startsWith("[########]")) {
+    fail("a finished run does not fill the creating bar");
+  }
+}
+
 /* Both streams the Creating screen listens to. The progress events are
    titles; the build summaries are whole sentences, and every one of them
    has to land on a row — a screen that sits on "Workspace connected" for
@@ -573,6 +588,8 @@ for (const [line, expected] of [
   ["Installed the EAI delivery guidance.", "template"],
   ["Prepared local version control.", "template"],
   ["Installed the required project packages.", "dependencies"],
+  ["Folder created", "folder"],
+  ["Creating the app on EAI", "template"],
 ]) {
   const row = machine.runRowForProgress(line, "");
   if (row !== expected) fail(`"${line}" was filed under ${row} rather than ${expected}`);
