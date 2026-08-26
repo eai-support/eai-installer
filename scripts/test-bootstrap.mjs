@@ -306,7 +306,7 @@ if (wizard.indexOf('id="wsRetry"') < wsQuestionStart || wizard.indexOf('id="wsRe
 }
 
 // Creating, as rows rather than a command log, with an honest retry.
-for (const value of ['id="runLines"', 'id="runTitle"', 'id="runSub"', 'id="runNote"', 'id="runRetry"', 'id="runBack"']) {
+for (const value of ['id="runLines"', 'id="runTitle"', 'id="runSub"', 'id="runBar"', 'id="runNote"', 'id="runRetry"', 'id="runBack"']) {
   if (!wizard.includes(value)) throw new Error(`wizard: the creating screen is missing ${value}`);
 }
 
@@ -402,7 +402,8 @@ for (const value of [
   "helpers.describeWorkspaceFailure", "helpers.describeAppFailure", "helpers.describeInitFailure",
   "helpers.summarizeCommandOutput", "helpers.prerequisitesReady", "helpers.isKebabCase", "helpers.chooseAiSurface",
   "machine.faultsInForce", "machine.setupSteps", "machine.runRows", "machine.harnessGroups", "machine.classifyBootstrapFailure",
-  "function reset()", "function paint()", "requestMacAdminPassword", "startHarnessPoll", "stopHarnessPoll",
+  "function reset()", "function paint()", "function goToSetup()", "requestMacAdminPassword", "startHarnessPoll", "stopHarnessPoll",
+  "startRunBar", "stopRunBar",
 ]) {
   if (!app.includes(value)) throw new Error(`wizard: the state-machine driver is missing ${value}`);
 }
@@ -430,6 +431,26 @@ if (!app.includes("setInterval") || !app.includes("waitingForSurfaceId")) {
 }
 if (!/stopHarnessPoll\(\);/.test(app.slice(app.indexOf("function startHarnessPoll")))) {
   throw new Error("wizard: the waiting poll is never stopped");
+}
+if (/goTo\("setup"\);\s*\n\s*syncStage\(\)/.test(app) || /goTo\("setup"\);\s*\n\s*raise\("workspace"/.test(app)) {
+  throw new Error("wizard: live setup paints the finished form before the answers catch up");
+}
+if (!app.includes("Boolean(facts.projectFolder)")) {
+  throw new Error("wizard: Change location can appear with an empty path");
+}
+if (!app.includes('facts.runReached = "folder"')) {
+  throw new Error("wizard: Creating still spins on Workspace connected for the whole platform wait");
+}
+if (!/stopRunBar\(\);/.test(app.slice(app.indexOf("function reset")))) {
+  throw new Error("wizard: the creating bar keeps marching after the screen has moved on");
+}
+
+const initArm = rust.slice(rust.indexOf('"init" =>'), rust.indexOf("_ => command_result"));
+if (!initArm.includes('"Folder created"') || !initArm.includes('"Creating the app on EAI"')) {
+  throw new Error("Tauri adapter does not emit Creating milestones before eai init");
+}
+if (initArm.indexOf('"Folder created"') > initArm.indexOf("run_program_in_directory_with_progress")) {
+  throw new Error("Folder created is not emitted before eai init starts");
 }
 // Setup begins on its own; the buttons are the accessible fallback.
 if (!app.includes("start();")) throw new Error("wizard: the app never starts itself");

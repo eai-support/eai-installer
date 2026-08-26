@@ -9,6 +9,20 @@
     return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value);
   }
 
+  function looksTemporarilyUnavailable(message) {
+    return /\b(502|503|504)\b|bad gateway|service unavailable|gateway timeout|request_error|EXTERNAL_SERVICE_ERROR|temporarily unavailable/i.test(message);
+  }
+
+  function firstUsefulLine(message) {
+    const lines = String(message || "")
+      .split(/\n+/)
+      .map((line) => line.replace(/^[✕✗×x]\s*/u, "").trim())
+      .filter(Boolean);
+    const skip = /^(try next:|getting started:|\d+\.\s*eai\b)/i;
+    const useful = lines.filter((line) => !skip.test(line));
+    return useful[0] || lines[0] || String(message || "");
+  }
+
   function cleanText(value) {
     return String(value ?? "")
       .replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, "")
@@ -90,6 +104,7 @@
         title: "App dependencies need attention",
         detail: "The project files were created, but the packages needed to run the app could not be installed. Your project folder is safe to reuse.",
         next: "Choose Try again. If it still fails, open the project folder and run npm install after checking your network connection.",
+        failedAt: "dependencies",
       };
     }
     if (/spawn EINVAL|npm\.cmd/i.test(cleanMessage) && platform === "windows") {
@@ -97,18 +112,29 @@
         title: "Windows dependency setup needs attention",
         detail: `The project files were created, but Windows returned a process error while installing the app packages. Your project folder is safe to reuse. Diagnostic: ${cleanMessage}`,
         next: "Choose Try again. If it still fails, check the network connection and the project folder, then retry.",
+        failedAt: "dependencies",
+      };
+    }
+    if (looksTemporarilyUnavailable(cleanMessage)) {
+      return {
+        title: "EAI is temporarily unavailable",
+        detail: "EAI could not create the app on the platform because a service it depends on was unavailable. Your folder may already exist and is safe to reuse.",
+        next: "Wait a moment, then choose Retry this step. You do not need to sign in again.",
+        diagnostic: cleanMessage,
+        failedAt: "template",
       };
     }
     return {
       title: "App setup failed",
-      detail: cleanMessage,
-      next: "Review Build summary, correct the issue, then choose Try again.",
+      detail: firstUsefulLine(cleanMessage),
+      next: "Open Setup details for the full message, then choose Retry this step.",
+      diagnostic: cleanMessage,
     };
   }
 
   function describeWorkspaceFailure(message) {
     const diagnostic = cleanText(message) || "Company workspaces could not be loaded.";
-    if (/\b(502|503|504)\b|bad gateway|service unavailable|gateway timeout|request_error|temporarily unavailable/i.test(diagnostic)) {
+    if (looksTemporarilyUnavailable(diagnostic)) {
       return {
         title: "EAI is temporarily unavailable",
         detail: "Your sign-in is complete. EAI could not load your company workspaces after several attempts.",
@@ -138,7 +164,7 @@
     return {
       title: "Company workspaces need attention",
       detail: "EAI could not confirm where this app should be created.",
-      next: "Review Build summary, then try the workspace check again.",
+      next: "Open Setup details, then try the workspace check again.",
       diagnostic,
       retryable: true,
     };
@@ -146,7 +172,7 @@
 
   function describeAppFailure(message) {
     const diagnostic = cleanText(message) || "Apps could not be loaded.";
-    if (/\b(502|503|504)\b|bad gateway|service unavailable|gateway timeout|request_error|temporarily unavailable/i.test(diagnostic)) {
+    if (looksTemporarilyUnavailable(diagnostic)) {
       return {
         title: "EAI is temporarily unavailable",
         detail: "Your sign-in is complete and your company workspace is ready. EAI could not load the apps after several attempts.",
@@ -167,7 +193,7 @@
     return {
       title: "Apps need attention",
       detail: "EAI could not load the apps for this company workspace.",
-      next: "Review Build summary, then choose Try again.",
+      next: "Open Setup details, then choose Try again.",
       diagnostic,
       retryable: true,
     };

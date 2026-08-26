@@ -54,6 +54,31 @@ const genericFailure = wizard.describeInitFailure("folder is not writable", "mac
 if (genericFailure.title !== "App setup failed" || !genericFailure.detail.includes("folder is not writable")) {
   throw new Error("wizard generic failure guidance is wrong");
 }
+const dumpedInitFailure = wizard.describeInitFailure(
+  "✕ Something unique went wrong\n\nTry next:\n1. eai whoami [read-only]\n\nGetting started: https://www.enterpriseaigroup.com/docs/getting-started",
+  "macos",
+);
+if (
+  dumpedInitFailure.detail.includes("eai whoami")
+  || dumpedInitFailure.detail.includes("Try next")
+  || dumpedInitFailure.detail.includes("Getting started")
+  || dumpedInitFailure.next.includes("Build summary")
+) {
+  throw new Error("wizard init failure still dumps CLI recovery onto the screen");
+}
+const transientInitFailure = wizard.describeInitFailure(
+  "✕ App creation failed: A platform dependency is temporarily unavailable\n\nTry next:\n1. eai whoami [read-only]\n\nGetting started: https://www.enterpriseaigroup.com/docs/getting-started",
+  "macos",
+);
+if (
+  transientInitFailure.title !== "EAI is temporarily unavailable"
+  || !transientInitFailure.detail.includes("service it depends on")
+  || transientInitFailure.detail.includes("eai whoami")
+  || !transientInitFailure.next.includes("Retry this step")
+  || transientInitFailure.failedAt !== "template"
+) {
+  throw new Error("wizard transient init failure guidance is wrong");
+}
 const missingExistingApp = wizard.describeInitFailure(
   "No app named eai-app-testing was found in the selected company workspace.",
   "windows",

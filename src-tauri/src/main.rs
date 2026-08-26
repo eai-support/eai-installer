@@ -1788,6 +1788,14 @@ fn run_bootstrap_sync(app: AppHandle, step: String, project_name: Option<String>
             if !directory.is_dir() {
                 return command_result("init", false, "The app folder could not be created.", Some("Choose a writable parent folder and retry."), None, true);
             }
+            emit_progress(
+                &app,
+                "init",
+                "Folder created",
+                "Created the app folder on this computer.",
+                Some(25),
+                Some(90),
+            );
             let Some(company_tenant_id) = company_tenant_id.filter(|value| !value.trim().is_empty()) else {
                 return command_result("init", false, "Choose a company workspace before creating the app.", Some("Select a company workspace in EAI Setup, then retry."), None, true);
             };
@@ -1806,6 +1814,14 @@ fn run_bootstrap_sync(app: AppHandle, step: String, project_name: Option<String>
                 init_args.extend(["--app-key".to_string(), app_key]);
             }
             let init_args_ref = init_args.iter().map(String::as_str).collect::<Vec<_>>();
+            emit_progress(
+                &app,
+                "init",
+                "Creating the app on EAI",
+                "Waiting for the platform to create the app and download its template.",
+                Some(40),
+                Some(90),
+            );
             match run_program_in_directory_with_progress(&app, "init", "eai", &init_args_ref, Some(&directory)) {
                 Ok((stdout, stderr)) => {
                     emit_progress(

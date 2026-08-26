@@ -707,7 +707,7 @@
   function runRowForProgress(title = "", detail = "") {
     const text = `${title} ${detail}`.toLowerCase();
     if (/dependenc|project packages|npm packages|added \d+ package|up to date|npm install/.test(text)) return "dependencies";
-    if (/template|cloned from|scaffold|gofer|agents\.md|claude\.md|env\.local|package\.json|configuration|project settings|data model|workspace guidance|delivery guidance|version control/.test(text)) return "template";
+    if (/template|cloned from|scaffold|gofer|agents\.md|claude\.md|env\.local|package\.json|configuration|project settings|data model|workspace guidance|delivery guidance|version control|creating the app/.test(text)) return "template";
     if (/folder|directory/.test(text)) return "folder";
     if (/workspace|tenant/.test(text)) return "workspace";
     return null;
@@ -739,6 +739,45 @@
   /** When everything is finished, all four rows are ticks. */
   function runRowsComplete(values = {}) {
     return RUN_ROWS.map((row) => ({ id: row.id, label: row.label, value: values[row.id] || "", mark: "done" }));
+  }
+
+  /**
+   * A caption for the row that is running, short enough to sit on the
+   * ASCII bar. The four rows already name the milestones; this is the
+   * verb for the one that has not finished yet.
+   */
+  function runProgressCaption(reached = "workspace") {
+    const captions = {
+      workspace: "Connecting the workspace",
+      folder: "Creating the folder",
+      template: "Creating the app on EAI",
+      dependencies: "Installing packages",
+      done: "Ready",
+    };
+    return captions[reached] || captions.workspace;
+  }
+
+  /**
+   * Four slots, two characters each: filled, marching, or empty.
+   *
+   * The bar is honest about what we know — which row is running — and
+   * animates only the active slot, so a long wait on the platform still
+   * looks like work rather than a freeze. Percentages the CLI never
+   * sent do not appear here.
+   */
+  function runProgressBar({ reached = "workspace", tick = 0 } = {}) {
+    const order = RUN_ROWS.map((row) => row.id);
+    const done = reached === "done";
+    const active = order.includes(reached) ? reached : "workspace";
+    const activeIndex = done ? order.length : order.indexOf(active);
+    const march = ["=>", ">="];
+    let track = "";
+    for (let index = 0; index < order.length; index += 1) {
+      if (done || index < activeIndex) track += "##";
+      else if (index === activeIndex) track += march[Math.abs(Number(tick) || 0) % march.length];
+      else track += "--";
+    }
+    return `[${track}] ${runProgressCaption(done ? "done" : active)}`;
   }
 
   /* --- Choose a harness ----------------------------------------------
@@ -1016,6 +1055,8 @@
     runRowForProgress,
     runRows,
     runRowsComplete,
+    runProgressBar,
+    runProgressCaption,
     screenById,
     setupComplete,
     answersForStage,
