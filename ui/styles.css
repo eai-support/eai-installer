@@ -61,21 +61,11 @@
      never declared, so four rules silently drop their font-weight. */
   --font-weight-semibold: 600;
 
-  /* The app's own width, and the design's.
-
-     The prototype states it where it shows the app on its own — the
-     statemachine page frames it at `width: min(100%, 900px)` and
-     `height: 720px`. I ported the screens and the window chrome and
-     missed the frame that holds them, so the content stretched to
-     whatever it was given: at a maximised window, or opened straight in
-     a browser, a two-button form ran the full width of a monitor.
-
-     The window opens at this size. When somebody makes it bigger the
-     content stays this wide and centres, which is what a desktop app
-     does — growing the window gives you more room around the thing, not
-     a wider thing. `src-tauri/tauri.conf.json` declares the same number
-     and scripts/test-ui-contract.mjs fails if the two disagree. */
-  --app-width: 900px;
+  /* The window's width — two equal columns, flow on the left and the
+     Paper shader on the right (prototypes/bamako-v2/install-5). The
+     number is declared here and in src-tauri/tauri.conf.json; the
+     contract test fails if they disagree. */
+  --app-width: 1100px;
 
   --spacing-2: 8px;
   --spacing-3: 12px;
@@ -112,14 +102,57 @@ button, input { font-family: inherit; }
   background: var(--color-background);
 }
 
+.skin-setup.eai.split {
+  overflow: hidden;
+}
+
+.setup-split {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.setup-split-main {
+  flex: 0 0 50%;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--color-background);
+  border-right: 1px solid #f0f0f0;
+}
+
+.setup-split-progress {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 22px 34px 0;
+  flex: none;
+}
+
+.setup-split-bars.eai-steps {
+  margin: 0;
+  gap: 5px;
+}
+
+.setup-split-bars .eai-step {
+  height: 3px;
+  border-radius: 2px;
+}
+
+.setup-split-count {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-muted-foreground);
+  white-space: nowrap;
+}
+
 .eai-body {
   display: flex;
   flex: 1;
   flex-direction: column;
   min-height: 0;
   width: 100%;
-  max-width: var(--app-width);
-  margin-inline: auto;
   overflow-y: auto;
   padding: 26px 34px 0;
   font-family: var(--font-sans);
@@ -137,9 +170,9 @@ button, input { font-family: inherit; }
 
 .eai-steps {
   display: flex;
-  flex: none;
+  flex: 1;
   gap: 8px;
-  margin: 0 0 26px;
+  margin: 0;
   padding: 0;
   list-style: none;
 }
@@ -236,17 +269,6 @@ button, input { font-family: inherit; }
   line-height: 20px;
   color: var(--color-primary);
 }
-.eai-run-bar,
-.eai-head .eai-run-bar {
-  margin: 0;
-  font-family: var(--font-mono);
-  font-size: 13px;
-  line-height: 20px;
-  color: var(--color-muted-foreground);
-  letter-spacing: 0.04em;
-  white-space: pre;
-}
-.eai-run-bar[hidden] { display: none; }
 
 /* ======================= rows and marks ========================== */
 
@@ -1062,8 +1084,6 @@ button, input { font-family: inherit; }
 .eai-diag-log,
 .eai-diag-foot {
   width: 100%;
-  max-width: var(--app-width);
-  margin-inline: auto;
 }
 .eai-diag summary {
   display: flex;
@@ -1095,6 +1115,197 @@ button, input { font-family: inherit; }
 .eai-diag-log time { color: var(--color-quiet); }
 .eai-diag-log li[data-kind="error"] span { color: var(--color-destructive); }
 .eai-diag-foot { margin-block: 0; padding: 0 34px 10px; font-size: 11px; color: var(--color-quiet); }
+
+/* ================= two-column art panel ========================== */
+
+.setup-split-foot {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
+  padding: 0 30px 24px;
+  text-align: center;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
+  pointer-events: auto;
+}
+
+.setup-split-foot a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.setup-split-foot a:hover {
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.setup-split-foot span {
+  margin: 0 10px;
+  opacity: 0.45;
+  text-decoration: none;
+}
+
+.setup-split-art {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  min-width: 0;
+  background: #0A180D;
+}
+
+.setup-split-art[data-art="dither"] {
+  background: #301C2A;
+}
+
+.setup-shader {
+  position: absolute;
+  inset: 0;
+}
+
+.setup-shader > div {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+.setup-shader > div.on {
+  opacity: 1;
+}
+
+.setup-art-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.setup-art-center img {
+  display: block;
+  width: min(300px, 62%);
+  height: auto;
+  filter: brightness(0) invert(1);
+  opacity: 0.88;
+}
+
+.setup-art-mark {
+  position: absolute;
+  right: 30px;
+  bottom: 56px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+}
+
+.setup-art-mark img {
+  display: block;
+  width: 40px;
+  height: auto;
+  filter: brightness(0) invert(1);
+}
+
+/* --- the door ---------------------------------------------------- */
+
+.setup-start {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 40px;
+  padding: 12px 0 24px;
+  text-align: center;
+}
+
+.setup-start-mark {
+  display: block;
+  width: 168px;
+  max-width: 62%;
+  height: auto;
+  filter: saturate(0) brightness(0.45);
+}
+
+.setup-start-tx {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 40ch;
+}
+
+.setup-start-tx h3 {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  color: var(--color-foreground);
+}
+
+.setup-start-tx p {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.55;
+  color: #858585;
+}
+
+.eai-screen[data-screen="start"] .eai-foot {
+  justify-content: center;
+}
+
+/* --- alternate route, above the bar ------------------------------ */
+
+.setup-alt {
+  margin-top: auto;
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 24px;
+}
+
+.setup-alt + .i3-foot,
+.setup-alt + .eai-foot {
+  margin-top: 0;
+  padding-top: 10px;
+}
+
+.setup-alt .eai-btn.ghost-quiet {
+  height: auto;
+  padding: 0 2px;
+  border: none;
+  background: none;
+  font-size: 13px;
+}
+
+.setup-alt .eai-btn.ghost-quiet:hover {
+  background: none;
+  color: var(--color-foreground);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.i4-step-note {
+  margin: 0;
+  padding: 0 16px 12px 52px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--color-muted-foreground);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .setup-split-art {
+    background: linear-gradient(168deg, #0D3856 0%, #0E3755 46%, #0A180D 100%);
+  }
+  .setup-split-art[data-art="dither"] {
+    background: linear-gradient(168deg, #301C2A 0%, #2A2036 52%, #145788 100%);
+  }
+}
 
 /* ===================== quieter machines ========================== */
 

@@ -339,7 +339,7 @@ body.st {
    a caption that starts somewhere else reads as a different page. */
 .st-cap,
 .st-frame {
-  width: min(100%, var(--app-width, 900px));
+  width: min(100%, var(--app-width, 1100px));
   margin-inline: auto;
 }
 

@@ -11,9 +11,9 @@
     "windows": [
       {
         "title": "Enterprise AI Setup",
-        "width": 900,
+        "width": 1100,
         "height": 720,
-        "minWidth": 720,
+        "minWidth": 900,
         "minHeight": 560,
         "resizable": true
       }
