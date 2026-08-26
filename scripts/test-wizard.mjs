@@ -107,12 +107,19 @@ const report = {
   package_manager: null,
   tools: [
     { command: "git", version: "git version 2.40" },
-    { command: "node", version: "v20.0.0" },
+    { command: "node", version: "v24.0.0" },
     { command: "npm", version: "10.0.0" },
     { command: "eai", version: "3.8.0" },
   ],
 };
 if (!wizard.prerequisitesReady(report)) throw new Error("complete prerequisite report should be ready");
+const oldNodeReport = {
+  ...report,
+  tools: report.tools.map((tool) => tool.command === "node" ? { ...tool, version: null } : tool),
+};
+if (wizard.prerequisitesReady(oldNodeReport)) {
+  throw new Error("Node.js 20 must not be treated as ready after backend filtering");
+}
 if (wizard.prerequisitesReady({ platform: "linux", package_manager: "apt-get", tools: [{ command: "git", version: "2" }] })) {
   throw new Error("incomplete prerequisite report should not be ready");
 }

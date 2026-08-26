@@ -11,7 +11,7 @@ operations.
 ```text
 Signed EAI Setup
   -> platform adapter (WinGet / native macOS packages / distro package manager)
-  -> Git + Node/npm
+  -> Git + Node.js 24/npm
   -> @enterpriseai/cli (command: eai)
   -> browser sign-in
   -> eai init

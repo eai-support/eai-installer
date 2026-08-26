@@ -64,7 +64,7 @@ const activitySummaryKeys = new Set();
 
 const stepLabels = {
   git: "Git",
-  node: "Node.js and npm",
+  node: "Node.js 24 and npm",
   "eai-cli": "EAI CLI",
 };
 
@@ -73,8 +73,8 @@ const prerequisiteSteps = ["git", "node", "eai-cli"];
 const journeyStages = [
   { id: "computer", label: "Check computer", waiting: "Waiting to check this computer." },
   { id: "git", label: "Prepare Git", waiting: "Waiting for the computer check." },
-  { id: "node", label: "Prepare Node.js and npm", waiting: "Waiting for Git." },
-  { id: "eai-cli", label: "Prepare EAI CLI", waiting: "Waiting for Node.js and npm." },
+  { id: "node", label: "Prepare Node.js 24 and npm", waiting: "Waiting for Git." },
+  { id: "eai-cli", label: "Prepare EAI CLI", waiting: "Waiting for Node.js 24 and npm." },
   { id: "signin", label: "Sign in", waiting: "Waiting for the required tools." },
   { id: "app", label: "Create app", waiting: "Waiting for sign-in." },
   { id: "ai", label: "Open AI workspace", waiting: "Waiting for the app." },
@@ -384,7 +384,7 @@ function setDetectionState(report) {
   );
   const eaiReady = Boolean(tools.get("eai")?.version);
   setJourneyStage("git", gitReady ? "done" : "pending", gitReady ? "Git is already ready." : "Git needs to be installed.");
-  setJourneyStage("node", nodeReady ? "done" : "pending", nodeReady ? "Node.js, npm, and required app support are ready." : "Node.js, npm, or required app support needs to be installed.");
+  setJourneyStage("node", nodeReady ? "done" : "pending", nodeReady ? "Node.js 24, npm, and required app support are ready." : "Node.js 24, npm, or required app support needs to be installed.");
   setJourneyStage("eai-cli", eaiReady ? "done" : "pending", eaiReady ? "The EAI CLI is already ready." : "The EAI CLI needs to be installed.");
 }
 
@@ -548,7 +548,7 @@ async function installPrerequisites() {
     wizard.prerequisitesReady = true;
     if (retryInstall) retryInstall.hidden = true;
     showOutput("All prerequisites are ready.");
-    setActivity("Everything is ready", "Git, Node.js, npm, required app support, and the EAI CLI are ready.", 100, false);
+    setActivity("Everything is ready", "Git, Node.js 24, npm, required app support, and the EAI CLI are ready.", 100, false);
     for (const step of prerequisiteSteps) setJourneyStage(step, "done", `${stepLabels[step]} is ready.`);
     return true;
   }

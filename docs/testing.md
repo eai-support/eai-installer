@@ -19,8 +19,9 @@ does not prove, is in [`docs/test-execution-trace.md`](./test-execution-trace.md
 The bootstrap contract tests also verify that Homebrew is optional on macOS,
 that missing Git uses Apple's Command Line Tools rather than full Xcode, and
 that a missing Software Update listing triggers Apple's native catalog refresh
-before the setup reports a recoverable error.
-that missing Node.js uses the official signed Node.js LTS package over HTTPS.
+before the setup reports a recoverable error. They also verify that Node.js 24
+is the required runtime and that missing Node.js uses the official signed
+Node.js 24 LTS package over HTTPS.
 The desktop path must not open Terminal: it uses native macOS administrator
 dialogs and reports progress back to the EAI Setup window. The clean-machine
 matrix must include macOS Apple Silicon and Intel hosts without Homebrew so the
@@ -42,7 +43,7 @@ A release is incomplete until all of the following are true:
 2. Windows and macOS artifacts are signed and, where applicable, notarized.
 3. Tauri updater artifacts are enabled only after signed update keys and their
    public verification key are added to the application configuration.
-4. A clean machine test installs Git, Node/npm, and the CLI, then runs the
+4. A clean machine test installs Git, Node.js 24/npm, and the CLI, then runs the
    browser login and project handoff without storing a credential.
 5. A smoke project confirms `eai init` fetched the supported Gofer/template
    assets and that the generated repository is usable.
