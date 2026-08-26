@@ -227,8 +227,6 @@ function onBootstrapProgress(payload) {
 
 function reset() {
   for (const node of document.querySelectorAll("[data-screen]")) node.hidden = true;
-  el("builtOverlay").hidden = true;
-  el("builtOverlay").classList.remove("on");
 
   const dev = machine.device(platform());
 
@@ -258,6 +256,9 @@ function reset() {
   // Set up
   el("setupSub").textContent = machine.setupSub(state, { account: facts.account });
   el("wsRows").replaceChildren();
+  el("wsMenuRows").replaceChildren();
+  el("wsPick").hidden = true;
+  closeWorkspaceMenu();
   el("wsNote").hidden = true;
   el("wsActs").hidden = true;
   el("folderHelp").textContent = dev.chooserNote;
@@ -467,6 +468,8 @@ const PAINT = {
          the row goes rather than sitting above the thing that says there
          isn't one. */
       el("wsRows").replaceChildren();
+      el("wsPick").hidden = true;
+      closeWorkspaceMenu();
       const node = stepNode("workspace");
       node.hidden = false;
       const context = facts.failureContext.workspace || {};
@@ -625,10 +628,8 @@ const PAINT = {
     }
   },
 
-  /* Built. It lands over the hand-off, so the hand-off is painted first. */
+  /* Complete — the harness opened on the project. */
   built() {
-    PAINT.handoff([]);
-    screenNode("handoff").hidden = false;
     const copy = machine.builtCopy({
       projectName: facts.projectName,
       workspaceName: selectedTenant()?.displayName,
@@ -647,9 +648,6 @@ const PAINT = {
       built.append(document.createTextNode(piece));
     }
     el("builtFolder").hidden = !facts.projectPath;
-    const overlay = el("builtOverlay");
-    overlay.hidden = false;
-    requestAnimationFrame(() => overlay.classList.add("on"));
   },
 };
 
@@ -685,24 +683,6 @@ function renderSteps() {
   if (count) count.textContent = `${at} / ${steps.length}`;
 }
 
-/**
- * Whether the rail has anything scrolling under it.
- *
- * The line above it is drawn only then. A rule under content that ends
- * above it is a rule drawing a box for no reason, and on most screens
- * the content does end above it.
- */
-function syncFootLine() {
-  const body = document.querySelector(".eai-body");
-  const foot = document.querySelector(`[data-screen="${state.screen}"] .eai-foot`);
-  if (!foot) return;
-  const under = body.scrollHeight - body.scrollTop - body.clientHeight > 1;
-  foot.classList.toggle("over", under);
-}
-
-document.querySelector(".eai-body").addEventListener("scroll", syncFootLine, { passive: true });
-window.addEventListener("resize", syncFootLine);
-
 function paint() {
   /* Which field somebody was in, so a repaint triggered by their own
      typing does not take the caret away from them. The reveal repaints
@@ -713,12 +693,10 @@ function paint() {
 
   reset();
   const screen = machine.screenById(state.screen);
-  if (state.screen !== "built") screenNode(state.screen).hidden = false;
+  screenNode(state.screen).hidden = false;
   renderSteps();
   PAINT[state.screen](machine.faultsInForce(state));
   document.querySelector(".eai-body").scrollTop = 0;
-  // After the screen is drawn, so it measures what is actually there.
-  requestAnimationFrame(syncFootLine);
 
   if (focused) {
     const node = maybe(focused);
@@ -748,9 +726,7 @@ function goTo(screenId, options) {
  * and leaves the keyboard focus on a detached node.
  */
 function focusScreenHeading() {
-  const node = state.screen === "built"
-    ? maybe("builtTitle")
-    : screenNode(state.screen).querySelector("h3");
+  const node = screenNode(state.screen).querySelector("h3");
   if (!node) return;
   node.setAttribute("tabindex", "-1");
   node.focus({ preventScroll: true });
@@ -802,12 +778,55 @@ function pickRow(label, meta, selected, onPick) {
   const row = document.createElement("button");
   row.type = "button";
   row.className = "eai-row pick";
+  row.setAttribute("role", "option");
+  row.setAttribute("aria-selected", String(selected));
   row.innerHTML = (selected ? '<i class="mk done">&#10003;</i>' : '<i class="mk pending"></i>')
     + `<span class="lbl">${escapeHtml(label)}`
     + (meta ? `<span class="sub">${escapeHtml(meta)}</span>` : "")
     + "</span>";
   row.addEventListener("click", onPick);
   return row;
+}
+
+let workspaceMenuOpen = false;
+
+function closeWorkspaceMenu() {
+  workspaceMenuOpen = false;
+  el("wsMenu").hidden = true;
+  el("wsTrigger").setAttribute("aria-expanded", "false");
+}
+
+function openWorkspaceMenu() {
+  workspaceMenuOpen = true;
+  el("wsMenu").hidden = false;
+  el("wsTrigger").setAttribute("aria-expanded", "true");
+}
+
+function toggleWorkspaceMenu() {
+  if (workspaceMenuOpen) closeWorkspaceMenu();
+  else openWorkspaceMenu();
+}
+
+function renderWorkspacePicker() {
+  const tenant = selectedTenant();
+  el("wsTriggerLabel").textContent = tenant?.displayName || "Choose a workspace";
+  el("wsTriggerMeta").textContent = tenant?.slug || "";
+  el("wsTriggerMeta").hidden = !tenant?.slug;
+
+  const menu = el("wsMenuRows");
+  menu.replaceChildren();
+  const sorted = [...facts.tenants].sort((left, right) => left.displayName.localeCompare(right.displayName));
+  for (const item of sorted) {
+    menu.appendChild(pickRow(
+      item.displayName,
+      item.slug || "",
+      item.id === facts.selectedTenantId,
+      () => {
+        chooseTenant(item.id);
+        closeWorkspaceMenu();
+      },
+    ));
+  }
 }
 
 function selectedTenant() {
@@ -817,29 +836,30 @@ function selectedTenant() {
 function renderWorkspaceRows() {
   const rows = el("wsRows");
   rows.replaceChildren();
-  if (!facts.tenants.length) return;
+  closeWorkspaceMenu();
+  if (!facts.tenants.length) {
+    el("wsPick").hidden = true;
+    return;
+  }
 
   // One workspace is not a question. It is shown answered, which is what
   // the prototype does, because a list of one asks somebody to confirm
   // something they were never given a choice about.
   if (facts.tenants.length === 1) {
+    el("wsPick").hidden = true;
     const tenant = facts.tenants[0];
     const row = document.createElement("div");
     row.className = "eai-row";
     row.innerHTML = '<i class="mk done">&#10003;</i>'
-      + `<span class="lbl">${escapeHtml(tenant.displayName)}</span>`;
+      + `<span class="lbl">${escapeHtml(tenant.displayName)}`
+      + (tenant.slug ? `<span class="sub">${escapeHtml(tenant.slug)}</span>` : "")
+      + "</span>";
     rows.appendChild(row);
     return;
   }
 
-  for (const tenant of facts.tenants) {
-    rows.appendChild(pickRow(
-      tenant.displayName,
-      tenant.slug || "",
-      tenant.id === facts.selectedTenantId,
-      () => chooseTenant(tenant.id),
-    ));
-  }
+  el("wsPick").hidden = false;
+  renderWorkspacePicker();
 }
 
 /* The tiles, so six tools are six things to look at rather than six lines
@@ -849,14 +869,12 @@ function renderWorkspaceRows() {
    The brand colour is deliberately NOT here. It is a `data-tile`
    attribute that ui/styles.css matches on, because the app runs under a
    `default-src 'self'` policy, and a background written into innerHTML
-   as a style attribute is exactly what that policy exists to refuse. A browser with no CSP shows the colour and a signed
-   build shows a grey square, which is the worst kind of difference to
-   discover in a screenshot. */
+   as a style attribute is exactly what that policy exists to refuse. */
 const TILES = {
   vscode: '<svg viewBox="0 0 64 64" fill="none"><path d="M46 9 30 26l-9-7-5 3.4 7.6 6.6L16 36l5 3.4 9-7 16 17 8-4V13z" fill="#ffffff"/></svg>',
   copilot: '<svg viewBox="0 0 64 64" fill="none"><path d="M32 20c8 0 12 3 12 3s4-1 6 1c1.6 1.6 1.4 6 1.4 6s2.6 1.4 2.6 5.6c0 6-4 9.4-8 11.2-4 1.8-9 2.2-14 2.2s-10-.4-14-2.2c-4-1.8-8-5.2-8-11.2 0-4.2 2.6-5.6 2.6-5.6s-.2-4.4 1.4-6c2-2 6-1 6-1s4-3 12-3z" fill="#ffffff"/><ellipse cx="24" cy="37" rx="5.4" ry="6.4" fill="#0d1117"/><ellipse cx="40" cy="37" rx="5.4" ry="6.4" fill="#0d1117"/></svg>',
   claude: '<svg viewBox="0 0 24 24" fill="none"><g stroke="#ffffff" stroke-width="2.6" stroke-linecap="round"><path d="M12 4v16"/><path d="M4 12h16"/><path d="M6.3 6.3l11.4 11.4"/><path d="M17.7 6.3L6.3 17.7"/></g></svg>',
-  codex: '<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="7.5" stroke="#ffffff" stroke-width="2.2"/></svg>',
+  codex: '<svg viewBox="0 0 24 24" fill="none"><path d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.938 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.985 5.985 0 0 0-3.997 2.9 6.046 6.046 0 0 0 .742 7.097 5.98 5.98 0 0 0 .511 4.938 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.055 6.055 0 0 0-.747-7.073zM13.26 22.43a4.476 4.476 0 0 1-2.876-1.04l.141-.081 4.779-2.758a.795.795 0 0 0 .392-.681v-6.737l2.02 1.168a.071.071 0 0 1 .038.052v5.583a4.478 4.478 0 0 1-4.494 4.494zM3.6 18.304a4.47 4.47 0 0 1-.535-3.014l.142.085 4.783 2.759a.771.771 0 0 0 .78 0l5.843-3.369v2.332a.08.08 0 0 1-.033.062L9.74 19.95a4.5 4.5 0 0 1-6.14-1.646zM2.34 7.896a4.485 4.485 0 0 1 2.366-1.973V11.6a.766.766 0 0 0 .388.676l5.815 3.355-2.02 1.168a.076.076 0 0 1-.071 0l-4.83-2.786A4.504 4.504 0 0 1 2.34 7.872zm16.597 3.855l-5.833-3.387L15.16 6.2a.076.076 0 0 1 .071 0l4.83 2.791a4.494 4.494 0 0 1-.676 8.105v-5.678a.79.79 0 0 0-.407-.667zm2.01-3.023l-.141-.085-4.774-2.755a.775.775 0 0 0-.785 0L9.409 9.23V6.897a.066.066 0 0 1 .028-.061l4.83-2.787a4.5 4.5 0 0 1 6.68 4.66zm-12.64 4.135l-2.02-1.163a.077.077 0 0 1-.038-.057V6.075a4.5 4.5 0 0 1 7.375-3.453l-.142.08L8.704 5.46a.795.795 0 0 0-.393.681zm1.097-2.365l2.602-1.5 2.607 1.5v2.999l-2.597 1.5-2.607-1.5z" fill="#ffffff"/></svg>',
   gemini: '<svg viewBox="0 0 24 24" fill="none"><path d="M12 2c.6 5.2 4.2 8.8 9.4 9.4-5.2.6-8.8 4.2-9.4 9.4-.6-5.2-4.2-8.8-9.4-9.4C7.8 10.8 11.4 7.2 12 2z" fill="#ffffff"/></svg>',
   grok: '<svg viewBox="0 0 24 24" fill="none"><g stroke="#ffffff" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></g></svg>',
 };
@@ -867,6 +885,7 @@ function tileFor(surface) {
 }
 
 const TICK_SVG = '<svg viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.5 4.5L19 7.5" stroke="#ffffff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const ALERT_INFO_SVG = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.9"/><path d="M12 11v5.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="7.8" r="1.15" fill="currentColor"/></svg>';
 
 function renderHarnessRows(surfaces) {
   const rows = el("harnessRows");
@@ -905,13 +924,13 @@ function renderHarnessRows(surfaces) {
          The numbers sit in the tile's column so the block reads as
          hanging off this row rather than starting a new one. */
       const steps = chosen ? machine.harnessSteps(surface) : null;
-      if (steps) {
-        if (steps.length === 1) {
-          const note = document.createElement("p");
-          note.className = "i4-step-note";
-          note.textContent = steps[0];
-          pick.appendChild(note);
-        } else {
+      if (steps?.length === 1) {
+        const alert = document.createElement("div");
+        alert.className = "i4-alert i4-round-trip";
+        alert.setAttribute("role", "status");
+        alert.innerHTML = ALERT_INFO_SVG + `<div class="tx"><span>${escapeHtml(steps[0])}</span></div>`;
+        pick.appendChild(alert);
+      } else if (steps?.length > 1) {
           const list = document.createElement("ol");
           list.className = "i4-steps";
           for (const text of steps) {
@@ -921,7 +940,6 @@ function renderHarnessRows(surfaces) {
             list.appendChild(item);
           }
           pick.appendChild(list);
-        }
       }
       rows.appendChild(pick);
     }
@@ -933,7 +951,7 @@ function showWaiting(surface) {
   /* Step one said "download and install it from their site". It has been
      opened. Leaving the steps up beside a box saying we are waiting for
      the result is the screen giving two accounts of where somebody is. */
-  for (const steps of document.querySelectorAll(".i4-steps")) steps.hidden = true;
+  for (const steps of document.querySelectorAll(".i4-steps, .i4-round-trip")) steps.hidden = true;
   let box = maybe("harnessWait");
   if (!box) {
     box = document.createElement("div");
@@ -1299,6 +1317,7 @@ function chooseTenant(tenantId) {
   facts.selectedTenantId = tenantId;
   machine.clear(state);
   syncStage();
+  if (facts.tenants.length > 1) renderWorkspacePicker();
   paint();
 }
 
@@ -1713,6 +1732,18 @@ async function chooseFolder() {
 
 el("chooseFolderStart").addEventListener("click", chooseFolder);
 el("chooseFolder").addEventListener("click", chooseFolder);
+el("wsTrigger").addEventListener("click", (event) => {
+  event.stopPropagation();
+  toggleWorkspaceMenu();
+});
+document.addEventListener("click", (event) => {
+  if (!workspaceMenuOpen) return;
+  if (event.target instanceof Element && event.target.closest("#wsPick")) return;
+  closeWorkspaceMenu();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") closeWorkspaceMenu();
+});
 el("setupBack").addEventListener("click", () => {
   facts.signinWaiting = false;
   goTo("signin");
@@ -1751,13 +1782,24 @@ el("handoffGo").addEventListener("click", () => openHarness());
 el("handoffFolder").addEventListener("click", () => openProjectFolder());
 
 el("builtFolder").addEventListener("click", () => openProjectFolder());
-el("builtDone").addEventListener("click", async () => {
-  try {
-    await window.__TAURI__?.window?.getCurrentWindow()?.close();
-  } catch {
-    el("builtBody").textContent = "You can close this window.";
-  }
-});
+
+function startAnotherProject() {
+  stopHarnessPoll();
+  facts.projectName = "";
+  facts.projectFolder = "";
+  facts.projectPath = null;
+  facts.projectDirectory = null;
+  facts.selectedSurfaceId = null;
+  facts.waitingForSurfaceId = null;
+  facts.runReached = "workspace";
+  facts.runFailedAt = null;
+  facts.runValues = {};
+  machine.clear(state);
+  note("Starting another project.");
+  goTo("setup", { stage: machine.stageForAnswers({ workspace: Boolean(facts.selectedTenantId) }) });
+}
+
+el("builtAnother").addEventListener("click", () => startAnotherProject());
 
 /* ========================== 15. GO =============================== */
 
@@ -1770,6 +1812,26 @@ el("builtDone").addEventListener("click", async () => {
  * rather than the thing that ships. It is off unless the query string
  * asks for it, and it never runs the real bootstrap.
  */
+/**
+ * Preview workspaces for the state machine. Real accounts can have many;
+ * ten is enough to review the dropdown scroll.
+ */
+function previewTenants(count = 1) {
+  const catalog = [
+    { id: "preview-acme", displayName: "Acme Corp", slug: "acme", active: true, apps: [] },
+    { id: "preview-beacon", displayName: "Beacon Health", slug: "beacon-health", active: true, apps: [] },
+    { id: "preview-contoso", displayName: "Contoso Ltd", slug: "contoso", active: true, apps: [] },
+    { id: "preview-fabrikam", displayName: "Fabrikam Inc", slug: "fabrikam", active: true, apps: [] },
+    { id: "preview-litware", displayName: "Litware Inc", slug: "litware", active: true, apps: [] },
+    { id: "preview-northwind", displayName: "Northwind Group", slug: "northwind", active: true, apps: [] },
+    { id: "preview-northwind-retail", displayName: "Northwind Retail", slug: "northwind-retail", active: true, apps: [] },
+    { id: "preview-tailwind", displayName: "Tailwind Traders", slug: "tailwind-traders", active: true, apps: [] },
+    { id: "preview-adventure", displayName: "Adventure Works", slug: "adventure-works", active: true, apps: [] },
+    { id: "preview-wide-world", displayName: "Wide World Importers", slug: "wide-world", active: true, apps: [] },
+  ];
+  return catalog.slice(0, Math.max(1, Math.min(count, catalog.length)));
+}
+
 function applyDevAddress() {
   const query = new URLSearchParams(window.location.search);
   if (!query.has("screen")) return false;
@@ -1808,14 +1870,16 @@ function applyDevAddress() {
   facts.projectPath = `${root}${separator}contract-renewals`;
   facts.projectDirectory = facts.projectPath;
 
-  facts.tenants = [{ id: "preview", displayName: "Northwind Group", slug: "northwind", active: true, apps: [] }];
-  facts.selectedTenantId = "preview";
+  facts.tenants = previewTenants(1);
+  facts.selectedTenantId = facts.tenants[0].id;
   facts.runReached = query.get("reached") || "template";
 
-  /* ?workspaces=2 reaches the one shape of the form a self-serve tester
+  /* ?workspaces=N reaches the shape of the form a self-serve tester
      never sees: an account that administers more than one workspace. */
-  if (query.get("workspaces") === "2") {
-    facts.tenants.push({ id: "preview-2", displayName: "Northwind Retail", slug: "northwind-retail", active: true, apps: [] });
+  const workspaceCount = Number.parseInt(query.get("workspaces") || "1", 10);
+  if (Number.isFinite(workspaceCount) && workspaceCount > 1) {
+    facts.tenants = previewTenants(workspaceCount);
+    facts.selectedTenantId = facts.tenants[0].id;
   }
 
   /* Which AI tools are on this machine, as a list of ids.

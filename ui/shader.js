@@ -133,18 +133,25 @@ async function showArt(name) {
   }
 }
 
-if (stage) {
-  reduced.addEventListener("change", (event) => {
-    const layer = layers.get(current);
-    if (layer) layer.mount.setSpeed(event.matches ? 0 : layer.speed);
-  });
-
-  const asked = new URLSearchParams(window.location.search).get("art");
-  let stored = null;
+async function bootShader() {
+  if (!stage) return;
   try {
-    stored = sessionStorage.getItem(STORE_KEY);
-  } catch {
-    stored = null;
+    reduced.addEventListener("change", (event) => {
+      const layer = layers.get(current);
+      if (layer) layer.mount.setSpeed(event.matches ? 0 : layer.speed);
+    });
+
+    const asked = new URLSearchParams(window.location.search).get("art");
+    let stored = null;
+    try {
+      stored = sessionStorage.getItem(STORE_KEY);
+    } catch {
+      stored = null;
+    }
+    await showArt(STYLES[asked] ? asked : STYLES[stored] ? stored : DEFAULT_STYLE);
+  } catch (error) {
+    console.error("EAI Setup: the art shader could not start.", error);
   }
-  showArt(STYLES[asked] ? asked : STYLES[stored] ? stored : DEFAULT_STYLE);
 }
+
+if (stage) bootShader();

@@ -644,7 +644,8 @@ const emptyMac = installedMac.map((surface) => ({ ...surface, installed: false }
   if (machine.harnessSteps(installedMac[0])) fail("an installed tool is given steps for fetching it");
   const steps = machine.harnessSteps(installedMac[1]);
   if (steps.length !== 1) fail(`the round trip is ${steps.length} steps, not one`);
-  if (!/come back to EAI Setup/i.test(steps[0])) fail(`the step does not say to come back: ${steps[0]}`);
+  if (!/come back here to complete setup/i.test(steps[0])) fail(`the step does not say to come back: ${steps[0]}`);
+  if (!steps[0].includes(installedMac[1].name)) fail(`the step does not name the tool: ${steps[0]}`);
 
   const origin = machine.harnessOrigin({ installUrl: "https://code.visualstudio.com/download", provider: "GitHub" });
   if (origin.site !== "code.visualstudio.com") fail(`the origin host is wrong: ${origin.site}`);

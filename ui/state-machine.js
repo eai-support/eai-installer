@@ -206,7 +206,7 @@
     {
       id: "built",
       name: "Built",
-      note: "The harness opened on the project. The only screen that is not a step — it lands over everything.",
+      note: "The harness opened on the project. The left panel lands on a complete state — no overlay.",
       faultIds: [],
       exclusive: true,
     },
@@ -853,7 +853,7 @@
    */
   function harnessSteps(surface) {
     if (!surface || surface.installed) return null;
-    return ["After you install, come back to EAI Setup to complete setup."];
+    return [`After you install ${surface.name}, come back here to complete setup`];
   }
 
   /**
