@@ -41,7 +41,7 @@ function fail(message) {
 
 /* ============ 1. THE SCREENS ARE THE FLOW, IN ORDER ============== */
 
-const expectedScreens = ["signin", "welcome", "setup", "running", "done", "handoff", "built"];
+const expectedScreens = ["start", "signin", "welcome", "setup", "running", "done", "handoff", "built"];
 if (machine.SCREEN_ORDER.join(",") !== expectedScreens.join(",")) {
   fail(`state machine screens are not the tested flow: ${machine.SCREEN_ORDER.join(",")}`);
 }
@@ -91,6 +91,7 @@ for (const screen of machine.SCREENS.filter((item) => item.exclusive && item.fau
 /* Moving screens drops the faults of the screen being left. */
 {
   const state = machine.createState();
+  machine.goTo(state, "signin");
   machine.raise(state, "prereq");
   machine.goTo(state, "welcome");
   if (state.faults.length) fail("a fault survived the move to another screen");
@@ -99,6 +100,7 @@ for (const screen of machine.SCREENS.filter((item) => item.exclusive && item.fau
 /* Faults come back in the screen's order, not the order they arrived. */
 {
   const state = machine.createState();
+  machine.goTo(state, "signin");
   machine.raise(state, "network");
   machine.raise(state, "prereq");
   const order = machine.faultsInForce(state).map((fault) => fault.id).join(",");
@@ -117,6 +119,7 @@ for (const screen of machine.SCREENS.filter((item) => item.exclusive && item.fau
   // Every screen belongs to exactly one stage, or the bar has a state
   // in which nothing is current.
   for (const id of machine.SCREEN_ORDER) {
+    if (id === "start") continue;
     const owners = machine.STEPS.filter((step) => step.screens.includes(id));
     if (owners.length !== 1) fail(`the screen "${id}" belongs to ${owners.length} stages`);
   }
@@ -293,6 +296,7 @@ if (!machine.readyRow("windows").body.includes(String(machine.checkedTools("wind
 
 {
   const state = machine.createState();
+  machine.goTo(state, "signin");
   state.platform = "macos";
   if (machine.signinButtonLabel(state) !== "Sign in with browser") fail("the working sign-in button is not Sign in");
   machine.raise(state, "prereq");
@@ -325,6 +329,7 @@ if (!machine.readyRow("windows").body.includes(String(machine.checkedTools("wind
    rows rather than faults. */
 {
   const state = machine.createState();
+  machine.goTo(state, "signin");
   machine.raise(state, "prereq");
   const two = machine.signinProblems(state, { prereq: { steps: ["git", "node"] } });
   if (two.length !== 2) fail(`two failed prerequisites gave ${two.length} rows`);
@@ -347,12 +352,12 @@ if (!machine.readyRow("windows").body.includes(String(machine.checkedTools("wind
      combination; two prerequisite rows would have made it a lie twice on
      one screen. */
   for (const platform of PLATFORMS) {
-    const single = machine.signinProblems(Object.assign(machine.createState(), { platform, faults: ["prereq"] }),
+    const single = machine.signinProblems(Object.assign(machine.createState(), { screen: "signin", platform, faults: ["prereq"] }),
       { prereq: { steps: ["git"] } });
     if (!single[0][1].includes("Nothing else is waiting on it")) {
       fail(`a lone ${platform} prerequisite failure no longer says it is the only one`);
     }
-    const pair = machine.signinProblems(Object.assign(machine.createState(), { platform, faults: ["prereq"] }),
+    const pair = machine.signinProblems(Object.assign(machine.createState(), { screen: "signin", platform, faults: ["prereq"] }),
       { prereq: { steps: ["git", "node"] } });
     for (const [, body] of pair) {
       if (body.includes("Nothing else is waiting on it")) {
@@ -361,7 +366,7 @@ if (!machine.readyRow("windows").body.includes(String(machine.checkedTools("wind
     }
     // And beside the network failure, which is the prototype's own case.
     const withNetwork = machine.signinProblems(
-      Object.assign(machine.createState(), { platform, faults: ["prereq", "network"] }),
+      Object.assign(machine.createState(), { screen: "signin", platform, faults: ["prereq", "network"] }),
       { prereq: { steps: ["git"] }, network: { host: "api.example.com" } },
     );
     if (withNetwork[0][1].includes("Nothing else is waiting on it")) {
@@ -554,21 +559,6 @@ if (machine.looksLikeTakenName("the template could not be downloaded")) {
   if (finished.some((row) => row.mark !== "done")) fail("a finished run leaves a row unticked");
 }
 
-{
-  if (machine.runProgressBar({ reached: "template", tick: 0 }) !== "[####=>--] Creating the app on EAI") {
-    fail(`the creating bar does not name the running row: ${machine.runProgressBar({ reached: "template", tick: 0 })}`);
-  }
-  if (machine.runProgressBar({ reached: "template", tick: 1 }) !== "[####>=--] Creating the app on EAI") {
-    fail("the creating bar does not march while the platform is silent");
-  }
-  if (machine.runProgressBar({ reached: "folder", tick: 0 }) !== "[##=>----] Creating the folder") {
-    fail(`creating starts on the folder row, not workspace: ${machine.runProgressBar({ reached: "folder", tick: 0 })}`);
-  }
-  if (!machine.runProgressBar({ reached: "done" }).startsWith("[########]")) {
-    fail("a finished run does not fill the creating bar");
-  }
-}
-
 /* Both streams the Creating screen listens to. The progress events are
    titles; the build summaries are whole sentences, and every one of them
    has to land on a row — a screen that sits on "Workspace connected" for
@@ -626,7 +616,7 @@ const emptyMac = installedMac.map((surface) => ({ ...surface, installed: false }
   if (empty.length !== 1 || empty[0].id !== "missing") {
     fail("a machine with nothing installed still draws an empty ready group");
   }
-  if (!empty[0].note) fail("the not-installed group does not say where those come from");
+  if (empty[0].note) fail("the not-installed group no longer carries a second subtitle under the heading");
 
   if (machine.harnessGroups([], "macos").length !== 0) fail("an empty inventory still draws headings");
 }
@@ -650,30 +640,11 @@ const emptyMac = installedMac.map((surface) => ({ ...surface, installed: false }
   }
   if (machine.harnessButtonLabel(null) !== "Choose an AI tool") fail("no selection does not ask for one");
 
-  /* The round trip, as three steps: their site, their account, and back.
-     A paragraph saying all three in one breath is the shape that makes
-     somebody skim it and then be surprised twice. */
+  /* One line under the chosen option: install elsewhere, then come back. */
   if (machine.harnessSteps(installedMac[0])) fail("an installed tool is given steps for fetching it");
   const steps = machine.harnessSteps(installedMac[1]);
-  if (steps.length !== 3) fail(`the round trip is ${steps.length} steps, not three`);
-  /* The whole sentence, so the host is matched as the host rather than
-     as any run of characters inside it. */
-  if (steps[0] !== `Download and install ${installedMac[1].name} from github.com`) {
-    fail(`the first step is wrong: ${steps[0]}`);
-  }
-  if (machine.harnessOrigin(installedMac[1]).site !== "github.com") {
-    fail("the origin is not the host the step claims");
-  }
-  if (!steps[1].includes("GitHub")) fail("the second step does not say whose account they will need");
-  if (!/come back/i.test(steps[2])) fail("the third step does not say to come back");
-
-  /* "a" or "an" by how the name is said, not how it is spelled: a rule
-     that only looks for vowels writes "a xAI account". */
-  for (const [provider, expected] of [["GitHub", "a GitHub"], ["Anthropic", "an Anthropic"],
-    ["OpenAI", "an OpenAI"], ["Google", "a Google"], ["xAI", "an xAI"]]) {
-    const said = machine.harnessSteps({ name: "Tool", provider, installUrl: "https://example.com", installed: false })[1];
-    if (!said.includes(`${expected} account`)) fail(`the second step says "${said}" rather than "${expected} account"`);
-  }
+  if (steps.length !== 1) fail(`the round trip is ${steps.length} steps, not one`);
+  if (!/come back to EAI Setup/i.test(steps[0])) fail(`the step does not say to come back: ${steps[0]}`);
 
   const origin = machine.harnessOrigin({ installUrl: "https://code.visualstudio.com/download", provider: "GitHub" });
   if (origin.site !== "code.visualstudio.com") fail(`the origin host is wrong: ${origin.site}`);
@@ -716,7 +687,7 @@ const emptyMac = installedMac.map((surface) => ({ ...surface, installed: false }
 
   // An unknown screen leaves the state where it was.
   const unknown = machine.readAddress("?screen=nowhere");
-  if (unknown.screen !== "signin") fail("an unknown screen name moves the app somewhere undefined");
+  if (unknown.screen !== "start") fail("an unknown screen name moves the app somewhere undefined");
 }
 
 /* =================== 9. STAGES ARE CLAMPED ===================== */

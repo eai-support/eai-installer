@@ -287,12 +287,9 @@ function reset() {
   // Creating
   el("runTitle").textContent = `Creating ${facts.projectName || "your EAI app"}`;
   el("runSub").textContent = "This takes a couple of minutes. You can leave it running.";
-  el("runBar").hidden = true;
-  el("runBar").textContent = "";
   el("runLines").replaceChildren();
   el("runNote").hidden = true;
   el("runActs").hidden = true;
-  stopRunBar();
 
   // Choose a harness
   el("harnessRows").replaceChildren();
@@ -349,6 +346,14 @@ function addCheckRow(mark, title, body) {
 }
 
 const PAINT = {
+  start() {
+    const ready = !machine.faultsInForce(state).length
+      && (facts.demo || helpers.prerequisitesReady(facts.environment, facts.demo));
+    const copy = machine.startCopy({ ready });
+    el("startTitle").textContent = copy.title;
+    el("startSub").textContent = copy.sub;
+  },
+
   /**
    * Sign in, with none, one or both of its failures.
    *
@@ -529,15 +534,11 @@ const PAINT = {
       el("runNoteBody").textContent = fault.noteBody(platform(), context);
       el("runNote").hidden = false;
       el("runActs").hidden = false;
-      el("runBar").hidden = true;
-      stopRunBar();
       return;
     }
 
     el("runTitle").textContent = `Creating ${facts.projectName}`;
     el("runSub").textContent = "This takes a couple of minutes. You can leave it running.";
-    el("runBar").hidden = false;
-    startRunBar();
   },
 
   /**
@@ -662,9 +663,14 @@ const PAINT = {
  * last state's colours when a step is skipped.
  */
 function renderSteps() {
+  const progress = document.querySelector(".setup-split-progress");
+  const onStart = state.screen === "start";
+  if (progress) progress.hidden = onStart;
+
   const list = el("steps");
+  const steps = machine.stepper(state);
   list.replaceChildren();
-  for (const step of machine.stepper(state)) {
+  for (const step of steps) {
     const item = document.createElement("li");
     item.className = `eai-step ${step.status}`;
     if (step.current) item.setAttribute("aria-current", "step");
@@ -674,6 +680,9 @@ function renderSteps() {
     item.append(name);
     list.append(item);
   }
+  const at = Math.max(1, steps.findIndex((step) => step.current) + 1);
+  const count = maybe("stepCount");
+  if (count) count.textContent = `${at} / ${steps.length}`;
 }
 
 /**
@@ -771,38 +780,6 @@ function addRunRow({ label, value, mark }) {
     + `<span class="lbl">${escapeHtml(label)}</span>`
     + `<span class="val">${escapeHtml(reported)}</span>`;
   el("runLines").appendChild(row);
-}
-
-let runBarTimer = null;
-let runBarTick = 0;
-
-function stopRunBar() {
-  if (!runBarTimer) return;
-  clearInterval(runBarTimer);
-  runBarTimer = null;
-}
-
-/**
- * The ASCII bar on Creating. It is the only thing that has to move while
- * the platform is silent, so it updates in place rather than through
- * paint() — a full redraw would steal focus and reset the scroll.
- */
-function startRunBar() {
-  const draw = () => {
-    el("runBar").textContent = machine.runProgressBar({ reached: facts.runReached, tick: runBarTick });
-  };
-  draw();
-  stopRunBar();
-  const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
-  if (reduced) return;
-  runBarTimer = setInterval(() => {
-    if (state.screen !== "running" || machine.isBroken(state, "init")) {
-      stopRunBar();
-      return;
-    }
-    runBarTick += 1;
-    draw();
-  }, 450);
 }
 
 function setFieldError(name, message) {
@@ -929,15 +906,22 @@ function renderHarnessRows(surfaces) {
          hanging off this row rather than starting a new one. */
       const steps = chosen ? machine.harnessSteps(surface) : null;
       if (steps) {
-        const list = document.createElement("ol");
-        list.className = "i4-steps";
-        for (const text of steps) {
-          const item = document.createElement("li");
-          item.innerHTML = '<span class="n"></span><span class="tx"></span>';
-          item.querySelector(".tx").textContent = text;
-          list.appendChild(item);
+        if (steps.length === 1) {
+          const note = document.createElement("p");
+          note.className = "i4-step-note";
+          note.textContent = steps[0];
+          pick.appendChild(note);
+        } else {
+          const list = document.createElement("ol");
+          list.className = "i4-steps";
+          for (const text of steps) {
+            const item = document.createElement("li");
+            item.innerHTML = '<span class="n"></span><span class="tx"></span>';
+            item.querySelector(".tx").textContent = text;
+            list.appendChild(item);
+          }
+          pick.appendChild(list);
         }
-        pick.appendChild(list);
       }
       rows.appendChild(pick);
     }
@@ -1080,7 +1064,7 @@ async function runReadiness() {
       }
       facts.prereqBusy = step;
       facts.prereqDetail = "";
-      if (state.screen === "signin") paint();
+      if (state.screen === "signin" || state.screen === "start") paint();
       if (!await runBootstrapStep(step, { collect: true })) failed.push(step);
       await detect();
     }
@@ -1235,6 +1219,21 @@ async function runLogin() {
   await loadWorkspaces();
 }
 
+/**
+ * Arrive on Set up at the stage the answers actually support.
+ *
+ * Demo and live both come through here. A bare goTo("setup") paints the
+ * finished form before the answers catch up, which is what a reviewer
+ * sees if the live path forgets to pass a stage.
+ */
+function goToSetup() {
+  goTo("setup", {
+    stage: machine.stageForAnswers({
+      workspace: Boolean(facts.selectedTenantId),
+    }),
+  });
+}
+
 /* ================ 10. WORKSPACES, APPS AND THE FORM ============== */
 
 async function loadWorkspaces() {
@@ -1304,21 +1303,6 @@ function chooseTenant(tenantId) {
 }
 
 /**
- * Arrive on Set up at the stage the answers actually support.
- *
- * `goTo("setup")` with no stage paints the last one — the finished form,
- * Change location, empty path — and that is what a reviewer sees if the
- * live path forgets to pass one. Demo and live both come through here.
- */
-function goToSetup() {
-  goTo("setup", {
-    stage: machine.stageForAnswers({
-      workspace: Boolean(facts.selectedTenantId),
-    }),
-  });
-}
-
-/**
  * The reveal, recomputed from the answers rather than counted upwards.
  *
  * The name counts as answered when there is one, not when it is a valid
@@ -1368,7 +1352,6 @@ async function runInit() {
   facts.runValues = {
     workspace: selectedTenant()?.displayName || "",
   };
-  runBarTick = 0;
   goTo("running");
   await listenForBootstrapProgress();
 
@@ -1654,6 +1637,7 @@ async function runE2eFlow() {
 /* ======================== 14. THE WIRING ========================= */
 
 el("setupSignin").addEventListener("click", () => runLogin());
+el("setupStart").addEventListener("click", () => goTo("signin"));
 el("setupCreate").addEventListener("click", () => {
   if (machine.faultsInForce(state).length) return runReadiness();
   return runSignup();

@@ -115,7 +115,7 @@
 
   function createState() {
     return {
-      screen: "signin",
+      screen: "start",
       faults: [],
       stage: 99,          // clamped on read against the screen's own list
       platform: "macos",
@@ -137,6 +137,13 @@
      to get wrong, and saying so is worth more than leaving them off. */
 
   const SCREENS = [
+    {
+      id: "start",
+      name: "Welcome",
+      note: "The door. The value proposition and one button — nothing has started yet, so the stepper stays hidden.",
+      faultIds: [],
+      exclusive: true,
+    },
     {
       id: "signin",
       name: "Sign in",
@@ -741,43 +748,20 @@
     return RUN_ROWS.map((row) => ({ id: row.id, label: row.label, value: values[row.id] || "", mark: "done" }));
   }
 
-  /**
-   * A caption for the row that is running, short enough to sit on the
-   * ASCII bar. The four rows already name the milestones; this is the
-   * verb for the one that has not finished yet.
-   */
-  function runProgressCaption(reached = "workspace") {
-    const captions = {
-      workspace: "Connecting the workspace",
-      folder: "Creating the folder",
-      template: "Creating the app on EAI",
-      dependencies: "Installing packages",
-      done: "Ready",
-    };
-    return captions[reached] || captions.workspace;
-  }
+  /* --- Welcome -------------------------------------------------------
 
-  /**
-   * Four slots, two characters each: filled, marching, or empty.
-   *
-   * The bar is honest about what we know — which row is running — and
-   * animates only the active slot, so a long wait on the platform still
-   * looks like work rather than a freeze. Percentages the CLI never
-   * sent do not appear here.
-   */
-  function runProgressBar({ reached = "workspace", tick = 0 } = {}) {
-    const order = RUN_ROWS.map((row) => row.id);
-    const done = reached === "done";
-    const active = order.includes(reached) ? reached : "workspace";
-    const activeIndex = done ? order.length : order.indexOf(active);
-    const march = ["=>", ">="];
-    let track = "";
-    for (let index = 0; index < order.length; index += 1) {
-      if (done || index < activeIndex) track += "##";
-      else if (index === activeIndex) track += march[Math.abs(Number(tick) || 0) % march.length];
-      else track += "--";
-    }
-    return `[${track}] ${runProgressCaption(done ? "done" : active)}`;
+     The door before sign-in: the value proposition, and whether this
+     computer is ready. The stepper stays hidden here — nothing has
+     started yet, and a bar reading 1 / 4 before a single question has
+     been asked is a promise made too early. */
+
+  function startCopy({ ready = false } = {}) {
+    return {
+      title: "Build with Enterprise AI",
+      sub: ready
+        ? "Your computer is ready. Sign in, pick a workspace, and create your first app — it takes about a minute."
+        : "Sign in, pick a workspace, and create your first app in its own folder. Checking this computer…",
+    };
   }
 
   /* --- Choose a harness ----------------------------------------------
@@ -813,7 +797,7 @@
     const missing = list.filter((surface) => !surface.installed);
     return [
       { id: "ready", label: `Ready on ${device(platform).device}`, note: "", items: ready },
-      { id: "missing", label: "Not installed", note: "you get these from their makers", items: missing },
+      { id: "missing", label: "Not installed", note: "", items: missing },
     ].filter((group) => group.items.length);
   }
 
@@ -869,15 +853,7 @@
    */
   function harnessSteps(surface) {
     if (!surface || surface.installed) return null;
-    const origin = harnessOrigin(surface);
-    const provider = origin.account || surface.provider || "their";
-    return [
-      origin.site
-        ? `Download and install ${surface.name} from ${origin.site}`
-        : `Download and install ${surface.name} from its makers`,
-      `Sign in there with ${article(provider)} ${provider} account`,
-      "Come back to this app to complete EAI set up",
-    ];
+    return ["After you install, come back to EAI Setup to complete setup."];
   }
 
   /**
@@ -923,7 +899,7 @@
       instruction: "When it opens, type /eai and press enter",
       body: `${name} opens on your app with an empty prompt — it doesn't know about EAI until you say so. `
         + "Typing /eai is what starts it.",
-      button: `Open ${projectName ? `${projectName} in ` : "in "}${name}`,
+      button: `Open in ${name}`,
     };
   }
 
@@ -1055,8 +1031,6 @@
     runRowForProgress,
     runRows,
     runRowsComplete,
-    runProgressBar,
-    runProgressCaption,
     screenById,
     setupComplete,
     answersForStage,
@@ -1068,6 +1042,7 @@
     signinProblems,
     stageForAnswers,
     stageOf,
+    startCopy,
     stepper,
     toolName,
     workingRow,

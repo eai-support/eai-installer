@@ -15,15 +15,40 @@
          screen ids match ui/state-machine.js exactly — app.js reaches
          into this markup by id, and scripts/test-ui-contract.mjs fails
          the build if the two ever drift apart. -->
-    <div class="skin-setup eai" id="setupApp">
+    <!-- Two-column layout from Paper frame 5N0-0: the flow on the left,
+         a Warp shader and branding on the right. The screens and button
+         patterns are PR 71's state machine; only the frame around them
+         comes from prototypes/bamako-v2/install-5. -->
+    <div class="skin-setup eai split" id="setupApp">
+      <div class="setup-split">
+        <div class="setup-split-main">
+          <!-- Four bars for four things somebody does — the seven screens
+               are the machine's count, not a person's. Built by app.js
+               from ui/state-machine.js. -->
+          <div class="setup-split-progress">
+            <ol class="eai-steps setup-split-bars" id="steps" aria-label="Setup progress"></ol>
+            <span class="setup-split-count" id="stepCount" aria-hidden="true">1 / 4</span>
+          </div>
+
       <div class="eai-body">
 
-        <!-- Where you are, across the top of every screen. Four bars for
-             four things somebody does — the seven screens are the
-             machine's count, not a person's. Built by app.js from
-             ui/state-machine.js, so the stages and the screens cannot
-             disagree about which one you are on. -->
-        <ol class="eai-steps" id="steps" aria-label="Setup progress"></ol>
+        <!-- 0 · The door.
+
+             Value proposition and one button. The stepper above stays
+             hidden — nothing has started yet. Readiness runs in the
+             background; when it lands, the copy says the computer is ready. -->
+        <div class="eai-screen" data-screen="start">
+          <div class="setup-start">
+            <img class="setup-start-mark" src="assets/eai-wordmark.svg" alt="Enterprise AI" />
+            <div class="setup-start-tx">
+              <h3 id="startTitle">Build with Enterprise AI</h3>
+              <p id="startSub">Sign in, pick a workspace, and create your first app in its own folder. Checking this computer…</p>
+            </div>
+          </div>
+          <div class="eai-acts eai-foot">
+            <button class="eai-btn primary" type="button" id="setupStart">Get started</button>
+          </div>
+        </div>
 
         <!-- A · Sign in.
 
@@ -197,7 +222,6 @@
           <div class="eai-head">
             <h3 id="runTitle">Creating your EAI app</h3>
             <p id="runSub">This takes a couple of minutes. You can leave it running.</p>
-            <p class="eai-run-bar" id="runBar" hidden aria-hidden="true"></p>
           </div>
 
           <div class="eai-rows" id="runLines" role="status" aria-live="polite"></div>
@@ -239,18 +263,19 @@
             </div>
           </div>
 
+          <div class="setup-alt" id="harnessAlt">
+            <button class="eai-btn i3-nav ghost-quiet" type="button" id="harnessRefresh" hidden>Check again</button>
+          </div>
+
           <div class="i3-foot eai-foot">
             <button class="eai-btn i3-nav" type="button" id="harnessBack">
               <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M14.5 6l-6 6 6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
               Back
             </button>
-            <div class="i3-foot-end">
-              <button class="eai-btn i3-nav ghost-quiet" type="button" id="harnessRefresh" hidden>Check again</button>
-              <button class="eai-btn primary i3-nav" type="button" id="harnessGo">
-                Next step
-                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9.5 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              </button>
-            </div>
+            <button class="eai-btn primary i3-nav" type="button" id="harnessGo">
+              Next step
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9.5 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
           </div>
         </div>
 
@@ -284,33 +309,46 @@
             </div>
           </div>
 
+          <div class="setup-alt" id="handoffAlt">
+            <button class="eai-btn i3-nav ghost-quiet" type="button" id="handoffFolder">Open the project folder</button>
+          </div>
+
           <div class="i3-foot eai-foot">
             <button class="eai-btn i3-nav" type="button" id="handoffBack">
               <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M14.5 6l-6 6 6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
               Back
             </button>
-            <div class="i3-foot-end">
-              <button class="eai-btn i3-nav ghost-quiet" type="button" id="handoffFolder">Open the project folder</button>
-              <button class="eai-btn primary i3-nav" type="button" id="handoffGo">
-                Open in your AI tool
-                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9.5 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              </button>
-            </div>
+            <button class="eai-btn primary i3-nav" type="button" id="handoffGo">
+              Open in your AI tool
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9.5 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
           </div>
         </div>
 
       </div>
 
-      <!-- Not a screen and not in the prototype: the record of what the
-           installer actually did, for the one call in fifty where the
-           designed sentence is not enough and somebody has to be told
-           which command failed. Shut by default, on every screen, and
-           never in the way of the primary. -->
-      <details class="eai-diag" id="diagnostics">
-        <summary><span>Setup details</span><span class="eai-diag-status" id="diagStatus"></span></summary>
-        <ol class="eai-diag-log" id="diagLog" aria-live="polite"></ol>
-        <p class="eai-diag-foot" id="diagFoot"></p>
-      </details>
+          <!-- Setup details stays in the left column; legal links live on
+               the art panel, like the Aloud reference frame. -->
+          <details class="eai-diag" id="diagnostics">
+            <summary><span>Setup details</span><span class="eai-diag-status" id="diagStatus"></span></summary>
+            <ol class="eai-diag-log" id="diagLog" aria-live="polite"></ol>
+            <p class="eai-diag-foot" id="diagFoot"></p>
+          </details>
+        </div>
+
+        <aside class="setup-split-art" aria-hidden="true">
+          <div class="setup-shader" id="setupShader"></div>
+          <div class="setup-art-center">
+            <img src="assets/eai-wordmark.svg" alt="" />
+          </div>
+          <div class="setup-art-mark">
+            <img src="assets/eai-mark-dark.svg" alt="" />
+          </div>
+          <footer class="setup-split-foot">
+            <a href="https://enterpriseaigroup.com/terms" target="_blank" rel="noopener noreferrer">Terms and Conditions</a><span>·</span><a href="https://enterpriseaigroup.com/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
+          </footer>
+        </aside>
+      </div>
     </div>
 
     <!-- G · Built. Lands over everything, because it is the end. -->
@@ -332,5 +370,6 @@
     <script src="state-machine.js"></script>
     <script src="video.js"></script>
     <script src="app.js"></script>
+    <script type="module" src="shader.js"></script>
   </body>
 </html>

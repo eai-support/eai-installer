@@ -247,7 +247,7 @@ for (const color of ["#123d5b", "#83d8ef"]) {
 
 // The seven screens of the tested state machine, and the overlay the
 // last one lands in.
-for (const screen of ["signin", "welcome", "setup", "running", "done", "handoff"]) {
+for (const screen of ["start", "signin", "welcome", "setup", "running", "done", "handoff"]) {
   if (!wizard.includes(`data-screen="${screen}"`)) throw new Error(`wizard: missing screen ${screen}`);
 }
 if (!wizard.includes('id="builtOverlay"')) throw new Error("wizard: the built state has no overlay");
@@ -306,7 +306,7 @@ if (wizard.indexOf('id="wsRetry"') < wsQuestionStart || wizard.indexOf('id="wsRe
 }
 
 // Creating, as rows rather than a command log, with an honest retry.
-for (const value of ['id="runLines"', 'id="runTitle"', 'id="runSub"', 'id="runBar"', 'id="runNote"', 'id="runRetry"', 'id="runBack"']) {
+for (const value of ['id="runLines"', 'id="runTitle"', 'id="runSub"', 'id="runNote"', 'id="runRetry"', 'id="runBack"']) {
   if (!wizard.includes(value)) throw new Error(`wizard: the creating screen is missing ${value}`);
 }
 
@@ -341,12 +341,11 @@ for (const removed of ["harvey-ball", "recommendation-dialog", "How the Harvey b
 if (!machineSource.includes("Ready on ") || !machineSource.includes("Not installed")) {
   throw new Error("wizard: the AI tool list no longer separates what is installed from what is not");
 }
-/* The round trip is three steps rather than a paragraph, and the third
-   one is the one that matters: come back. The reassurance that nothing
-   is lost by leaving now lives in the box that is on screen while they
-   are away, which is when somebody needs it. */
-for (const step of ["Download and install", "Sign in there with", "Come back to this app"]) {
-  if (!machineSource.includes(step)) throw new Error(`wizard: the round trip is missing its step: ${step}`);
+/* The round trip is one line under the chosen option: come back after
+   install. The reassurance that nothing is lost by leaving now lives in
+   the box that is on screen while they are away. */
+if (!machineSource.includes("come back to EAI Setup to complete setup")) {
+  throw new Error("wizard: the round trip no longer says to come back after install");
 }
 if (!machineSource.includes("nothing is lost if you")) {
   throw new Error("wizard: nothing reassures somebody that leaving does not lose the app they just created");
@@ -403,7 +402,6 @@ for (const value of [
   "helpers.summarizeCommandOutput", "helpers.prerequisitesReady", "helpers.isKebabCase", "helpers.chooseAiSurface",
   "machine.faultsInForce", "machine.setupSteps", "machine.runRows", "machine.harnessGroups", "machine.classifyBootstrapFailure",
   "function reset()", "function paint()", "function goToSetup()", "requestMacAdminPassword", "startHarnessPoll", "stopHarnessPoll",
-  "startRunBar", "stopRunBar",
 ]) {
   if (!app.includes(value)) throw new Error(`wizard: the state-machine driver is missing ${value}`);
 }
@@ -440,9 +438,6 @@ if (!app.includes("Boolean(facts.projectFolder)")) {
 }
 if (!app.includes('facts.runReached = "folder"')) {
   throw new Error("wizard: Creating still spins on Workspace connected for the whole platform wait");
-}
-if (!/stopRunBar\(\);/.test(app.slice(app.indexOf("function reset")))) {
-  throw new Error("wizard: the creating bar keeps marching after the screen has moved on");
 }
 
 const initArm = rust.slice(rust.indexOf('"init" =>'), rust.indexOf("_ => command_result"));

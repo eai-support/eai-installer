@@ -61,7 +61,7 @@ if (referenced.size < 30) fail(`only ${referenced.size} element references found
    an element that nothing drives is either dead markup or a wiring bug,
    and both are worth knowing about. Ids that exist only for CSS or for
    accessibility are exempt by name. */
-const PRESENTATION_IDS = new Set(["setupApp", "welcomeBlock", "harnessEai", "setupSteps", "diagnostics"]);
+const PRESENTATION_IDS = new Set(["setupApp", "welcomeBlock", "harnessEai", "setupSteps", "diagnostics", "setupShader", "stepCount", "harnessAlt", "handoffAlt"]);
 for (const id of declaredIds) {
   if (PRESENTATION_IDS.has(id)) continue;
   if (!app.includes(`"${id}"`) && !video.includes(`"${id}"`)) {
@@ -122,7 +122,7 @@ const DRIVEN_CLASSES = [
   "lbl", "sub", "val",
   "i3-step", "answered", "i3-num", "i3-foot", "i3-nav",
   "i3-welcome", "i3-tick", "i3-welcome-acts", "i3-welcome-fine", "wide",
-  "i4-group", "i4-pick", "i4-row", "i4-steps", "i4-wait",
+  "i4-group", "i4-pick", "i4-row", "i4-steps", "i4-step-note", "i4-wait",
   "i4-list", "i4-eai", "i4-eai-note", "i4-eai-video", "eai-foot", "i3-foot-end", "over",
   "mark", "tile", "nm", "on", "missing",
   "eai-btn", "primary", "ring", "off", "big", "ghost-quiet",
@@ -132,7 +132,6 @@ const DRIVEN_CLASSES = [
   "eai-vid", "eai-vid-stage", "eai-vid-win", "eai-vid-play", "eai-vid-caret",
   "eai-vid-ok", "eai-vid-caption", "eai-vid-track", "playing", "replay",
   "eai-step", "eai-steps", "reached", "upcoming", "sr-only",
-  "eai-run-bar",
 ];
 /* Escape every character a regex gives meaning to, not just the hyphen.
    Hand-rolling one character of escaping is the shape that reads as
@@ -243,24 +242,21 @@ for (const match of html.matchAll(/<input\b[^>]*>/g)) {
 
 /* The app has a width, and only one place may decide it.
 
-   The design states it where it shows the app on its own — the
-   prototype's statemachine page frames it at `min(100%, 900px)`. The
-   window opens at that width and the content is capped at it, so a
-   maximised window gives more room around the form rather than a wider
-   form. Two files carry the number; they have to agree. */
+   The two-column layout fills the window: flow on the left, shader on
+   the right. The number is the window's opening width; the playground
+   frames the app at the same size. */
 const windowConfig = JSON.parse(await readFile(new URL("../src-tauri/tauri.conf.json", import.meta.url), "utf8"))
   .app?.windows?.[0];
 const declaredCap = /--app-width:\s*(\d+)px/.exec(css)?.[1];
-if (!declaredCap) fail("ui/styles.css does not declare --app-width, so the content has no width to be capped at");
+if (!declaredCap) fail("ui/styles.css does not declare --app-width, so the window width is nowhere written down");
 if (Number(declaredCap) !== windowConfig?.width) {
-  fail(`the content is capped at ${declaredCap}px but the window opens at ${windowConfig?.width}px — one of them is wrong`);
+  fail(`--app-width is ${declaredCap}px but the window opens at ${windowConfig?.width}px — one of them is wrong`);
 }
-if (!/\.eai-body \{[^}]*max-width:\s*var\(--app-width\)/s.test(css)) {
-  fail("the content column is not capped, so a maximised window stretches the form across the monitor");
-}
-if (!/\.eai-body \{[^}]*margin-inline:\s*auto/s.test(css)) {
-  fail("the content column is capped but not centred, so a wide window leaves it against one edge");
-}
+if (!/class="setup-split"/.test(html)) fail("the app is not in the two-column layout");
+if (!/class="setup-split-art"/.test(html)) fail("the shader panel is missing from the markup");
+if (!/id="setupShader"/.test(html)) fail("the shader has nowhere to mount");
+if (!/\.setup-split-main\b/.test(css)) fail("ui/styles.css has no left column for the flow");
+if (!/\.setup-split-art\b/.test(css)) fail("ui/styles.css has no right column for the art");
 
 /* ========= 4. THE PLAYGROUND, AND WHERE IT MAY NOT LIVE ========= */
 
