@@ -297,8 +297,8 @@ function reset() {
   el("harnessSub").textContent = "";
   el("harnessNote").hidden = true;
   el("harnessRefresh").hidden = true;
+  el("harnessGo").hidden = true;
   el("harnessGo").disabled = false;
-  maybe("harnessWait")?.setAttribute("hidden", "");
 
   // Hand-off
   el("handoffTitle").textContent = "One last thing";
@@ -562,16 +562,13 @@ const PAINT = {
       el("harnessNoteTitle").textContent = fault.head(platform());
       el("harnessNoteBody").textContent = fault.body(platform());
       el("harnessNote").hidden = false;
-      // The primary is the check. A second button beside it reading the
-      // same words is the screen offering one action twice.
-      el("harnessRefresh").hidden = true;
+      el("harnessGo").hidden = false;
       setLabel(el("harnessGo"), "Check again");
       return;
     }
 
     el("harnessSub").textContent = machine.harnessSubtitle(surfaces, platform());
     renderHarnessRows(surfaces);
-    el("harnessRefresh").hidden = false;
 
     const chosen = selectedSurface();
 
@@ -579,7 +576,6 @@ const PAINT = {
       el("harnessNoteTitle").textContent = fault.head(platform(), { harnessName: chosen?.name });
       el("harnessNoteBody").textContent = fault.body(platform());
       el("harnessNote").hidden = false;
-      setLabel(el("harnessGo"), machine.harnessButtonLabel(chosen));
       return;
     }
 
@@ -588,8 +584,11 @@ const PAINT = {
       return;
     }
 
-    setLabel(el("harnessGo"), machine.harnessButtonLabel(chosen));
-    el("harnessGo").disabled = !chosen;
+    if (chosen?.installed) {
+      el("harnessGo").hidden = false;
+      setLabel(el("harnessGo"), machine.harnessButtonLabel(chosen));
+      el("harnessGo").disabled = false;
+    }
   },
 
   /* One instruction, on its own screen. */
@@ -885,7 +884,58 @@ function tileFor(surface) {
 }
 
 const TICK_SVG = '<svg viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.5 4.5L19 7.5" stroke="#ffffff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-const ALERT_INFO_SVG = '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.9"/><path d="M12 11v5.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="7.8" r="1.15" fill="currentColor"/></svg>';
+
+function appendHarnessPickPanel(pick, surface, { waiting = false } = {}) {
+  const panel = document.createElement("div");
+  panel.className = "i4-pick-panel";
+
+  if (waiting) {
+    const copy = machine.harnessWaiting(surface, platform());
+    const box = document.createElement("div");
+    box.className = "i4-wait";
+    box.innerHTML = `<i class="mk busy">${SPINNER}</i><div class="tx"><b></b><span></span></div>`;
+    box.querySelector(".tx b").textContent = copy.title;
+    box.querySelector(".tx span").textContent = copy.body;
+    panel.appendChild(box);
+    pick.appendChild(panel);
+    return;
+  }
+
+  if (surface.installed) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "eai-btn primary i3-nav i4-pick-go";
+    btn.textContent = machine.harnessButtonLabel(surface);
+    btn.addEventListener("click", () => harnessNext());
+    panel.appendChild(btn);
+    pick.appendChild(panel);
+    return;
+  }
+
+  const copy = machine.harnessPickCopy(surface, platform());
+  if (copy?.body) {
+    const note = document.createElement("p");
+    note.className = "i4-pick-note";
+    note.textContent = copy.body;
+    panel.appendChild(note);
+  }
+
+  const acts = document.createElement("div");
+  acts.className = "i4-pick-acts";
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "eai-btn primary i3-nav i4-pick-go";
+  btn.textContent = machine.harnessButtonLabel(surface);
+  btn.addEventListener("click", () => harnessNext());
+  const check = document.createElement("button");
+  check.type = "button";
+  check.className = "eai-btn i3-nav ghost-quiet i4-pick-check";
+  check.textContent = "Check again";
+  check.addEventListener("click", () => refreshHarness());
+  acts.append(btn, check);
+  panel.appendChild(acts);
+  pick.appendChild(panel);
+}
 
 function renderHarnessRows(surfaces) {
   const rows = el("harnessRows");
@@ -920,26 +970,9 @@ function renderHarnessRows(surfaces) {
       row.addEventListener("click", () => chooseSurface(surface.id));
       pick.appendChild(row);
 
-      /* The round trip, as three steps, in the option they belong to.
-         The numbers sit in the tile's column so the block reads as
-         hanging off this row rather than starting a new one. */
-      const steps = chosen ? machine.harnessSteps(surface) : null;
-      if (steps?.length === 1) {
-        const alert = document.createElement("div");
-        alert.className = "i4-alert i4-round-trip";
-        alert.setAttribute("role", "status");
-        alert.innerHTML = ALERT_INFO_SVG + `<div class="tx"><span>${escapeHtml(steps[0])}</span></div>`;
-        pick.appendChild(alert);
-      } else if (steps?.length > 1) {
-          const list = document.createElement("ol");
-          list.className = "i4-steps";
-          for (const text of steps) {
-            const item = document.createElement("li");
-            item.innerHTML = '<span class="n"></span><span class="tx"></span>';
-            item.querySelector(".tx").textContent = text;
-            list.appendChild(item);
-          }
-          pick.appendChild(list);
+      if (chosen) {
+        const waiting = facts.waitingForSurfaceId === surface.id;
+        appendHarnessPickPanel(pick, surface, { waiting });
       }
       rows.appendChild(pick);
     }
@@ -947,24 +980,7 @@ function renderHarnessRows(surfaces) {
 }
 
 function showWaiting(surface) {
-  const copy = machine.harnessWaiting(surface, platform());
-  /* Step one said "download and install it from their site". It has been
-     opened. Leaving the steps up beside a box saying we are waiting for
-     the result is the screen giving two accounts of where somebody is. */
-  for (const steps of document.querySelectorAll(".i4-steps, .i4-round-trip")) steps.hidden = true;
-  let box = maybe("harnessWait");
-  if (!box) {
-    box = document.createElement("div");
-    box.className = "i4-wait";
-    box.id = "harnessWait";
-    box.innerHTML = `<i class="mk busy">${SPINNER}</i><div class="tx"><b></b><span></span></div>`;
-    el("harnessRows").after(box);
-  }
-  box.querySelector(".tx b").textContent = copy.title;
-  box.querySelector(".tx span").textContent = copy.body;
-  box.hidden = false;
-  el("harnessGo").disabled = true;
-  setLabel(el("harnessGo"), machine.harnessButtonLabel(surface, { waiting: true }));
+  renderHarnessRows(facts.surfaces?.surfaces || []);
 }
 
 function selectedSurface() {
@@ -1760,18 +1776,21 @@ el("harnessBack").addEventListener("click", () => {
   stopHarnessPoll();
   goTo("setup", { stage: machine.stageForAnswers({ workspace: true, name: true, folder: true }) });
 });
-el("harnessRefresh").addEventListener("click", async () => {
-  el("harnessRefresh").disabled = true;
+
+async function refreshHarness() {
+  for (const btn of document.querySelectorAll(".i4-pick-check, #harnessRefresh")) btn.disabled = true;
   try {
     await loadSurfaces();
     paint();
   } finally {
-    el("harnessRefresh").disabled = false;
+    for (const btn of document.querySelectorAll(".i4-pick-check, #harnessRefresh")) btn.disabled = false;
   }
-});
+}
+
+el("harnessRefresh").addEventListener("click", () => refreshHarness());
 el("harnessGo").addEventListener("click", () => {
   if (machine.isBroken(state, "detect")) {
-    loadSurfaces().then(() => paint());
+    refreshHarness();
     return;
   }
   harnessNext();
