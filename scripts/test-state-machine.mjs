@@ -388,8 +388,20 @@ if (!machine.readyRow("windows").body.includes(String(machine.checkedTools("wind
 }
 
 /* The prerequisite row names the thing that actually failed. */
-for (const [step, expected] of [["git", "Git"], ["node", "Node.js and npm"], ["eai-cli", "the EAI CLI"], ["windows-runtime", "Windows app support"]]) {
+for (const [step, expected] of [["git", "Git"], ["node", "Node.js 24 and npm"], ["eai-cli", "the EAI CLI"], ["windows-runtime", "Windows app support"]]) {
   if (machine.toolName(step) !== expected) fail(`the plain name for ${step} is wrong: ${machine.toolName(step)}`);
+}
+
+/* The installer requires Node.js 24, so the UI must say 24 wherever it
+   names the runtime. This is copy, not enforcement — the version gate
+   itself lives in src-tauri/src/main.rs — but a rebuilt wizard that
+   silently drops the "24" is how the requirement stops reaching anyone
+   who reads the screen. Assert it on every platform. */
+for (const platform of ["macos", "linux", "windows"]) {
+  const named = machine.checkedTools(platform).filter((tool) => tool.startsWith("Node.js"));
+  if (named.length !== 1 || named[0] !== "Node.js 24") {
+    fail(`${platform} readiness row must name Node.js 24, got: ${named.join(", ") || "nothing"}`);
+  }
 }
 {
   const [, body] = machine.FAULTS.prereq.problem("windows", { step: "eai-cli" });

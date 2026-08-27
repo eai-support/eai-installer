@@ -17,16 +17,18 @@ commands.
   installer. Full Xcode is not required. If Apple's Software Update catalog has
   not advertised the package yet, EAI Setup asks macOS to refresh that catalog,
   continues checking, and explains any native Install dialog that needs approval.
-- If Node.js is missing on macOS, EAI Setup first discovers valid user-managed
+- If Node.js 24 is missing on macOS, EAI Setup first discovers valid user-managed
   installations such as NVM, including when the app was opened from Finder. If
-  no usable runtime is found, it downloads the official Node.js LTS archive
+  no usable runtime is found, it downloads the official Node.js 24 LTS archive
   over HTTPS, verifies its checksum, and installs it for the current user
   without a second administrator prompt. A signed package is the fallback when
   the official archive is unavailable.
 - On Windows, prerequisite detection runs the real `git`, `node`, `npm`, and
   `eai` version commands. It searches the normal system and user npm locations,
-  installs the CLI into a user-writable prefix when needed, verifies the command
-  after npm finishes, and hides package-manager consoles behind the setup window.
+  upgrades Node.js through WinGet when the installed runtime is older than
+  Node.js 24, installs the CLI into a user-writable prefix when needed,
+  verifies the command after npm finishes, and hides package-manager consoles
+  behind the setup window.
 - Installation progress is reported in the EAI Setup window, including the
   current item, phase, and an honest approximate remaining time. Estimates are
   guidance, not a guarantee about network speed or provider availability.
