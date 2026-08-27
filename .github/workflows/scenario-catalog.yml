@@ -1,0 +1,31 @@
+name: Scenario catalog
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  catalog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run scenario-catalog
+
+      - run: node scripts/test-scenario-catalog.mjs
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: scenario-catalog
+          path: artifacts/scenario-catalog.json
+          if-no-files-found: error
