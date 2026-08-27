@@ -79,9 +79,9 @@
 
   /** The tools the readiness row is allowed to claim it checked. */
   const CHECKED_TOOLS = {
-    macos: ["Git", "Node.js", "npm", "EAI CLI"],
-    linux: ["Git", "Node.js", "npm", "EAI CLI"],
-    windows: ["Git", "Node.js", "npm", "Windows app support", "EAI CLI"],
+    macos: ["Git", "Node.js 24", "npm", "EAI CLI"],
+    linux: ["Git", "Node.js 24", "npm", "EAI CLI"],
+    windows: ["Git", "Node.js 24", "npm", "Windows app support", "EAI CLI"],
   };
 
   function checkedTools(platform) {
@@ -91,7 +91,7 @@
   /** Plain names for the things that can be missing, per bootstrap step. */
   const TOOL_NAMES = {
     git: "Git",
-    node: "Node.js and npm",
+    node: "Node.js 24 and npm",
     "eai-cli": "the EAI CLI",
     "windows-runtime": "Windows app support",
     homebrew: "Homebrew",

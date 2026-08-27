@@ -1,11 +1,11 @@
 {
   "name": "@enterpriseai/setup",
-  "version": "0.3.17",
+  "version": "0.3.18",
   "private": true,
   "description": "Cross-platform EAI Setup validation and bootstrap tooling",
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   },
   "scripts": {
     "vendor-shaders": "node scripts/vendor-shaders.mjs",
