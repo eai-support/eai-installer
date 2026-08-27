@@ -17,6 +17,7 @@ jobs:
         with:
           node-version: 24
           package-manager-cache: false
+      - run: npm ci
       - run: npm test
       - run: bash -n scripts/bootstrap.sh scripts/release-preflight.sh
       - run: node --check ui/app.js
