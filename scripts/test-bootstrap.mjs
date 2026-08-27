@@ -261,12 +261,12 @@ for (const color of ["#123d5b", "#83d8ef"]) {
   if (!bundleLogoSource.includes(color)) throw new Error(`bundle: Enterprise AI logo source is missing ${color}`);
 }
 
-// The seven screens of the tested state machine, and the overlay the
-// last one lands in.
-for (const screen of ["start", "signin", "welcome", "setup", "running", "done", "handoff"]) {
+// The eight screens of the tested state machine — built is the final
+// left-panel state, not an overlay.
+for (const screen of ["start", "signin", "welcome", "setup", "running", "done", "handoff", "built"]) {
   if (!wizard.includes(`data-screen="${screen}"`)) throw new Error(`wizard: missing screen ${screen}`);
 }
-if (!wizard.includes('id="builtOverlay"')) throw new Error("wizard: the built state has no overlay");
+if (!wizard.includes('id="builtAnother"')) throw new Error("wizard: the built state has no Start another project action");
 // The panel model it replaced must not come back alongside it.
 if (wizard.includes("data-panel=") || wizard.includes("wizard-panel")) {
   throw new Error("wizard: the old numbered panel model is back beside the state machine");
@@ -285,7 +285,7 @@ for (const value of ['id="welcomeMark"', 'id="welcomeTitle"', 'id="welcomeSub"',
 }
 
 // The form, revealed downwards, with its questions and its rail.
-for (const value of ['data-step="workspace"', 'data-step="name"', 'data-step="folder"', 'id="wsRows"', 'id="projName"', 'id="projFolder"', 'id="chooseFolder"', 'id="chooseFolderStart"', 'id="createApp"', 'id="setupBack"']) {
+for (const value of ['data-step="workspace"', 'data-step="name"', 'data-step="folder"', 'id="wsRows"', 'id="wsPick"', 'id="wsTrigger"', 'id="wsMenuRows"', 'id="projName"', 'id="projFolder"', 'id="chooseFolder"', 'id="chooseFolderStart"', 'id="createApp"', 'id="setupBack"']) {
   if (!wizard.includes(value)) throw new Error(`wizard: the setup form is missing ${value}`);
 }
 /* Three questions, and the app picker is not one of them: EAI Setup
@@ -360,7 +360,7 @@ if (!machineSource.includes("Ready on ") || !machineSource.includes("Not install
 /* The round trip is one line under the chosen option: come back after
    install. The reassurance that nothing is lost by leaving now lives in
    the box that is on screen while they are away. */
-if (!machineSource.includes("come back to EAI Setup to complete setup")) {
+if (!machineSource.includes("come back here to complete setup")) {
   throw new Error("wizard: the round trip no longer says to come back after install");
 }
 if (!machineSource.includes("nothing is lost if you")) {

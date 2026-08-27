@@ -25,7 +25,7 @@
           <!-- Four bars for four things somebody does — the seven screens
                are the machine's count, not a person's. Built by app.js
                from ui/state-machine.js. -->
-          <div class="setup-split-progress">
+          <div class="setup-split-progress" hidden>
             <ol class="eai-steps setup-split-bars" id="steps" aria-label="Setup progress"></ol>
             <span class="setup-split-count" id="stepCount" aria-hidden="true">1 / 4</span>
           </div>
@@ -46,7 +46,7 @@
             </div>
           </div>
           <div class="eai-acts eai-foot">
-            <button class="eai-btn primary" type="button" id="setupStart">Get started</button>
+            <button class="eai-btn primary i3-nav" type="button" id="setupStart">Get started</button>
           </div>
         </div>
 
@@ -57,7 +57,7 @@
              each thing standing in the way. Never both — "ready" is a
              claim that sign-in can proceed, so nothing that stops it may
              sit beside it. -->
-        <div class="eai-screen gap-8" data-screen="signin">
+        <div class="eai-screen gap-8" data-screen="signin" hidden>
           <!-- No mark above the title. The prototype's sign-in screen is
                the head and nothing else: the window is already called
                Enterprise AI Setup by the operating system, and the title
@@ -85,15 +85,15 @@
                 <input class="eai-input" id="adminPassword" type="password" autocomplete="current-password" aria-label="Mac login password" />
               </div>
               <div class="eai-acts gap-2">
-                <button class="eai-btn" type="button" id="adminCancel">Not now</button>
-                <button class="eai-btn primary" type="button" id="adminSubmit">Authorise</button>
+                <button class="eai-btn i3-nav" type="button" id="adminCancel">Not now</button>
+                <button class="eai-btn primary i3-nav" type="button" id="adminSubmit">Authorise</button>
               </div>
             </div>
           </div>
 
           <div class="eai-acts gap-2 eai-foot">
-            <button class="eai-btn" type="button" id="setupCreate">Create an EAI account</button>
-            <button class="eai-btn primary ring" type="button" id="setupSignin">Sign in with browser</button>
+            <button class="eai-btn i3-nav" type="button" id="setupCreate">Create an EAI account</button>
+            <button class="eai-btn primary ring i3-nav" type="button" id="setupSignin">Sign in with browser</button>
           </div>
         </div>
 
@@ -121,8 +121,8 @@
                  a second time. -->
             <div class="i3-welcome-acts" id="welcomeActs" hidden>
               <div class="eai-acts gap-2">
-                <button class="eai-btn" type="button" id="welcomeCopy">Copy the sign-in link</button>
-                <button class="eai-btn primary" type="button" id="welcomeRetry">Try again</button>
+                <button class="eai-btn i3-nav" type="button" id="welcomeCopy">Copy the sign-in link</button>
+                <button class="eai-btn primary i3-nav" type="button" id="welcomeRetry">Try again</button>
               </div>
               <p class="i3-welcome-fine" id="welcomeFine">If your browser never opened, paste the link into it yourself.</p>
             </div>
@@ -153,6 +153,18 @@
                   <span>Where this app is managed, and who it belongs to.</span>
                 </div>
               </div>
+              <div class="eai-pick" id="wsPick" hidden>
+                <button class="eai-pick-trigger" type="button" id="wsTrigger" aria-haspopup="listbox" aria-expanded="false">
+                  <span class="eai-pick-body">
+                    <span class="lbl" id="wsTriggerLabel">Choose a workspace</span>
+                    <span class="sub" id="wsTriggerMeta"></span>
+                  </span>
+                  <svg class="eai-pick-caret" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <div class="eai-pick-menu" id="wsMenu" role="listbox" hidden>
+                  <div class="eai-rows" id="wsMenuRows"></div>
+                </div>
+              </div>
               <div class="eai-rows" id="wsRows"></div>
               <div class="eai-note" id="wsNote" hidden>
                 <i class="mk fail bang">!</i>
@@ -162,7 +174,7 @@
                 </div>
               </div>
               <div class="eai-acts gap-2 pt-2" id="wsActs" hidden>
-                <button class="eai-btn" type="button" id="wsRetry">Try again</button>
+                <button class="eai-btn i3-nav" type="button" id="wsRetry">Try again</button>
               </div>
             </section>
 
@@ -189,10 +201,10 @@
                 </div>
               </div>
               <div class="eai-field" data-field="folder">
-                <button class="eai-btn loc-start" type="button" id="chooseFolderStart">Choose location</button>
+                <button class="eai-btn i3-nav loc-start" type="button" id="chooseFolderStart">Choose location</button>
                 <div class="eai-combo" id="locCombo" hidden>
                   <input type="text" id="projFolder" readonly aria-label="The chosen location" />
-                  <button class="eai-inner" type="button" id="chooseFolder">Change location</button>
+                  <button class="eai-btn i3-nav loc-change" type="button" id="chooseFolder">Change location</button>
                 </div>
                 <div class="eai-err" hidden><i class="mk fail bang sm">!</i><span></span></div>
               </div>
@@ -235,8 +247,8 @@
           </div>
 
           <div class="eai-acts gap-3 eai-foot" id="runActs" hidden>
-            <button class="eai-btn" type="button" id="runBack">Back</button>
-            <button class="eai-btn primary" type="button" id="runRetry">Retry this step</button>
+            <button class="eai-btn i3-nav" type="button" id="runBack">Back</button>
+            <button class="eai-btn primary i3-nav" type="button" id="runRetry">Retry this step</button>
           </div>
         </div>
 
@@ -263,7 +275,7 @@
             </div>
           </div>
 
-          <div class="setup-alt" id="harnessAlt">
+          <div class="setup-alt" id="harnessAlt" hidden>
             <button class="eai-btn i3-nav ghost-quiet" type="button" id="harnessRefresh" hidden>Check again</button>
           </div>
 
@@ -272,7 +284,7 @@
               <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M14.5 6l-6 6 6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
               Back
             </button>
-            <button class="eai-btn primary i3-nav" type="button" id="harnessGo">
+            <button class="eai-btn primary i3-nav" type="button" id="harnessGo" hidden>
               Next step
               <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9.5 6l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
@@ -325,6 +337,27 @@
           </div>
         </div>
 
+        <!-- G · Complete.
+
+             The harness opened on the project. The left panel lands here
+             as the final state — no overlay, because there is nothing left
+             to decide and the window should stay open. -->
+        <div class="eai-screen" data-screen="built" hidden>
+          <div class="i3-welcome" id="builtBlock">
+            <span class="i3-tick" id="builtMark" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.5 4.5L19 7.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </span>
+            <h3 id="builtTitle">That's it — you're building</h3>
+            <p id="builtBody"></p>
+            <div class="i3-welcome-acts" id="builtActs">
+              <div class="eai-acts gap-2">
+                <button class="eai-btn i3-nav" type="button" id="builtFolder">Open the project folder</button>
+                <button class="eai-btn primary i3-nav" type="button" id="builtAnother">Start another project</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
 
           <!-- Setup details stays in the left column; legal links live on
@@ -345,24 +378,9 @@
             <img src="assets/eai-mark-dark.svg" alt="" />
           </div>
           <footer class="setup-split-foot">
-            <a href="https://enterpriseaigroup.com/terms" target="_blank" rel="noopener noreferrer">Terms and Conditions</a><span>·</span><a href="https://enterpriseaigroup.com/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
+            <a href="https://www.enterpriseaigroup.com/terms-of-use" target="_blank" rel="noopener noreferrer">Terms of Use</a><span>·</span><a href="https://www.enterpriseaigroup.com/privacy-policy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
           </footer>
         </aside>
-      </div>
-    </div>
-
-    <!-- G · Built. Lands over everything, because it is the end. -->
-    <div class="eai-done" id="builtOverlay" hidden>
-      <div class="eai-done-card">
-        <span class="tick">
-          <svg viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.5 4.5L19 7.5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </span>
-        <h3 id="builtTitle">That's it — you're building</h3>
-        <p id="builtBody"></p>
-        <div class="eai-acts gap-2">
-          <button class="eai-btn" type="button" id="builtFolder">Open the project folder</button>
-          <button class="eai-btn primary" type="button" id="builtDone">Done</button>
-        </div>
       </div>
     </div>
 
@@ -370,6 +388,6 @@
     <script src="state-machine.js"></script>
     <script src="video.js"></script>
     <script src="app.js"></script>
-    <script type="module" src="shader.js"></script>
+    <script src="shader.bundle.js"></script>
   </body>
 </html>

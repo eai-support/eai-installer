@@ -206,7 +206,7 @@
     {
       id: "built",
       name: "Built",
-      note: "The harness opened on the project. The only screen that is not a step — it lands over everything.",
+      note: "The harness opened on the project. The left panel lands on a complete state — no overlay.",
       faultIds: [],
       exclusive: true,
     },
@@ -853,25 +853,30 @@
    */
   function harnessSteps(surface) {
     if (!surface || surface.installed) return null;
-    return ["After you install, come back to EAI Setup to complete setup."];
+    return [`After you install ${surface.name}, come back here to complete setup`];
   }
 
   /**
-   * The button, which no longer carries the verb.
-   *
-   * It used to say "Get Claude Code" for something that was not here and
-   * "Next" for something that was, on the principle that the verb should
-   * say how much work is about to happen. The three steps now say that,
-   * in more detail and in the place somebody is already reading — and a
-   * button repeating step one is a button competing with it.
-   *
-   * Waiting keeps its own words, because that is a state rather than a
-   * choice: it is not asking anything, it is reporting.
+   * Copy inside the chosen not-installed option.
+   */
+  function harnessPickCopy(surface, platform) {
+    if (!surface || surface.installed) return null;
+    const dev = device(platform);
+    return {
+      body: `No external AI harness is recognized on ${dev.device} yet. Open the download page, install ${surface.name}, `
+        + "then check again — you can continue your EAI setup app once one is detected.",
+    };
+  }
+
+  /**
+   * The button on the chosen row — installed tools move on; missing ones
+   * open the makers' download page from inside the list item.
    */
   function harnessButtonLabel(surface, { waiting = false } = {}) {
     if (!surface) return "Choose an AI tool";
     if (waiting) return `Waiting for ${surface.name}…`;
-    return "Next step";
+    if (surface.installed) return `Continue with ${surface.name}`;
+    return "Open and install";
   }
 
   /** The box that appears while they are on somebody else's website. */
@@ -1017,6 +1022,7 @@
     handoffCopy,
     builtCopy,
     harnessSteps,
+    harnessPickCopy,
     harnessButtonLabel,
     harnessGroups,
     harnessOrigin,

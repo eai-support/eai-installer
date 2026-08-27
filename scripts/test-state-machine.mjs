@@ -235,6 +235,7 @@ function everySentence(platform) {
   const waiting = machine.harnessWaiting(surfaces[1], platform);
   lines.push(waiting.title, waiting.body);
   lines.push(...machine.harnessSteps(surfaces[1]));
+  lines.push(machine.harnessPickCopy(surfaces[1], platform)?.body || "");
   lines.push(machine.harnessButtonLabel(surfaces[0]), machine.harnessButtonLabel(surfaces[1]), machine.harnessButtonLabel(surfaces[1], { waiting: true }));
 
   const handoff = machine.handoffCopy(surfaces[0], { projectName: "contract-renewals" });
@@ -645,18 +646,22 @@ const emptyMac = installedMac.map((surface) => ({ ...surface, installed: false }
 {
   /* One label for both, because the three steps now say what fetching
      one involves and a button repeating step one competes with it. */
-  if (machine.harnessButtonLabel(installedMac[0]) !== "Next step") fail("an installed tool does not move the flow on");
-  if (machine.harnessButtonLabel(installedMac[1]) !== "Next step") fail("a missing tool gets a different button from an installed one");
+  if (machine.harnessButtonLabel(installedMac[0]) !== "Continue with Claude Code") fail("an installed tool names itself on the button");
+  if (machine.harnessButtonLabel(installedMac[1]) !== "Open and install") fail("a missing tool opens the download page from the row");
   if (machine.harnessButtonLabel(installedMac[1], { waiting: true }) !== "Waiting for GitHub Copilot CLI…") {
     fail("the waiting button does not say what it is waiting for");
   }
   if (machine.harnessButtonLabel(null) !== "Choose an AI tool") fail("no selection does not ask for one");
 
-  /* One line under the chosen option: install elsewhere, then come back. */
-  if (machine.harnessSteps(installedMac[0])) fail("an installed tool is given steps for fetching it");
+  const pickCopy = machine.harnessPickCopy(installedMac[1], "macos");
+  if (!pickCopy?.body.includes("No external AI harness is recognized")) fail("the pick copy does not say none are recognized");
+  if (!/check again/i.test(pickCopy.body)) fail("the pick copy does not say to check again");
+  if (!pickCopy.body.includes(installedMac[1].name)) fail("the pick copy does not name the tool");
+
   const steps = machine.harnessSteps(installedMac[1]);
   if (steps.length !== 1) fail(`the round trip is ${steps.length} steps, not one`);
-  if (!/come back to EAI Setup/i.test(steps[0])) fail(`the step does not say to come back: ${steps[0]}`);
+  if (!/come back here to complete setup/i.test(steps[0])) fail(`the step does not say to come back: ${steps[0]}`);
+  if (!steps[0].includes(installedMac[1].name)) fail(`the step does not name the tool: ${steps[0]}`);
 
   const origin = machine.harnessOrigin({ installUrl: "https://code.visualstudio.com/download", provider: "GitHub" });
   if (origin.site !== "code.visualstudio.com") fail(`the origin host is wrong: ${origin.site}`);

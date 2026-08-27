@@ -43,7 +43,7 @@ const declaredIds = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map((match) =>
 /* Ids the app creates at runtime rather than shipping in the markup —
    the waiting box, which only exists while somebody is away installing
    something. Listed here so the check stays exact rather than lenient. */
-const RUNTIME_IDS = new Set(["harnessWait"]);
+const RUNTIME_IDS = new Set([]);
 
 const referenced = new Set([
   ...[...app.matchAll(/\bel\("([^"]+)"\)/g)].map((match) => match[1]),
@@ -61,7 +61,7 @@ if (referenced.size < 30) fail(`only ${referenced.size} element references found
    an element that nothing drives is either dead markup or a wiring bug,
    and both are worth knowing about. Ids that exist only for CSS or for
    accessibility are exempt by name. */
-const PRESENTATION_IDS = new Set(["setupApp", "welcomeBlock", "harnessEai", "setupSteps", "diagnostics", "setupShader", "stepCount", "harnessAlt", "handoffAlt"]);
+const PRESENTATION_IDS = new Set(["setupApp", "welcomeBlock", "builtBlock", "harnessEai", "setupSteps", "diagnostics", "setupShader", "stepCount", "harnessAlt", "handoffAlt", "builtActs", "builtMark"]);
 for (const id of declaredIds) {
   if (PRESENTATION_IDS.has(id)) continue;
   if (!app.includes(`"${id}"`) && !video.includes(`"${id}"`)) {
@@ -73,13 +73,11 @@ for (const id of declaredIds) {
 
 const screensInMarkup = new Set([...html.matchAll(/data-screen="([^"]+)"/g)].map((match) => match[1]));
 for (const id of machine.SCREEN_ORDER) {
-  if (id === "built") continue;   // an overlay, not a screen in the body
   if (!screensInMarkup.has(id)) fail(`the state machine has a screen "${id}" with no markup`);
 }
 for (const id of screensInMarkup) {
   if (!machine.SCREEN_ORDER.includes(id)) fail(`ui/index.html has a screen "${id}" the state machine does not know about`);
 }
-if (!declaredIds.has("builtOverlay")) fail("the built state has no overlay to land in");
 
 /* The setup screen's questions, and the machine's idea of them. */
 const stepsInMarkup = [...html.matchAll(/data-step="([^"]+)"/g)].map((match) => match[1]);
@@ -89,6 +87,12 @@ const stepsInMachine = machine.setupSteps(
 ).map((step) => step.id);
 if (stepsInMarkup.join(",") !== stepsInMachine.join(",")) {
   fail(`the form's questions differ between markup (${stepsInMarkup}) and machine (${stepsInMachine})`);
+}
+if (!app.includes("function appendHarnessPickPanel")) {
+  fail("the harness screen does not draw actions inside the chosen row");
+}
+if (!app.includes("machine.harnessPickCopy")) {
+  fail("the harness pick copy is not wired from the state machine");
 }
 if (!app.includes('locationShape(state) === "chosen" && Boolean(facts.projectFolder)')) {
   fail("the location question can draw Change location with an empty path");
@@ -122,15 +126,16 @@ const DRIVEN_CLASSES = [
   "lbl", "sub", "val",
   "i3-step", "answered", "i3-num", "i3-foot", "i3-nav",
   "i3-welcome", "i3-tick", "i3-welcome-acts", "i3-welcome-fine", "wide",
-  "i4-group", "i4-pick", "i4-row", "i4-steps", "i4-step-note", "i4-wait",
-  "i4-list", "i4-eai", "i4-eai-note", "i4-eai-video", "eai-foot", "i3-foot-end", "over",
+  "i4-group", "i4-pick", "i4-row", "i4-steps", "i4-round-trip", "i4-wait",
+  "i4-pick-panel", "i4-pick-note", "i4-pick-acts", "i4-pick-go", "i4-pick-check",
+  "i4-list", "i4-eai", "i4-eai-note", "i4-eai-video", "eai-foot", "i3-foot-end",
   "mark", "tile", "nm", "on", "missing",
+  "i4-alert",
   "eai-btn", "primary", "ring", "off", "big", "ghost-quiet",
-  "eai-field", "eai-input", "eai-combo", "eai-inner", "eai-err", "eai-note",
-  "eai-done", "eai-done-card", "tick",
+  "eai-field", "eai-input", "eai-combo", "eai-inner", "eai-pick", "eai-pick-trigger", "eai-pick-body", "eai-pick-menu", "eai-pick-caret", "eai-err", "eai-note",
   "eai-diag", "eai-diag-log", "eai-diag-status", "eai-diag-foot",
   "eai-vid", "eai-vid-stage", "eai-vid-win", "eai-vid-play", "eai-vid-caret",
-  "eai-vid-ok", "eai-vid-caption", "eai-vid-track", "playing", "replay",
+  "eai-vid-ok", "playing", "replay",
   "eai-step", "eai-steps", "reached", "upcoming", "sr-only",
 ];
 /* Escape every character a regex gives meaning to, not just the hyphen.
@@ -185,6 +190,16 @@ if (!/\.i4-row\.on \.nm \{[^}]*color:\s*var\(--color-foreground\)/s.test(css)) {
    the list, once where it only fills the right edge. */
 if (/class="state"/.test(app)) {
   fail("every AI tool row repeats what its group heading already says");
+}
+
+/* The round-trip alert sits in a list with overflow: hidden. width: 100%
+   plus horizontal margin is wider than the row, the margin gets clipped,
+   and the alert reads as edge-to-edge. */
+if (!/\.i4-pick \.i4-round-trip \{[^}]*width:\s*calc\(100% - 32px\)/s.test(css)) {
+  fail("the round-trip alert does not inset within the row padding");
+}
+if (!/\.i4-pick \.i4-round-trip \{[^}]*margin:[^;]*16px/s.test(css)) {
+  fail("the round-trip alert does not share the row's horizontal inset");
 }
 
 /* Anchored was not enough: `margin-top: auto` puts the rail at the
@@ -255,6 +270,10 @@ if (Number(declaredCap) !== windowConfig?.width) {
 if (!/class="setup-split"/.test(html)) fail("the app is not in the two-column layout");
 if (!/class="setup-split-art"/.test(html)) fail("the shader panel is missing from the markup");
 if (!/id="setupShader"/.test(html)) fail("the shader has nowhere to mount");
+if (!/src="shader\.bundle\.js"/.test(html)) fail("the art shader is not bundled for the signed webview");
+if (!/\[data-paper-shader\][^}]*canvas/s.test(css)) {
+  fail("the paper-shader canvas rules are not in the stylesheet, so WebGL will not fill the art panel under CSP");
+}
 if (!/\.setup-split-main\b/.test(css)) fail("ui/styles.css has no left column for the flow");
 if (!/\.setup-split-art\b/.test(css)) fail("ui/styles.css has no right column for the art");
 
@@ -372,8 +391,8 @@ const writtenByRail = new Set([
   ...[...rail.matchAll(/URLSearchParams\(\{\s*([a-z]+):/g)].map((match) => match[1]),
 ]);
 // `harness` is the old spelling of `installed`, kept so links written
-// before the rail existed still open.
-const RETIRED = new Set(["harness"]);
+// before the rail existed still open. `pick` is chosen in the app panel.
+const RETIRED = new Set(["harness", "pick"]);
 for (const name of readByApp) {
   if (RETIRED.has(name)) continue;
   if (!writtenByRail.has(name)) fail(`the app reads ?${name}, which the playground rail cannot set — that state is unreviewable`);
