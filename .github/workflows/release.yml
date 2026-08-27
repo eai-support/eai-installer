@@ -12,6 +12,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
   release:
@@ -92,8 +93,6 @@ jobs:
       - name: Require release signing configuration
         shell: bash
         env:
-          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
-          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
@@ -104,10 +103,6 @@ jobs:
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
         run: |
-          if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            test -n "$WINDOWS_CERTIFICATE" || { echo "Missing release secret WINDOWS_CERTIFICATE (base64 PFX)." >&2; exit 1; }
-            test -n "$WINDOWS_CERTIFICATE_PASSWORD" || { echo "Missing release secret WINDOWS_CERTIFICATE_PASSWORD." >&2; exit 1; }
-          fi
           if [ "${{ matrix.os }}" = "macos-latest" ]; then
             test -n "$APPLE_CERTIFICATE" || { echo "Missing release secret APPLE_CERTIFICATE (base64 Developer ID Application .p12)." >&2; exit 1; }
             test -n "$APPLE_CERTIFICATE_PASSWORD" || { echo "Missing release secret APPLE_CERTIFICATE_PASSWORD." >&2; exit 1; }
@@ -141,8 +136,6 @@ jobs:
         uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
-          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
@@ -160,6 +153,25 @@ jobs:
           releaseBody: Signed cross-platform EAI Setup bundle.
           releaseDraft: true
           prerelease: false
+      - name: Sign Windows installer with Azure Artifact Signing
+        if: matrix.os == 'windows-latest'
+        uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Apply Windows Authenticode signature
+        if: matrix.os == 'windows-latest'
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: https://neu.codesigning.azure.net/
+          signing-account-name: eai-installer-signing
+          certificate-profile-name: eai-installer-windows
+          files-folder: src-tauri/target/${{ matrix.target }}/release/bundle/nsis
+          files-folder-filter: exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
       - name: Verify Gatekeeper-ready macOS bundle
         if: matrix.os == 'macos-latest'
         shell: bash

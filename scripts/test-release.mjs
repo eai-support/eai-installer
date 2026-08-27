@@ -94,8 +94,14 @@ for (const dependency of [
 ]) {
   assert.match(releaseWorkflow, new RegExp(`\\b${dependency.replaceAll(".", "\\.")}\\b`));
 }
-assert.match(releaseWorkflow, /name: Require release signing configuration[\s\S]*WINDOWS_CERTIFICATE_PASSWORD/);
-assert.match(releaseWorkflow, /Missing release secret WINDOWS_CERTIFICATE/);
+assert.match(releaseWorkflow, /permissions:[\s\S]*contents: write[\s\S]*id-token: write/);
+assert.match(releaseWorkflow, /name: Sign Windows installer with Azure Artifact Signing[\s\S]*uses: azure\/login@v3/);
+assert.match(releaseWorkflow, /name: Apply Windows Authenticode signature[\s\S]*uses: azure\/artifact-signing-action@v2/);
+assert.match(releaseWorkflow, /endpoint: https:\/\/neu\.codesigning\.azure\.net\//);
+assert.match(releaseWorkflow, /signing-account-name: eai-installer-signing/);
+assert.match(releaseWorkflow, /certificate-profile-name: eai-installer-windows/);
+assert.match(releaseWorkflow, /timestamp-rfc3161: http:\/\/timestamp\.acs\.microsoft\.com/);
+assert.doesNotMatch(releaseWorkflow, /WINDOWS_CERTIFICATE(?:_PASSWORD)?/);
 assert.match(releaseWorkflow, /Missing release secret APPLE_CERTIFICATE/);
 assert.match(releaseWorkflow, /name: Verify Authenticode signature/);
 assert.match(releaseWorkflow, /releaseDraft: true/);
