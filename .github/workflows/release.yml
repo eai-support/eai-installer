@@ -73,6 +73,7 @@ jobs:
             librsvg2-dev \
             patchelf \
             wget
+      - run: npm ci
       - run: npm test
       - name: Validate semantic release version
         shell: bash
