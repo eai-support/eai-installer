@@ -41,6 +41,13 @@ if (!git?.installers?.macos?.includes("Command Line Tools") || git.installers.ma
   throw new Error("manifest: macOS Git path must use Command Line Tools without requiring full Xcode");
 }
 const node = manifest.prerequisites.find((item) => item.id === "node");
+if (node?.minimumVersion !== "24") {
+  throw new Error("manifest: Node.js 24 must be the minimum supported runtime");
+}
+const eaiCli = manifest.prerequisites.find((item) => item.id === "eai-cli");
+if (eaiCli?.minimumVersion !== "3.15.8") {
+  throw new Error("manifest: EAI CLI minimum must match the latest compatible 3.15.8 release");
+}
 const nodeMacInstaller = node?.installers?.macos ?? "";
 const nodeMacUrls = nodeMacInstaller.match(/https:\/\/[^\s]+/g) ?? [];
 const hasOfficialNodeUrl = nodeMacUrls.some((value) => {
@@ -51,8 +58,11 @@ const hasOfficialNodeUrl = nodeMacUrls.some((value) => {
     return false;
   }
 });
-if (!hasOfficialNodeUrl || !nodeMacInstaller.includes("checksum verification") || !nodeMacInstaller.includes("user-local")) {
+if (!hasOfficialNodeUrl || !nodeMacInstaller.includes("Node.js 24 LTS") || !nodeMacInstaller.includes("checksum verification") || !nodeMacInstaller.includes("user-local")) {
   throw new Error("manifest: macOS Node.js path must use the official checksum-verified user-local archive");
+}
+if (!node?.installers?.linux?.includes("Node.js 24 or newer")) {
+  throw new Error("manifest: Linux Node.js path must require Node.js 24 or newer");
 }
 
 const dmgBackgroundSource = await readFile(new URL("../src-tauri/icons/dmg-background.svg", import.meta.url), "utf8");
@@ -70,8 +80,14 @@ if ((rust.match(/env::var_os\("HOME"\)/g) ?? []).length !== 1 || rust.includes('
 for (const value of ['command.env("HOME", &home)', 'command.env("npm_config_cache", home.join(".eai-setup/npm-cache"))', 'command.env_remove("HOME")', 'command.env_remove("npm_config_cache")']) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter lets a GUI child process inherit an invalid home: ${value}`);
 }
-for (const value of ["MIN_EAI_CLI_VERSION", "@enterpriseai/cli", "eai_cli_version()", "user_npm_global_exec_dirs", "current_version >= MIN_EAI_CLI_VERSION", "fn eai_cli_script", "APPDATA", "run_program_in_directory_with_env(\"node\", &node_args, directory, environment)"] ) {
+for (const value of ["MIN_EAI_CLI_VERSION", "MIN_NODE_MAJOR_VERSION: u64 = 24", "fn node_version()", "@enterpriseai/cli", "eai_cli_version()", "user_npm_global_exec_dirs", "current_version >= MIN_EAI_CLI_VERSION", "fn eai_cli_script", "APPDATA", "run_program_in_directory_with_env(\"node\", &node_args, directory, environment)"] ) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter does not verify the canonical EAI CLI release: ${value}`);
+}
+if (!rust.includes('ToolState { command: "node".to_string(), version: node_version() }')) {
+  throw new Error("Tauri adapter must report only Node.js 24 or newer as ready");
+}
+if (!rust.includes("The package step finished, but Node.js 24 and npm are not ready.")) {
+  throw new Error("Tauri adapter must explain incompatible Node.js package installs");
 }
 if (rust.includes("latest_eai_cli_requirement") || rust.includes('version("npm", &["view", "@enterpriseai/cli"')) {
   throw new Error("Tauri adapter must not use live npm metadata to decide whether the installed EAI CLI is ready");
@@ -163,10 +179,10 @@ if (!rust.includes('inventory.contract_version != "eai.ai-surfaces/v1"')) {
 for (const value of ["Homebrew.pkg", "/usr/sbin/pkgutil", "--check-signature", "with administrator privileges", "--stdinpass", "No Terminal window will open"]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing native macOS installation control: ${value}`);
 }
-for (const value of ["windows_package_bin_dirs", "windows_resolved_path", "env::split_paths", "ProgramW6432", "ProgramFiles(Arm)", "ProgramFiles(x86)", "CREATE_NO_WINDOW", "creation_flags", "APPDATA", "windows_shell_arg", "ComSpec", "ends_with(\".cmd\")", "command_line.push_str", "call {}", "windows_package_install_result", "windows_vc_runtime_version", "Microsoft.VCRedist.2015+", "npm_version", "run_npm_in_directory(&[\"--version\"], None)", "Node.js and npm are already installed and ready.", "installed EAI CLI could not be started."]) {
+for (const value of ["windows_package_bin_dirs", "windows_resolved_path", "windows_best_candidate", "windows_node_candidate_is_supported", "env::split_paths", "ProgramW6432", "ProgramFiles(Arm)", "ProgramFiles(x86)", "CREATE_NO_WINDOW", "creation_flags", "APPDATA", "windows_shell_arg", "ComSpec", "ends_with(\".cmd\")", "command_line.push_str", "call {}", "windows_package_install_result", "windows_vc_runtime_version", "Microsoft.VCRedist.2015+", "npm_version", "run_npm_in_directory(&[\"--version\"], None)", "winget_node_action", "\"upgrade\"", "Node.js and npm are already installed and ready.", "installed EAI CLI could not be started."]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing Windows prerequisite safety support: ${value}`);
 }
-for (const value of ["xcode-select", "full Xcode is not required", "softwareupdate", "latest_command_line_tools_label", "refresh_macos_command_line_tools_catalog", "Refreshing Apple Software Update", "with administrator privileges", "secure administrator dialog", "native administrator install", "latest_node_artifact", "nodejs.org/dist/index.json", "osx-arm64-pkg", "osx-x64-pkg", "osx-arm64-tar", "osx-x64-tar", "SHASUMS256.txt", "shasum", "uname", "--prefix", "expose_user_npm_bin", "NVM_DIR", "versions/node", "NVM_BIN", "nvm_node_bin_dirs", "macos_package_bin_dirs"]) {
+for (const value of ["xcode-select", "full Xcode is not required", "softwareupdate", "latest_command_line_tools_label", "refresh_macos_command_line_tools_catalog", "Refreshing Apple Software Update", "with administrator privileges", "secure administrator dialog", "native administrator install", "latest_node_artifact", "nodejs.org/dist/index.json", "brew_action", "brew install/upgrade", "osx-arm64-pkg", "osx-x64-pkg", "osx-arm64-tar", "osx-x64-tar", "SHASUMS256.txt", "shasum", "uname", "--prefix", "expose_user_npm_bin", "NVM_DIR", "versions/node", "NVM_BIN", "nvm_node_bin_dirs", "macos_package_bin_dirs"]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing minimal macOS setup support: ${value}`);
 }
 if (!rust.includes("fn macos_git_ready()") || !rust.includes("/usr/bin/xcode-select") || !rust.includes("usr/bin/git")) {
@@ -196,8 +212,8 @@ if (!rust.includes('command.env("PATH", path)') || !rust.includes(".eai-setup/no
 if (!rust.includes("fn clean_process_output") || !rust.includes("character == '\\u{1b}'")) {
   throw new Error("Tauri adapter does not remove terminal control sequences from GUI diagnostics");
 }
-if (!rust.includes("Node.js files were downloaded, but the desktop app could not run node and npm")) {
-  throw new Error("Tauri adapter reports Node.js ready before verifying the installed executables");
+if (!rust.includes("Node.js files were downloaded, but the desktop app could not run Node.js 24 and npm")) {
+  throw new Error("Tauri adapter reports Node.js ready before verifying the installed executables and version");
 }
 if (!rust.includes("async fn run_bootstrap") || !rust.includes("spawn_blocking")) {
   throw new Error("Tauri adapter blocks the UI while running a bootstrap task");

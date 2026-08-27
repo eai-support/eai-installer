@@ -1093,7 +1093,7 @@ async function runReadiness() {
     const failed = [];
     for (const step of missingSteps()) {
       if (step === "eai-cli" && failed.includes("node")) {
-        note("Skipped the EAI CLI: it is installed with npm, and Node.js is not ready.");
+        note("Skipped the EAI CLI: it is installed with npm, and Node.js 24 is not ready.");
         continue;
       }
       facts.prereqBusy = step;
