@@ -60,7 +60,7 @@ install_package() {
       require_auto_install node
       if has apt-get; then sudo apt-get update && sudo apt-get install -y nodejs npm
       elif has dnf; then sudo dnf install -y nodejs npm
-      else echo "Install Node.js 20+ with your distribution's signed package manager, then rerun." >&2; exit 1; fi
+      else echo "Install Node.js 24+ with your distribution's signed package manager, then rerun." >&2; exit 1; fi
       ;;
   esac
 }
@@ -105,7 +105,7 @@ fi
 
 if ! has node || ! has npm; then echo "Node.js and npm are required after installation." >&2; exit 1; fi
 NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]')"
-if [ "$NODE_MAJOR" -lt 20 ]; then echo "Node.js 20 or newer is required; found $(node --version)." >&2; exit 1; fi
+if [ "$NODE_MAJOR" -lt 24 ]; then echo "Node.js 24 or newer is required; found $(node --version)." >&2; exit 1; fi
 
 if ! has eai || [ "$AUTO_INSTALL" = "1" ]; then
   require_auto_install eai

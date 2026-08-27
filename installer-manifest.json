@@ -40,12 +40,12 @@
     {
       "id": "node",
       "command": "node",
-      "minimumVersion": "20",
+      "minimumVersion": "24",
       "required": true,
       "installers": {
         "windows": "winget install --id OpenJS.NodeJS.LTS -e --source winget",
-        "macos": "Official Node.js LTS macOS archive from https://nodejs.org/ with checksum verification and a user-local install; signed package fallback if an archive is unavailable",
-        "linux": "Use the distribution package manager and verify Node.js 20 or newer"
+        "macos": "Official Node.js 24 LTS macOS archive from https://nodejs.org/ with checksum verification and a user-local install; signed package fallback if an archive is unavailable",
+        "linux": "Use the distribution package manager only when it provides Node.js 24 or newer, then verify Node.js and npm"
       }
     },
     {
@@ -54,7 +54,7 @@
       "minimumVersion": "10",
       "required": true,
       "installers": {
-        "windows": "Installed with Node.js LTS",
+        "windows": "Installed with Node.js 24 LTS",
         "macos": "Installed with Node.js",
         "linux": "Installed with Node.js package"
       }
@@ -62,7 +62,7 @@
     {
       "id": "eai-cli",
       "command": "eai",
-      "minimumVersion": "3.15.2",
+      "minimumVersion": "3.15.8",
       "required": true,
       "installers": {
         "all": "npm install --global @enterpriseai/cli"

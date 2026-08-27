@@ -10,13 +10,14 @@ visible.
 | --- | --- | --- | --- |
 | WELCOME-01 | Welcome | Open the installer | Device detection starts automatically and the window remains responsive. |
 | WELCOME-02 | Welcome | Choose Start setup twice | Only one setup run starts; the second click is ignored. |
-| PRE-01 | Computer | Git, Node.js, npm, and EAI CLI are present | No package is installed; setup continues. |
+| PRE-01 | Computer | Git, Node.js 24, npm, and EAI CLI are present | No package is installed; setup continues. |
 | PRE-02 | Computer | Git is missing | Only Git is installed, then its version is rechecked. |
-| PRE-03 | Computer | Node.js or npm is missing | Node.js and npm are installed together, then both are rechecked. |
+| PRE-03 | Computer | Node.js 24 or npm is missing | Node.js 24 and npm are installed together, then both are rechecked. |
 | PRE-04 | Computer | EAI CLI is missing or below the supported release | The canonical CLI package is installed or updated, then `eai --version` is rechecked. |
 | PRE-05 | Computer | A prerequisite installer fails or permission is cancelled | The exact item is marked as needing attention, recent activity stays visible, and Try again is shown. |
 | PRE-06 | Computer | Choose Try again after fixing the prerequisite | Only the missing item is retried. |
-| PRE-07 | Computer | WinGet reports that Node.js is already installed and no upgrade is available | Setup verifies the live `node` and `npm` commands and continues when they work; WinGet's no-change exit is not treated as an installation failure. |
+| PRE-07 | Computer | WinGet reports that Node.js is already installed and no upgrade is available | Setup verifies the live `node` command is Node.js 24 or newer and `npm` works; WinGet's no-change exit is not treated as an installation failure. |
+| PRE-08 | Computer | Node.js 20 or another older runtime is present | Setup treats Node.js as not ready, installs or asks for Node.js 24, and does not continue to the EAI CLI until Node.js 24 and npm work. |
 | AUTH-01 | Sign in | Browser sign-in succeeds | The company workspaces are loaded and app setup opens. |
 | AUTH-02 | Sign in | Browser sign-in is cancelled or times out | The installer explains that sign-in did not finish and allows retry. |
 | AUTH-03 | Sign in | User has no account | The public signup page opens; no password is collected by the installer. |
