@@ -766,6 +766,20 @@ button, input { font-family: inherit; }
 }
 .eai-btn.i3-nav { height: 32px; gap: 6px; padding: 0 12px; font-size: 13px; }
 .eai-btn.i3-nav svg { width: 14px; height: 14px; flex: none; }
+/* Footer rails, welcome actions, and in-row harness picks — 32px nav
+   buttons everywhere, not the 44px field default on .eai-btn alone. */
+.eai-screen > .eai-foot .eai-btn,
+.i3-foot .eai-btn,
+.i3-welcome-acts .eai-btn,
+.i4-pick-panel .eai-btn,
+.admin-note .eai-acts .eai-btn,
+.i3-step .eai-acts .eai-btn {
+  height: 32px;
+  gap: 6px;
+  padding: 0 12px;
+  font-size: 13px;
+  line-height: 18px;
+}
 /* The chevron sits closer to the edge than the word does, on whichever
    side it is on. */
 .eai-btn.i3-nav svg:first-child { margin-left: -3px; }
@@ -809,6 +823,47 @@ button, input { font-family: inherit; }
 .i4-list .i4-pick { border-bottom: 1px solid var(--color-border); }
 .i4-list .i4-pick:last-child { border-bottom: none; }
 .i4-list .i4-pick .i4-row { border-bottom: none; }
+
+/* Actions and copy inside the chosen option — not in the footer rail. */
+.i4-pick-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 16px 14px 44px;
+}
+.i4-pick-note {
+  margin: 0;
+  font-size: 13px;
+  line-height: 19px;
+  color: var(--color-muted-foreground);
+}
+.i4-pick-acts {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+.i4-pick-panel .i4-wait {
+  width: 100%;
+  box-sizing: border-box;
+}
+.i4-pick-acts .eai-btn.ghost-quiet,
+.i4-pick-panel .eai-btn.ghost-quiet {
+  height: auto;
+  min-height: 32px;
+  padding: 0 2px;
+  border: none;
+  background: none;
+}
+.i4-pick-acts .eai-btn.ghost-quiet:hover,
+.i4-pick-panel .eai-btn.ghost-quiet:hover {
+  background: none;
+  color: var(--color-foreground);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.i4-pick-go { align-self: flex-start; }
+.i4-pick-check { align-self: center; }
 
 /* --- the round trip, as three steps -----------------------------
 

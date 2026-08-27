@@ -43,7 +43,7 @@ const declaredIds = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map((match) =>
 /* Ids the app creates at runtime rather than shipping in the markup —
    the waiting box, which only exists while somebody is away installing
    something. Listed here so the check stays exact rather than lenient. */
-const RUNTIME_IDS = new Set(["harnessWait"]);
+const RUNTIME_IDS = new Set([]);
 
 const referenced = new Set([
   ...[...app.matchAll(/\bel\("([^"]+)"\)/g)].map((match) => match[1]),
@@ -88,6 +88,12 @@ const stepsInMachine = machine.setupSteps(
 if (stepsInMarkup.join(",") !== stepsInMachine.join(",")) {
   fail(`the form's questions differ between markup (${stepsInMarkup}) and machine (${stepsInMachine})`);
 }
+if (!app.includes("function appendHarnessPickPanel")) {
+  fail("the harness screen does not draw actions inside the chosen row");
+}
+if (!app.includes("machine.harnessPickCopy")) {
+  fail("the harness pick copy is not wired from the state machine");
+}
 if (!app.includes('locationShape(state) === "chosen" && Boolean(facts.projectFolder)')) {
   fail("the location question can draw Change location with an empty path");
 }
@@ -121,6 +127,7 @@ const DRIVEN_CLASSES = [
   "i3-step", "answered", "i3-num", "i3-foot", "i3-nav",
   "i3-welcome", "i3-tick", "i3-welcome-acts", "i3-welcome-fine", "wide",
   "i4-group", "i4-pick", "i4-row", "i4-steps", "i4-round-trip", "i4-wait",
+  "i4-pick-panel", "i4-pick-note", "i4-pick-acts", "i4-pick-go", "i4-pick-check",
   "i4-list", "i4-eai", "i4-eai-note", "i4-eai-video", "eai-foot", "i3-foot-end",
   "mark", "tile", "nm", "on", "missing",
   "i4-alert",
