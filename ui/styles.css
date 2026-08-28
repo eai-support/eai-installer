@@ -1,151 +1,1328 @@
+/* ------------------------------------------------------------------
+   EAI Setup — the app's skin.
+
+   Ported from the tested prototype's stylesheets (install.css,
+   install-3.css, install-4.css, signup.css), with three deliberate
+   differences and no others:
+
+   1. **No window chrome.** The prototype draws a fake macOS window on a
+      fake desktop. Here the window is real — macOS draws the traffic
+      lights and Windows draws the title bar — so every rule that
+      painted a title bar is gone.
+
+   2. **No web fonts.** The prototype loads Geist from Google. An
+      installer that has not signed in yet may be behind the very proxy
+      it is about to complain about, and a first screen that waits on a
+      font CDN is a first screen that hangs. The stacks below resolve to
+      each platform's own UI face: San Francisco, Segoe UI Variable,
+      whatever the desktop has.
+
+   3. **No oklch().** The prototype targets one browser. This ships
+      inside WebView2 on Windows and WebKitGTK on Linux, and an
+      unsupported colour function drops the whole declaration rather
+      than falling back. Every value below is the same colour written as
+      hex, so nothing is left to a browser's opinion.
+
+   Everything else — every size, every gap, every radius — is the
+   prototype's, so a screenshot of this next to a screenshot of the
+   state machine is the review it is meant to be.
+------------------------------------------------------------------- */
+
 :root {
   color-scheme: light;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  color: #1d252c;
-  background: #f4f6f7;
+
+  /* The design system from the Paper file, as hex. */
+  --color-background: #ffffff;
+  --color-foreground: #0a0a0a;
+  --color-primary: #171717;
+  --color-primary-foreground: #fafafa;
+  --color-primary-hover: #2b2b2b;
+  --color-muted-foreground: #737373;
+  --color-border: #e5e5e5;
+  --color-accent: #f5f5f5;
+  --color-ring: #a3a3a3;
+  --color-tick: #0d9488;
+  --color-destructive: #dc2626;
+
+  --color-surface-quiet: #fafafa;
+  --color-hairline: #d4d4d4;
+  --color-quiet: #8f8f8f;
+  --color-focus-border: #c4c4c4;
+
+  /* Each desktop's own UI face, rather than a font fetched over the
+     network the app has not yet proved it has. */
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", Roboto, Ubuntu, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", "Cascadia Mono", "Segoe UI Mono", Menlo, Consolas, monospace;
+
+  --text-xs: 12px;
+  --text-xl: 20px;
+  --font-weight-medium: 500;
+  /* Defined here on purpose. In the prototype this token is used and
+     never declared, so four rules silently drop their font-weight. */
+  --font-weight-semibold: 600;
+
+  /* The window's width — two equal columns, flow on the left and the
+     Paper shader on the right (prototypes/bamako-v2/install-5). The
+     number is declared here and in src-tauri/tauri.conf.json; the
+     contract test fails if they disagree. */
+  --app-width: 1100px;
+
+  --spacing-2: 8px;
+  --spacing-3: 12px;
+  --spacing-4: 16px;
+  --spacing-6: 24px;
+  --spacing-8: 32px;
 }
 
 * { box-sizing: border-box; }
-body { margin: 0; min-width: 320px; }
-.shell { max-width: 820px; margin: 0 auto; padding: 30px 28px 34px; }
-.topbar { display: flex; align-items: start; justify-content: space-between; border-bottom: 1px solid #d9dfe3; padding-bottom: 20px; }
-.brand { display: flex; align-items: center; gap: 12px; }
-.brand-logo { width: 42px; height: 42px; object-fit: contain; }
-.eyebrow { color: #53636d; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; margin: 0 0 8px; }
-h1, h2, h3, p { margin-top: 0; }
-h1 { font-size: 28px; margin-bottom: 0; }
-h2 { font-size: 24px; margin-bottom: 10px; }
-p { color: #53636d; line-height: 1.5; margin-bottom: 10px; }
-.lead { max-width: 620px; font-size: 16px; }
-.quiet { color: #65747c; font-size: 13px; }
-.status { color: #176448; background: #e1f4ea; border: 1px solid #b6dfc9; padding: 8px 12px; border-radius: 6px; font-size: 13px; }
-.wizard { background: #fff; border: 1px solid #d9dfe3; border-radius: 8px; box-shadow: 0 8px 24px rgba(29, 37, 44, .06); }
-.wizard-panel { min-height: 430px; padding: 42px 46px 28px; }
-.panel-logo { display: block; width: 88px; height: 88px; margin-bottom: 24px; object-fit: contain; }
-.panel-icon { display: grid; place-items: center; width: 48px; height: 48px; margin-bottom: 24px; border-radius: 8px; background: #1d252c; color: #fff; font-size: 13px; font-weight: 800; letter-spacing: .04em; }
-.panel-icon.success { background: #1b6d50; }
-.promise-list { display: grid; gap: 12px; padding: 0; margin: 24px 0; list-style: none; color: #35444c; }
-.promise-list li { position: relative; padding-left: 24px; }
-.promise-list li::before { content: "✓"; position: absolute; left: 0; color: #1b6d50; font-weight: 800; }
-.activity { margin: 18px 0 12px; padding: 16px; border: 1px solid #b6dfc9; border-radius: 6px; background: #f3fbf6; }
-.activity.complete { background: #f4f6f7; border-color: #d9dfe3; }
-.activity-heading { display: flex; align-items: center; gap: 9px; color: #1d252c; }
-.activity-step { margin-left: auto; color: #53636d; font-size: 11px; font-weight: 700; white-space: nowrap; }
-.activity-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 14px; margin: 8px 0 8px 21px; color: #65747c; font-size: 12px; }
-.activity-meta span:last-child { color: #1b6d50; font-weight: 700; }
-.activity-meta #activity-heartbeat { flex-basis: 100%; color: #65747c; font-weight: 600; }
-.activity-spinner { width: 12px; height: 12px; border: 2px solid #b6dfc9; border-top-color: #1b6d50; border-radius: 50%; animation: spin 800ms linear infinite; }
-.activity.complete .activity-spinner { border: 0; width: 14px; height: 14px; background: #1b6d50; position: relative; animation: none; }
-.activity.complete .activity-spinner::after { content: "✓"; color: #fff; font-size: 10px; position: absolute; left: 2px; top: -1px; }
-.activity p { margin: 6px 0 11px 21px; font-size: 13px; }
-.activity-track { height: 5px; margin-left: 21px; background: #d9e9df; border-radius: 999px; overflow: hidden; }
-.activity-track span { display: block; width: 0; height: 100%; background: #1b6d50; transition: width 180ms ease; }
-.activity-track span.indeterminate { width: 35%; animation: slide 1.2s ease-in-out infinite alternate; }
-.setup-stages { display: grid; gap: 6px; margin: 14px 0 0 21px; }
-.setup-stage { border: 1px solid #d6e2dc; border-radius: 5px; background: rgba(255, 255, 255, .7); }
-.setup-stage[open] { border-color: #8fc5aa; background: #fff; }
-.setup-stage[data-state="done"] { border-color: #cce3d5; }
-.setup-stage[data-state="error"] { border-color: #e2b8b0; background: #fff7f5; }
-.setup-stage summary { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 8px 10px; color: #35444c; cursor: pointer; list-style: none; }
-.setup-stage summary::-webkit-details-marker { display: none; }
-.setup-stage summary::marker { content: ""; }
-.setup-stage-number { display: grid; width: 18px; height: 18px; place-items: center; border: 1px solid #b8c8c0; border-radius: 50%; color: #65747c; font-size: 10px; font-weight: 800; }
-.setup-stage[data-state="active"] .setup-stage-number { border-color: #1b6d50; color: #fff; background: #1b6d50; }
-.setup-stage[data-state="done"] .setup-stage-number { border-color: #1b6d50; color: #fff; background: #1b6d50; }
-.setup-stage[data-state="done"] .setup-stage-number::before { content: "\2713"; }
-.setup-stage[data-state="done"] .setup-stage-number { font-size: 0; }
-.setup-stage[data-state="done"] .setup-stage-number::before { font-size: 10px; }
-.setup-stage[data-state="error"] .setup-stage-number { border-color: #a33e32; color: #fff; background: #a33e32; }
-.setup-stage-name { font-size: 12px; font-weight: 700; }
-.setup-stage-status { color: #65747c; font-size: 10px; font-weight: 700; }
-.setup-stage[data-state="active"] .setup-stage-status, .setup-stage[data-state="done"] .setup-stage-status { color: #176448; }
-.setup-stage[data-state="error"] .setup-stage-status { color: #a33e32; }
-.setup-stage-detail { margin: 0; padding: 0 10px 9px 40px; color: #53636d; font-size: 11px; line-height: 1.4; }
-.activity-log-panel { margin: 13px 0 0 21px; padding-top: 10px; border-top: 1px solid #d9e9df; }
-.activity-log-heading { display: flex; justify-content: space-between; gap: 12px; color: #53636d; font-size: 11px; cursor: pointer; list-style: none; }
-.activity-log-heading::-webkit-details-marker { display: none; }
-.activity-log-heading::marker { content: ""; }
-.activity-log-heading strong::before { content: "\25B8"; display: inline-block; width: 13px; }
-.activity-log-panel[open] .activity-log-heading strong::before { content: "\25BE"; }
-.activity-log-heading span { color: #1b6d50; font-weight: 600; }
-.activity-log { display: grid; gap: 4px; max-height: 116px; overflow: auto; margin: 7px 0 0; padding: 0; list-style: none; color: #53636d; font-size: 11px; }
-.activity-log li { display: grid; grid-template-columns: 66px 58px 1fr; gap: 7px; line-height: 1.35; }
-.activity-log time { color: #849198; }
-.activity-log strong { color: #1b6d50; font-size: 10px; text-transform: uppercase; }
-.activity-log li[data-category="error"] strong { color: #a33e32; }
-.activity-log li[data-category="error"] span { color: #7f352c; }
-.activity.error { background: #fff7f5; border-color: #e2b8b0; }
-.activity.error .activity-spinner { border-color: #e2b8b0; border-top-color: #a33e32; }
-.activity.error .activity-log-panel { border-top-color: #f0d8d3; }
-.activity.error .activity-log-heading span { color: #a33e32; }
-.admin-password-panel { margin: 14px 0 0 21px; padding: 12px; border: 1px solid #c9d9e0; border-radius: 5px; background: #fff; }
-.admin-password-panel p { margin: 7px 0 0; font-size: 12px; }
-.admin-password-panel .activity-actions { justify-content: flex-start; }
-.activity-actions { display: flex; justify-content: flex-end; margin-top: 12px; }
-.wizard > .activity { margin: 0; border: 0; border-bottom: 1px solid #d9dfe3; border-radius: 0; padding: 16px 46px; }
-@keyframes spin { to { transform: rotate(360deg); } }
-@keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(285%); } }
-.callout { margin: 26px 0; padding: 16px; border-left: 4px solid #1b6d50; background: #edf7f1; }
-.callout p { margin: 6px 0 0; font-size: 14px; }
-.form-grid { display: grid; gap: 16px; margin: 28px 0 14px; }
-label { display: grid; gap: 7px; font-size: 13px; font-weight: 700; }
-input, select { border: 1px solid #aebbc3; border-radius: 5px; padding: 11px; font: inherit; font-weight: 400; color: #1d252c; background: #fff; }
-input:focus, select:focus { outline: 3px solid rgba(27, 109, 80, .2); border-color: #1b6d50; }
-.field-help { color: #65747c; font-size: 13px; line-height: 1.45; margin: -10px 0 0; }
-.folder-picker { display: flex; align-items: stretch; gap: 8px; }
-.folder-picker input { flex: 1; min-width: 0; }
-.folder-picker button { flex: 0 0 auto; white-space: nowrap; }
-.panel-actions { display: flex; align-items: center; gap: 10px; margin-top: 28px; }
-.panel-actions.end { justify-content: flex-end; }
-.action-spacer { flex: 1; }
-button { border: 1px solid #aebbc3; background: #fff; color: #1d252c; border-radius: 5px; padding: 10px 14px; font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
-button:hover:not(:disabled) { border-color: #1b6d50; color: #15583f; }
-button:focus-visible { outline: 3px solid rgba(27, 109, 80, .25); outline-offset: 2px; }
-button:disabled { cursor: not-allowed; opacity: .5; }
-.primary { background: #1b6d50; border-color: #1b6d50; color: #fff; }
-.primary:hover:not(:disabled) { background: #15583f; color: #fff; }
-.completion-location { margin-top: 20px; padding: 14px 16px; border: 1px solid #c9d9e0; border-radius: 5px; background: #f4f8f9; color: #35444c; font-size: 14px; overflow-wrap: anywhere; }
-.surface-field { margin: 22px 0 12px; padding: 0; border: 0; }
-.surface-field legend { margin-bottom: 9px; font-size: 13px; font-weight: 700; }
-.surface-columns { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 10px; margin-bottom: 7px; padding: 0 12px; color: #596971; font-size: 10px; font-weight: 700; }
-.column-help { display: inline-flex; align-items: center; justify-content: flex-end; gap: 6px; border: 0; padding: 2px 0; color: #176448; background: transparent; font-size: 10px; }
-.column-help:hover:not(:disabled) { border-color: transparent; }
-.help-icon { display: inline-grid; width: 16px; height: 16px; place-items: center; border: 1px solid currentColor; border-radius: 50%; font-size: 10px; line-height: 1; }
-.surface-options { display: grid; gap: 8px; }
-.surface-option { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 11px 12px; border: 1px solid #c9d4d9; border-radius: 6px; background: #fff; }
-.surface-option:has(input:checked) { border-color: #1b6d50; box-shadow: 0 0 0 2px rgba(27, 109, 80, .12); }
-.surface-option input { margin: 0; padding: 0; }
-.surface-option strong { display: block; font-size: 13px; }
-.surface-option small { display: block; margin-top: 2px; color: #65747c; font-size: 11px; font-weight: 400; }
-.surface-badge { display: inline-flex; align-items: center; justify-content: flex-end; gap: 7px; color: #176448; font-size: 11px; font-weight: 700; white-space: nowrap; }
-.harvey-ball-label { display: inline-flex; align-items: center; }
-.harvey-ball { display: inline-block; width: 14px; height: 14px; flex: 0 0 14px; border: 1px solid #176448; border-radius: 50%; background: conic-gradient(#176448 calc(var(--recommendation-score) * 25%), #fff 0); }
-.recommendation-dialog { width: min(540px, calc(100vw - 40px)); border: 1px solid #c9d4d9; border-radius: 6px; padding: 24px; color: #1d252c; background: #fff; box-shadow: 0 18px 60px rgba(15, 32, 40, .28); }
-.recommendation-dialog::backdrop { background: rgba(15, 32, 40, .48); }
-.recommendation-dialog h2 { margin: 4px 0 0; font-size: 22px; }
-.recommendation-dialog > p { line-height: 1.5; }
-.dialog-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
-.dialog-close { flex: 0 0 auto; }
-.recommendation-criteria { margin: 14px 0; padding-left: 22px; line-height: 1.65; }
-.recommendation-scale { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 18px; margin: 18px 0; padding: 14px; border: 1px solid #d9e2e6; background: #f4f8f9; font-size: 13px; }
-.recommendation-scale > span { display: flex; align-items: center; gap: 8px; }
-.surface-next { margin: 12px 0 0; padding: 11px 13px; border: 1px solid #c9d9e0; border-radius: 5px; background: #f4f8f9; color: #35444c; font-size: 13px; line-height: 1.45; }
-.surface-install { padding: 7px 9px; font-size: 12px; }
-.output { display: block; min-height: 48px; margin: 0 46px 28px; background: #202b31; color: #ecf3f1; border-radius: 5px; padding: 14px; font-size: 13px; line-height: 1.45; }
-footer { color: #65747c; font-size: 12px; line-height: 1.5; margin-top: 18px; }
-code { font-family: ui-monospace, SFMono-Regular, monospace; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-sans);
+  color: var(--color-foreground);
+  background: var(--color-background);
+  -webkit-font-smoothing: antialiased;
+}
+
+body { overflow: hidden; }
+
 [hidden] { display: none !important; }
-@media (max-width: 620px) {
-  .shell { padding: 20px 16px 26px; }
-  .topbar { gap: 14px; flex-direction: column; }
-  .wizard-panel { min-height: 0; padding: 30px 22px 22px; }
-  .wizard > .activity { padding-right: 22px; padding-left: 22px; }
-  .output { margin-right: 22px; margin-left: 22px; }
-  .panel-actions { flex-wrap: wrap; }
-  .action-spacer { display: none; }
-  .panel-actions button { flex: 1 1 auto; }
-  .panel-actions.end { justify-content: stretch; }
-  .surface-columns, .surface-option { grid-template-columns: 20px minmax(0, 1fr); }
-  .surface-columns .column-help, .surface-badge { grid-column: 2; justify-self: start; }
-  .recommendation-scale { grid-template-columns: 1fr; }
+
+button, input { font-family: inherit; }
+
+/* =================== the app, top to bottom ====================== */
+
+.skin-setup.eai {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--color-background);
+}
+
+.skin-setup.eai.split {
+  overflow: hidden;
+}
+
+.setup-split {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.setup-split-main {
+  flex: 0 0 50%;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--color-background);
+  border-right: 1px solid #f0f0f0;
+}
+
+.setup-split-progress {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 22px 34px 0;
+  flex: none;
+}
+
+.setup-split-bars.eai-steps {
+  margin: 0;
+  gap: 5px;
+}
+
+.setup-split-bars .eai-step {
+  height: 3px;
+  border-radius: 2px;
+}
+
+.setup-split-count {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-muted-foreground);
+  white-space: nowrap;
+}
+
+.eai-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  width: 100%;
+  overflow-y: auto;
+  padding: 26px 34px 0;
+  font-family: var(--font-sans);
+}
+
+/* --- where you are, across the top ------------------------------
+
+   The sign-up dialog's bar: filled for what you have reached, pale for
+   what you have not, and no line drawn between done and current because
+   the screen underneath already says where you are.
+
+   The third state is this app's own. A sign-up form cannot stop; this
+   flow can, and a bar that only ever fills would say everything is fine
+   while the screen below it says the opposite. */
+
+.eai-steps {
+  display: flex;
+  flex: 1;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.eai-step {
+  flex: 1;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--color-border);
+  transition: background-color 0.2s ease;
+}
+/* All three written out, including the one that matches the base. A
+   state with no rule of its own is a state that changes the day
+   somebody edits the base and does not think to look. */
+.eai-step.upcoming { background: var(--color-border); }
+.eai-step.reached { background: var(--color-foreground); }
+.eai-step.failed { background: var(--color-destructive); }
+
+/* The bars carry no text, so the names go where a screen reader can
+   still reach them. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.eai-screen { display: flex; flex: 1 1 auto; flex-direction: column; }
+.eai-screen[hidden] { display: none; }
+.eai-screen.gap-8 { gap: var(--spacing-8); }
+.eai-screen.gap-6 { gap: var(--spacing-6); }
+/* --- the rail, stuck to the bottom ------------------------------
+
+   Back on the left, the primary on the right, on every screen that has
+   them — which is what the hi-fi frames do, and why neither the harness
+   screen nor the hand-off has a Back button above its title any more.
+
+   Anchored was not enough. `margin-top: auto` puts the rail at the
+   bottom of the screen, and when the content above grows past the
+   window the rail goes with it: the primary ends up below the fold on
+   the one screen whose job is a choice and a primary. Sticky keeps it
+   where anchored was aiming.
+
+   The negative side margins let its background reach the body's
+   gutters, so content scrolling underneath does not show in the 34px
+   either side of it. */
+.eai-screen > .eai-foot {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  margin: auto -34px 0;
+  padding: 14px 34px 26px;
+  background: var(--color-background);
+}
+
+/* The line appears only when it is separating something. A rule under
+   content that ends above it is a rule drawing a box for no reason. */
+.eai-screen > .eai-foot::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--color-border);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.eai-screen > .eai-foot.over::before { opacity: 1; }
+
+.i3-foot-end { display: flex; align-items: center; gap: 8px; }
+.eai-screen[data-screen="welcome"] { justify-content: center; }
+
+.eai-head {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--spacing-2);
+}
+.eai-head h3 {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: -0.025em;
+  line-height: 24px;
+  color: var(--color-foreground);
+}
+.eai-head p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 20px;
+  color: var(--color-primary);
+}
+
+/* ======================= rows and marks ========================== */
+
+.eai-rows {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+/* A list with nothing in it still draws its own border, which reads as a
+   box that failed to load. There is no state where an empty list is
+   meant to be seen. */
+.eai-rows:empty { display: none; }
+.eai-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-3);
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--color-border);
+}
+.eai-row:last-child { border-bottom: none; }
+
+.eai-row .mk {
+  /* Fixed basis and min-width: a flex item defaults to min-width:auto,
+     which lets the spinner's bars size the marker and knocks the running
+     row's label out of the lane the other rows share. */
+  flex: 0 0 16px;
+  min-width: 16px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 12px;
+  font-style: normal;
+}
+.eai-row .mk.done { background: var(--color-tick); color: #ffffff; }
+.eai-row .mk.pending { border: 2px solid var(--color-border); color: transparent; }
+.eai-row .mk.fail { background: var(--color-destructive); color: #ffffff; border: none; }
+
+.eai-row .lbl {
+  display: block;
+  flex: 1;
+  font-size: 14px;
+  line-height: 18px;
+  color: var(--color-foreground);
+}
+.eai-row .sub {
+  display: block;
+  margin-top: 2px;
+  font-size: 12.5px;
+  line-height: 16px;
+  color: var(--color-muted-foreground);
+}
+.eai-row .val {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 16px;
+  color: var(--color-muted-foreground);
+}
+.eai-row.pending .lbl { color: var(--color-muted-foreground); }
+.eai-row.active .lbl { color: var(--color-foreground); }
+.eai-row.failed { align-items: flex-start; gap: 10px; }
+.eai-row.failed .mk { margin-top: 1px; }
+.eai-row.failed .lbl { color: var(--color-foreground); }
+.eai-row.failed .val { color: var(--color-primary); }
+
+/* A row you can answer with. */
+.eai-row.pick {
+  width: 100%;
+  margin: 0;
+  background: none;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  font-family: var(--font-sans);
+  text-align: left;
+  cursor: pointer;
+}
+.eai-row.pick:hover { background: var(--color-surface-quiet); }
+.eai-row.pick:last-child { border-bottom: none; }
+.eai-row.pick .mk.pending { border-color: var(--color-hairline); }
+.eai-row.pick:focus-visible { outline: 2px solid var(--color-ring); outline-offset: -2px; }
+
+/* The eight-bar spinner, which is what anything working looks like.
+
+   Deliberately not scoped to .eai-row. It is used in three places — a
+   readiness row, a creating row, and the box that waits while somebody
+   is off installing something — and the version of this that was scoped
+   gave the third one eight bars all pointing the same way. */
+.mk.busy {
+  flex: 0 0 16px;
+  min-width: 16px;
+  width: 16px;
+  height: 16px;
+  border: none;
+  background: none;
+  color: transparent;
+  /* Block, not flex: the rotated bars perturb a flex container's measured
+     box, which pushes the label of the running row out of the lane. */
+  display: block;
+  position: relative;
+}
+.mk.busy s {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 1.7px;
+  height: 4.4px;
+  margin: -7px 0 0 -0.85px;
+  border-radius: 1px;
+  background: var(--color-muted-foreground);
+  transform-origin: 0.85px 7px;
+  animation: mkSpin 0.9s linear infinite;
+}
+.mk.busy s:nth-child(1) { transform: rotate(0deg);   animation-delay: -0.9000s; }
+.mk.busy s:nth-child(2) { transform: rotate(45deg);  animation-delay: -0.7875s; }
+.mk.busy s:nth-child(3) { transform: rotate(90deg);  animation-delay: -0.6750s; }
+.mk.busy s:nth-child(4) { transform: rotate(135deg); animation-delay: -0.5625s; }
+.mk.busy s:nth-child(5) { transform: rotate(180deg); animation-delay: -0.4500s; }
+.mk.busy s:nth-child(6) { transform: rotate(225deg); animation-delay: -0.3375s; }
+.mk.busy s:nth-child(7) { transform: rotate(270deg); animation-delay: -0.2250s; }
+.mk.busy s:nth-child(8) { transform: rotate(315deg); animation-delay: -0.1125s; }
+@keyframes mkSpin {
+  0%   { opacity: 1; }
+  100% { opacity: 0.15; }
+}
+
+.mk.bang {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-destructive);
+  color: #ffffff;
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 12px;
+  font-style: normal;
+}
+.mk.bang.sm { flex-basis: 14px; width: 14px; height: 14px; font-size: 9px; }
+
+/* ========================== the note ============================= */
+
+.eai-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px 16px;
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+.eai-note[hidden] { display: none; }
+.eai-note .tx { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+.eai-note .tx b {
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-foreground);
+}
+.eai-note .tx span {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--color-muted-foreground);
+}
+
+/* macOS only: Apple's own installer wants a password and will not take
+   it from a Terminal we refuse to open, so it is asked for here. */
+.admin-note { border-color: var(--color-hairline); background: var(--color-surface-quiet); }
+.admin-field { margin-top: 6px; }
+.admin-note .eai-acts { padding-top: 8px; }
+
+/* ====================== fields and buttons ======================= */
+
+.eai-field { display: flex; flex-direction: column; gap: var(--spacing-2); }
+
+.eai-input, .eai-combo {
+  height: 44px;
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 18px;
+  color: var(--color-foreground);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.eai-input { width: 100%; padding: 0 14px; outline: none; }
+.eai-input::placeholder { color: var(--color-muted-foreground); }
+.eai-input:focus { border-color: var(--color-focus-border); }
+/* Taken from the app that was chosen, not typed. It reads as a value the
+   form is reporting rather than a field waiting for an answer. */
+.eai-input[readonly] { background: var(--color-accent); color: var(--color-muted-foreground); }
+
+.eai-combo { display: flex; align-items: center; padding: 0 3px 0 14px; }
+.eai-combo input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: none;
+  outline: none;
+  background: none;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 16px;
+  /* The answer, not a hint. The prototype greys this, and greyed text
+     next to an empty-looking field is the thing people read as a
+     placeholder — which is what it looked like before the question had
+     two distinct shapes. It only ever holds a path somebody chose. */
+  color: var(--color-foreground);
+}
+
+.eai-inner {
+  flex: none;
+  padding: 9px var(--spacing-4);
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  font-weight: var(--font-weight-medium);
+  line-height: 16px;
+  color: var(--color-foreground);
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.eai-inner:hover { background: var(--color-accent); color: var(--color-foreground); }
+
+.eai-field .loc-start { align-self: flex-start; }
+
+.eai-err { display: flex; align-items: flex-start; gap: 8px; }
+.eai-err[hidden] { display: none; }
+.eai-err span { font-size: 12.5px; line-height: 17px; color: var(--color-primary); }
+.eai-err .mk.bang.sm { margin-top: 1px; }
+.eai-field.shake .eai-input,
+.eai-field.shake .eai-combo { animation: eaiShake 0.36s cubic-bezier(0.36, 0.07, 0.19, 0.97); }
+@keyframes eaiShake {
+  0%, 100% { transform: translateX(0); }
+  15%      { transform: translateX(-5px); }
+  30%      { transform: translateX(4px); }
+  45%      { transform: translateX(-3px); }
+  60%      { transform: translateX(2px); }
+  80%      { transform: translateX(-1px); }
+}
+
+.eai-acts { display: flex; justify-content: flex-end; }
+.eai-acts.gap-2 { gap: var(--spacing-2); }
+.eai-acts.gap-3 { gap: var(--spacing-3); }
+.eai-acts.pt-2 { padding-top: var(--spacing-2); }
+
+.eai-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  padding: 0 20px;
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-foreground);
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.eai-btn:hover { background: var(--color-accent); }
+.eai-btn:active { transform: translateY(0.5px); }
+.eai-btn.primary {
+  background: var(--color-primary);
+  color: var(--color-primary-foreground);
+  border-color: var(--color-primary);
+}
+.eai-btn.primary.ring { border-color: #000000; }
+.eai-btn.primary:hover { background: var(--color-primary-hover); }
+.eai-btn.primary:active { background: var(--color-primary); }
+.eai-btn[disabled], .eai-btn.off {
+  background: var(--color-accent);
+  border-color: var(--color-border);
+  color: var(--color-muted-foreground);
+  cursor: default;
+}
+.eai-btn[disabled]:hover, .eai-btn.off:hover { background: var(--color-accent); }
+.eai-btn.big { height: 52px; padding: 0 28px; font-size: 15px; }
+.eai-btn.ghost-quiet { border-color: transparent; color: var(--color-muted-foreground); }
+.eai-btn.ghost-quiet:hover { background: var(--color-accent); color: var(--color-foreground); }
+.eai-btn:focus-visible,
+.eai-input:focus-visible,
+.eai-inner:focus-visible { outline: 2px solid var(--color-ring); outline-offset: 2px; }
+
+/* ===================== the signed-in beat ======================== */
+
+.i3-welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 26px 0 22px;
+  text-align: center;
+}
+.i3-welcome h3 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: var(--font-weight-medium);
+  letter-spacing: -0.025em;
+  color: var(--color-foreground);
+}
+.i3-welcome p {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--color-muted-foreground);
+}
+.i3-welcome p.wide { max-width: 440px; font-size: 14px; line-height: 21px; }
+
+.i3-tick {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--color-tick);
+  color: #ffffff;
+  animation: i3TickIn 0.42s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+.i3-tick svg { width: 26px; height: 26px; }
+.i3-tick svg path {
+  stroke-dasharray: 26;
+  stroke-dashoffset: 26;
+  animation: i3Draw 0.36s 0.16s ease forwards;
+}
+.i3-tick.failed { background: var(--color-destructive); }
+/* Waiting on the browser: the same circle, holding the spinner instead of
+   a tick it has not earned yet. */
+.i3-tick.waiting { background: var(--color-accent); animation: none; }
+.i3-tick.waiting .mk.busy { flex: none; width: 26px; height: 26px; min-width: 26px; }
+.i3-tick.waiting .mk.busy s { width: 2.2px; height: 6.5px; margin: -11px 0 0 -1.1px; transform-origin: 1.1px 11px; background: var(--color-muted-foreground); }
+.i3-tick.failed svg path { animation: none; stroke-dashoffset: 0; }
+@keyframes i3TickIn {
+  from { transform: scale(0.5); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+@keyframes i3Draw { to { stroke-dashoffset: 0; } }
+
+.i3-welcome-acts {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  /* Further from the sentence it answers than that sentence is from its
+     own title — the block reads as one thing, then what to do about it. */
+  margin-top: 10px;
+}
+.i3-welcome-acts[hidden] { display: none; }
+.i3-welcome-acts .eai-acts { justify-content: center; }
+.i3-welcome-fine {
+  margin: 0;
+  max-width: 380px;
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--color-muted-foreground);
+}
+
+/* ================== set up, revealed downwards =================== */
+
+.i3-steps { display: flex; flex-direction: column; gap: 20px; }
+.i3-step { display: flex; flex-direction: column; gap: 12px; }
+.i3-step[hidden] { display: none; }
+.i3-step.i3-in { animation: i3StepIn 0.34s cubic-bezier(0.2, 0.7, 0.2, 1); }
+@keyframes i3StepIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.i3-step-head { display: flex; align-items: flex-start; gap: 0; }
+.i3-step-head .tx { display: flex; flex-direction: column; gap: 3px; }
+.i3-step-head b {
+  font-size: 15px;
+  font-weight: var(--font-weight-medium);
+  line-height: 20px;
+  color: var(--color-foreground);
+}
+.i3-step-head span {
+  font-size: 12.5px;
+  line-height: 17px;
+  color: var(--color-muted-foreground);
+}
+/* The numeral is a tick the moment the question is answered — and the
+   prototype hides it entirely, because the answer sits under its own
+   heading and a tick saying "answered" reports something already on
+   screen. Kept in the markup so the reveal can be read by tests. */
+.i3-num { display: none; }
+.i3-step.answered .i3-step-head span { color: var(--color-muted-foreground); }
+
+.i3-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.eai-btn.i3-nav { height: 32px; gap: 6px; padding: 0 12px; font-size: 13px; }
+.eai-btn.i3-nav svg { width: 14px; height: 14px; flex: none; }
+/* The chevron sits closer to the edge than the word does, on whichever
+   side it is on. */
+.eai-btn.i3-nav svg:first-child { margin-left: -3px; }
+.eai-btn.i3-nav svg:last-child { margin-right: -3px; }
+
+/* ==================== choosing a harness ========================= */
+
+.i4-list[hidden] { display: none; }
+
+.i4-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 11px 16px 7px;
+  background: var(--color-surface-quiet);
+  border-bottom: 1px solid var(--color-border);
+}
+.i4-group b {
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--color-muted-foreground);
+}
+.i4-group span { font-size: 12px; line-height: 16px; font-weight: 400; color: var(--color-quiet); }
+
+.i4-pick { display: block; }
+.i4-pick .i4-row:focus-visible { outline: none; }
+/* The divider separates one option from the next, so it belongs to the
+   option — not to the row inside it.
+
+   The prototype draws it on the row, which means an open option gets a
+   line between its own title and its own explanation, and none between
+   itself and the option below. The line then reads as a boundary
+   between two things that are one thing, and its absence reads as two
+   things that are one. Moving it to the wrapper puts it under the whole
+   option, alert and all, which is where a list divider goes. */
+.i4-list .i4-pick { border-bottom: 1px solid var(--color-border); }
+.i4-list .i4-pick:last-child { border-bottom: none; }
+.i4-list .i4-pick .i4-row { border-bottom: none; }
+
+/* --- the round trip, as three steps -----------------------------
+
+   Numbered, and hung off the option they belong to. The left edge is
+   44px: the row is 16px of padding, a 16px mark, a 12px gap — which
+   puts the tile at 44, and the numbers in the tile's column. That is
+   what makes the block read as belonging to the row above it rather
+   than starting a new one, and it is measured from the row rather than
+   guessed. */
+.i4-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0 16px 14px 44px;
+  list-style: none;
+}
+.i4-steps[hidden] { display: none; }
+.i4-steps li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+}
+.i4-steps .n {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--color-hairline);
+  border-radius: 50%;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--color-muted-foreground);
+}
+.i4-steps .tx {
+  flex: 1;
+  min-width: 0;
+  font-size: 13.5px;
+  line-height: 18px;
+  color: var(--color-foreground);
+}
+/* Numbered by the list, not by the markup: an <ol> already counts, and
+   a number typed into each item is a number that can be wrong. */
+.i4-steps { counter-reset: step; }
+.i4-steps li { counter-increment: step; }
+.i4-steps .n::before { content: counter(step); }
+
+.i4-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin: 0;
+  padding: 11px 16px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--color-border);
+  font-family: var(--font-sans);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.i4-row:last-child { border-bottom: none; }
+.i4-row:hover { background: var(--color-accent); }
+.i4-row .mark {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--color-border);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+}
+.i4-row.on .mark { border: none; background: var(--color-primary); }
+.i4-row .mark svg { width: 9px; height: 9px; opacity: 0; }
+.i4-row.on .mark svg { opacity: 1; }
+.i4-row .tile {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+}
+.i4-row .tile svg { width: 14px; height: 14px; }
+/* The brand colours live here rather than in a style attribute written
+   into innerHTML: the app runs under default-src 'self', which refuses
+   inline styles, and a tile that is coloured in a plain browser and grey
+   in the signed build is the worst kind of difference to find late. */
+.i4-row .tile[data-tile="vscode"] { background: #0065a9; }
+.i4-row .tile[data-tile="copilot"] { background: #0d1117; }
+.i4-row .tile[data-tile="claude"] { background: #d97757; }
+.i4-row .tile[data-tile="codex"] { background: #0b0b0d; }
+.i4-row .tile[data-tile="gemini"] { background: #4285f4; }
+.i4-row .tile[data-tile="grok"] { background: #111111; }
+.i4-row .tile[data-tile="other"] { background: #525252; }
+.i4-row .nm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  line-height: 18px;
+  color: var(--color-foreground);
+}
+/* Not here yet, and not chosen: the name steps back. Choosing it brings
+   it forward — a row you have picked is the subject of the screen, and a
+   subject in the same grey as the things you did not pick is a screen
+   that has not registered the choice. */
+.i4-row.missing .nm { color: var(--color-muted-foreground); }
+.i4-row.on .nm { color: var(--color-foreground); font-weight: var(--font-weight-semibold); }
+
+.i4-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 16px;
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-muted-foreground);
+}
+.i4-alert[hidden] { display: none; }
+.i4-alert > svg { width: 16px; height: 16px; flex: none; margin-top: 1px; }
+.i4-alert .tx { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
+.i4-alert .tx b {
+  font-size: 14px;
+  font-weight: var(--font-weight-medium);
+  line-height: 18px;
+  letter-spacing: -0.01em;
+  color: var(--color-foreground);
+}
+.i4-alert .tx span { font-size: 13px; line-height: 19px; color: var(--color-muted-foreground); }
+.i4-alert .tx code { font-family: var(--font-mono); font-size: 12.5px; color: var(--color-foreground); }
+
+.i4-wait {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+.i4-wait[hidden] { display: none; }
+.i4-wait .mk.busy { margin-top: 1px; }
+.i4-wait .tx { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+.i4-wait .tx b {
+  font-size: 14px;
+  font-weight: var(--font-weight-medium);
+  line-height: 18px;
+  color: var(--color-foreground);
+}
+.i4-wait .tx span { font-size: 13px; line-height: 18px; color: var(--color-muted-foreground); }
+
+/* ======================== the hand-off =========================== */
+
+.i4-eai { display: flex; flex-direction: column; gap: 10px; }
+.i4-eai-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--color-accent);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+}
+.i4-eai-note .tx { display: flex; flex-direction: column; gap: 3px; }
+.i4-eai-note .tx b {
+  font-size: 13.5px;
+  font-weight: var(--font-weight-semibold);
+  line-height: 19px;
+  color: var(--color-foreground);
+}
+.i4-eai-note .tx > span { font-size: 12.5px; line-height: 18px; color: var(--color-muted-foreground); }
+.i4-eai code {
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-foreground);
+}
+.i4-eai-video { display: block; }
+
+/* The drawn player. Not a screen recording: a real one would date the
+   moment any of these tools changes its chrome, and this has to
+   survive that. */
+.eai-vid {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--color-background);
+}
+.eai-vid-stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 214px;
+  padding: 18px;
+  background: var(--color-accent);
+  cursor: pointer;
+}
+.eai-vid-stage.playing { cursor: default; }
+.eai-vid-win {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 460px;
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: 9px;
+  overflow: hidden;
+  box-shadow: 0 10px 30px -18px rgba(16, 24, 40, 0.5);
+}
+.eai-vid-bar {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  flex: none;
+  padding: 0 10px;
+  background: var(--color-accent);
+  border-bottom: 1px solid var(--color-border);
+}
+.eai-vid-bar i { width: 7px; height: 7px; border-radius: 999px; background: #d4d4d8; }
+.eai-vid-title {
+  margin-left: 8px;
+  font-size: 11px;
+  color: var(--color-muted-foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.eai-vid-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 78px;
+  padding: 14px 13px;
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+}
+.eai-vid-line { display: flex; align-items: center; gap: 8px; }
+.eai-vid-line em { font-style: normal; color: var(--color-muted-foreground); }
+.eai-vid-line b { font-weight: 500; color: var(--color-foreground); }
+.eai-vid-caret {
+  width: 7px;
+  height: 16px;
+  background: var(--color-foreground);
+  text-decoration: none;
+  animation: eai-vid-blink 1s step-end infinite;
+}
+.eai-vid-caret.flash { animation: none; opacity: 1; }
+@keyframes eai-vid-blink { 50% { opacity: 0; } }
+.eai-vid-ok { font-family: var(--font-sans); font-size: 12.5px; color: #166534; }
+.eai-vid-play {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border: none;
+  border-radius: 999px;
+  background: var(--color-foreground);
+  color: #ffffff;
+  cursor: pointer;
+  box-shadow: 0 8px 24px -8px rgba(16, 24, 40, 0.6);
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+.eai-vid-play svg { width: 24px; height: 24px; margin-left: 2px; }
+.eai-vid-stage:hover .eai-vid-play { transform: scale(1.06); }
+.eai-vid-stage.playing .eai-vid-play { opacity: 0; pointer-events: none; }
+.eai-vid-play:focus-visible { outline: 2px solid var(--color-ring); outline-offset: 3px; }
+.eai-vid-play.replay { right: 14px; bottom: 14px; width: 38px; height: 38px; opacity: 0.9; }
+.eai-vid-play.replay svg { width: 16px; height: 16px; }
+.eai-vid-ft {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 12px 14px 14px;
+  background: var(--color-background);
+}
+.eai-vid-caption { font-size: 13px; line-height: 18px; color: var(--color-foreground); }
+.eai-vid-track { height: 3px; border-radius: 999px; background: var(--color-border); overflow: hidden; }
+.eai-vid-track i { display: block; height: 100%; width: 0; background: var(--color-foreground); }
+
+/* ========================== built ================================ */
+
+.eai-done {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  padding: 40px;
+  background: rgba(9, 9, 11, 0.5);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.eai-done.on { opacity: 1; }
+.eai-done[hidden] { display: none !important; }
+.eai-done-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: min(420px, 100%);
+  padding: 32px 30px 28px;
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 30px 60px -20px rgba(16, 24, 40, 0.5);
+  text-align: center;
+}
+.eai-done-card .tick {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 999px;
+  background: #dcfce7;
+  color: #166534;
+}
+.eai-done-card .tick svg { width: 24px; height: 24px; }
+.eai-done-card h3 {
+  margin: 4px 0 0;
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: -0.5px;
+  color: var(--color-foreground);
+}
+.eai-done-card p { margin: 0; font-size: 14px; line-height: 22px; color: var(--color-muted-foreground); }
+.eai-done-card p b { color: var(--color-foreground); font-weight: 600; }
+.eai-done-card .eai-acts { margin-top: 8px; }
+
+/* ===================== the record, shut ========================== */
+
+.eai-diag {
+  flex: none;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-surface-quiet);
+  font-size: 12px;
+  color: var(--color-muted-foreground);
+}
+/* The strip spans the window — it is the app's own footer — but what is
+   written on it lines up with the content column above, so its two ends
+   are not stranded at the edges of a wide window. */
+.eai-diag summary,
+.eai-diag-log,
+.eai-diag-foot {
+  width: 100%;
+}
+.eai-diag summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 34px;
+  cursor: pointer;
+  list-style: none;
+}
+.eai-diag summary::-webkit-details-marker { display: none; }
+.eai-diag summary::marker { content: ""; }
+.eai-diag summary > span:first-child::before { content: "\25B8"; display: inline-block; width: 14px; }
+.eai-diag[open] summary > span:first-child::before { content: "\25BE"; }
+.eai-diag-status { color: var(--color-quiet); }
+.eai-diag-log {
+  display: grid;
+  gap: 4px;
+  max-height: 132px;
+  overflow: auto;
+  margin: 0;
+  padding: 4px 34px 6px;
+  list-style: none;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.eai-diag-log li { display: grid; grid-template-columns: 62px 1fr; gap: 8px; }
+.eai-diag-log time { color: var(--color-quiet); }
+.eai-diag-log li[data-kind="error"] span { color: var(--color-destructive); }
+.eai-diag-foot { margin-block: 0; padding: 0 34px 10px; font-size: 11px; color: var(--color-quiet); }
+
+/* ================= two-column art panel ========================== */
+
+.setup-split-foot {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
+  padding: 0 30px 24px;
+  text-align: center;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
+  pointer-events: auto;
+}
+
+.setup-split-foot a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.setup-split-foot a:hover {
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.setup-split-foot span {
+  margin: 0 10px;
+  opacity: 0.45;
+  text-decoration: none;
+}
+
+.setup-split-art {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  min-width: 0;
+  background: #0A180D;
+}
+
+.setup-split-art[data-art="dither"] {
+  background: #301C2A;
+}
+
+.setup-shader {
+  position: absolute;
+  inset: 0;
+}
+
+.setup-shader > div {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+.setup-shader > div.on {
+  opacity: 1;
+}
+
+.setup-art-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.setup-art-center img {
+  display: block;
+  width: min(300px, 62%);
+  height: auto;
+  filter: brightness(0) invert(1);
+  opacity: 0.88;
+}
+
+.setup-art-mark {
+  position: absolute;
+  right: 30px;
+  bottom: 56px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+}
+
+.setup-art-mark img {
+  display: block;
+  width: 40px;
+  height: auto;
+  filter: brightness(0) invert(1);
+}
+
+/* --- the door ---------------------------------------------------- */
+
+.setup-start {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 40px;
+  padding: 12px 0 24px;
+  text-align: center;
+}
+
+.setup-start-mark {
+  display: block;
+  width: 168px;
+  max-width: 62%;
+  height: auto;
+  filter: saturate(0) brightness(0.45);
+}
+
+.setup-start-tx {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 40ch;
+}
+
+.setup-start-tx h3 {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  color: var(--color-foreground);
+}
+
+.setup-start-tx p {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.55;
+  color: #858585;
+}
+
+.eai-screen[data-screen="start"] .eai-foot {
+  justify-content: center;
+}
+
+/* --- alternate route, above the bar ------------------------------ */
+
+.setup-alt {
+  margin-top: auto;
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 24px;
+}
+
+.setup-alt + .i3-foot,
+.setup-alt + .eai-foot {
+  margin-top: 0;
+  padding-top: 10px;
+}
+
+.setup-alt .eai-btn.ghost-quiet {
+  height: auto;
+  padding: 0 2px;
+  border: none;
+  background: none;
+  font-size: 13px;
+}
+
+.setup-alt .eai-btn.ghost-quiet:hover {
+  background: none;
+  color: var(--color-foreground);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.i4-step-note {
+  margin: 0;
+  padding: 0 16px 12px 52px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--color-muted-foreground);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .setup-split-art {
+    background: linear-gradient(168deg, #0D3856 0%, #0E3755 46%, #0A180D 100%);
+  }
+  .setup-split-art[data-art="dither"] {
+    background: linear-gradient(168deg, #301C2A 0%, #2A2036 52%, #145788 100%);
+  }
+}
+
+/* ===================== quieter machines ========================== */
+
+@media (prefers-reduced-motion: reduce) {
+  .mk.busy s,
+  .i3-step.i3-in,
+  .i3-tick,
+  .i3-tick svg path,
+  .eai-field.shake .eai-input,
+  .eai-field.shake .eai-combo,
+  .eai-vid-caret { animation: none; }
+  .eai-step { transition: none; }
+  .i3-tick svg path { stroke-dashoffset: 0; }
+  .mk.busy s { opacity: 0.5; }
+}
+
+@media (max-width: 640px) {
+  .eai-body { padding: 20px 20px 22px; }
+  .eai-diag summary, .eai-diag-log, .eai-diag-foot { padding-left: 20px; padding-right: 20px; }
 }

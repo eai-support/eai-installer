@@ -1,0 +1,445 @@
+/* ------------------------------------------------------------------
+   The state machine's own chrome — and nothing else.
+
+   Ported from the prototype's assets/states.css. Everything inside the
+   frame is the app's own stylesheet, loaded unchanged; this file draws
+   the room the app is standing in: a rail of controls on the left, the
+   app in the middle, a line above it saying what you are looking at.
+
+   It is deliberately quiet. The page is a viewer, and a viewer that
+   competes with what it is showing is a viewer that lies about it — so
+   there is no accent colour, nothing coloured that is not a state, and
+   the app is the only thing on the page with a shadow.
+
+   Two deviations from the original, both forced:
+
+   · **System fonts, not Geist.** The original loads it from Google. A
+     review tool that needs the network to look right is one that looks
+     wrong on a plane.
+   · **The frame carries the shadow.** The original puts it on the
+     window it lifts out of /signup. Here the app is in an iframe, which
+     cannot be styled from outside, so the frame wears it instead. Same
+     result, one element further out.
+------------------------------------------------------------------- */
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+}
+
+body.st {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 296px 1fr;
+  background: #ffffff;
+  color: #18181b;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+/* ===================== the rail ================================== */
+
+.st-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+  height: 100vh;
+  padding: 40px 28px 40px 40px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.st-rail::-webkit-scrollbar { width: 0; }
+
+.st-title {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.st-title b {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+}
+.st-title span {
+  font-size: 12.5px;
+  line-height: 18px;
+  color: #8a8a90;
+}
+.st-title a {
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: #8a8a90;
+  text-decoration: none;
+  border-bottom: 1px solid #e4e4e7;
+  align-self: flex-start;
+}
+.st-title a:hover { color: #18181b; border-bottom-color: #18181b; }
+
+/* The one bit of chrome the removed bar was carrying that is worth
+   keeping: that the arrow keys do something. It sits under the control
+   they drive rather than in a bar announcing itself. */
+.rl-note kbd {
+  display: inline-block;
+  min-width: 16px;
+  padding: 1px 4px;
+  border: 1px solid #e4e4e7;
+  border-radius: 4px;
+  background: #ffffff;
+  font-family: inherit;
+  font-size: 11px;
+  line-height: 15px;
+  text-align: center;
+  color: #71717a;
+}
+
+#rail {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.rl-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.rl-label {
+  margin-bottom: 8px;
+  font-size: 11.5px;
+  font-weight: 400;
+  letter-spacing: 0.1px;
+  color: #8a8a90;
+}
+
+.rl-note {
+  max-width: 232px;
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  line-height: 17px;
+  color: #a1a1a8;
+}
+
+/* --- the screen, closed until you want it ------------------------
+
+   Seven names stacked open is the longest thing in the rail and six of
+   its lines are never the answer. A native select keeps the platform's
+   own list — keyboard, type-ahead, and no popover to build — and only
+   the chosen name takes up room. */
+
+.rl-select {
+  width: 100%;
+  margin-top: 2px;
+  padding: 9px 34px 9px 12px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  /* Filled, so it reads as something you open rather than as the heading
+     of the list below it. It is the only control on the page that hides
+     its options, and the fill is what says so. */
+  background: #f4f4f5 no-repeat right 11px center / 12px 12px;
+  /* The chevron, inline so there is no request for it. */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M6 9.5l6 6 6-6' stroke='%2371717a' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  color: #18181b;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.rl-select:hover { background-color: #ebebed; }
+.rl-select:focus-visible {
+  outline: none;
+  border-color: #a1a1aa;
+}
+
+/* --- the stacked list. The chosen one is simply the one you can read,
+       and the rest are still there. ------------------------------- */
+
+.rl-opt {
+  padding: 5px 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 15px;
+  line-height: 22px;
+  letter-spacing: -0.2px;
+  color: #b4b4ba;
+  text-align: left;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+.rl-opt:hover { color: #6e6e76; }
+.rl-opt.on {
+  font-weight: 600;
+  color: #18181b;
+}
+.rl-opt:focus-visible {
+  outline: 2px solid #d4d4d8;
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* --- the failures, with a box in front of each -------------------
+
+   The box carries the whole message: a square means these combine, a
+   circle means they cannot. Same list either way, so the difference is
+   read rather than discovered by clicking. */
+
+.rl-tick {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 6px 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  line-height: 20px;
+  letter-spacing: -0.1px;
+  color: #8a8a90;
+  text-align: left;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+.rl-tick:hover { color: #4b4b52; }
+.rl-tick.on { color: #18181b; font-weight: 500; }
+.rl-tick:focus-visible {
+  outline: 2px solid #d4d4d8;
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.rl-tick .box {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  border: 1.5px solid #d4d4d8;
+  border-radius: 4px;
+  background: #ffffff;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.rl-tick .box.radio { border-radius: 50%; }
+
+.rl-tick .box svg {
+  width: 11px;
+  height: 11px;
+  opacity: 0;
+  transform: scale(0.7);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+/* The circle fills rather than ticks — a tick in a radio is a checkbox
+   wearing the wrong shape. */
+.rl-tick .box.radio svg { display: none; }
+.rl-tick .box.radio::after {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ffffff;
+  transform: scale(0);
+  transition: transform 0.12s ease;
+}
+
+.rl-tick:hover .box { border-color: #a1a1aa; }
+.rl-tick.on .box {
+  border-color: #18181b;
+  background: #18181b;
+}
+.rl-tick.on .box svg { opacity: 1; transform: none; }
+.rl-tick.on .box.radio::after { transform: none; }
+
+/* --- what hangs off a failure ----------------------------------
+
+   Not a group of its own: a group is a question about the state, and
+   this is the detail of an answer already given. Indented to the
+   failure's own text — box plus gap — so the nesting is read rather
+   than inferred. */
+
+.rl-under {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  margin: 2px 0 6px 25px;
+}
+.rl-under .rl-label { margin-bottom: 4px; }
+
+/* --- the pill, for the two-way answers -------------------------
+
+   The prototype fills the track grey and floats a white thumb on it.
+   Grey here is the surface colour and nothing else, so the track is a
+   hairline instead and the chosen answer is the ink one — the same
+   vocabulary the tickboxes already use, and the only two colours on the
+   page that are not text. */
+
+.rl-pill {
+  display: inline-flex;
+  padding: 3px;
+  border: 1px solid #e4e4e7;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+/* A tab group, for a question whose answers are known and will not grow:
+   three platforms, sharing the width equally, so the shape says "these
+   are all of them" where a stacked list says "there may be more". */
+.rl-pill.wide { display: flex; width: 100%; margin-top: 2px; }
+.rl-pill.wide .rl-chip { flex: 1; padding: 7px 6px; text-align: center; }
+
+.rl-chip {
+  padding: 7px 14px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: none;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: #8a8a90;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.rl-chip:hover:not(.on):not(:disabled) { color: #4b4b52; }
+.rl-chip.on {
+  background: #18181b;
+  border-color: #18181b;
+  color: #ffffff;
+}
+.rl-chip:disabled {
+  color: #ccccd2;
+  cursor: default;
+}
+.rl-chip:focus-visible {
+  outline: 2px solid #d4d4d8;
+  outline-offset: 2px;
+}
+
+/* ===================== the stage ================================= */
+
+.st-stage {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 20px;
+  height: 100vh;
+  min-width: 0;
+  padding: 40px 48px 40px 20px;
+  overflow-y: auto;
+}
+
+/* Caption and app share one column and one left edge. The app is the
+   widest thing on the page, so it is what the column is measured from —
+   a caption that starts somewhere else reads as a different page. */
+.st-cap,
+.st-frame {
+  width: min(100%, var(--app-width, 1100px));
+  margin-inline: auto;
+}
+
+.st-cap {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.st-cap b {
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.4px;
+}
+.st-cap span {
+  max-width: 700px;
+  font-size: 13px;
+  line-height: 20px;
+  color: #8a8a90;
+}
+
+/* One window, one size, every state — the height is the prototype's own
+   reasoning, kept here because it is the thing most likely to be
+   "improved" by somebody sizing the window to its content:
+
+     Measured across every state the content runs from 270px to 844px, a
+     574px swing. Sized to its content the window grows and shrinks by
+     more than half its own height as you step through, which reads as a
+     web page reflowing rather than an application running. A window is
+     furniture: it is the size it is, and the content moves inside it.
+
+     720 is chosen so every state fits without scrolling except setup
+     with everything answered, which is the one screen whose content is
+     genuinely accumulating — scrolling there is honest.
+
+   The cost is real and worth naming: sign-in has slack below it. That is
+   what pinning the actions to the bottom edge is for. Fixed height and
+   anchored actions are one decision, not two. */
+.st-frame {
+  position: relative;
+  align-self: start;
+  max-height: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #ffffff;
+  box-shadow: 0 24px 60px -18px rgba(16, 24, 40, 0.28), 0 0 0 1px rgba(16, 24, 40, 0.07);
+}
+
+.st-frame iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+/* The entrance, replayed on every state. Short enough that stepping
+   through seven states in a row does not feel like waiting. */
+.st-frame.st-in { animation: st-in 0.34s cubic-bezier(0.22, 1, 0.36, 1); }
+@keyframes st-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.994); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .st-frame.st-in { animation: none; }
+  .rl-tick .box,
+  .rl-tick .box svg,
+  .rl-tick .box.radio::after { transition: none; }
+}
+
+/* When it does not come up there is nothing to show, so say why.
+
+   The original builds this panel at the moment it is needed. This page
+   ships it hidden, and `display: flex` on a class beats the browser's
+   own rule for [hidden] — so an empty bordered box has been sitting
+   under the app, making the stage scroll for no reason. */
+.st-dead[hidden] { display: none; }
+.st-dead {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 460px;
+  margin: 60px auto;
+  padding: 28px;
+  border: 1px solid #e4e4e7;
+  border-radius: 12px;
+  user-select: text;
+}
+.st-dead b { font-size: 15px; font-weight: 600; }
+.st-dead span { font-size: 13px; line-height: 21px; color: #71717a; }
+.st-dead code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: #f4f4f5;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+
+/* Below this the rail and the app would be fighting for the same room,
+   and the app has to win. */
+@media (max-width: 1080px) {
+  body.st { grid-template-columns: 240px 1fr; }
+  .st-rail { padding: 28px 16px 28px 24px; }
+  .st-stage { padding: 28px 24px 24px 12px; }
+}

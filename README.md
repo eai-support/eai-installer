@@ -40,12 +40,30 @@ hands control to the normal EAI CLI flow.
    option, but its first use still requires GitHub sign-in. If a workspace is
    missing, the installer opens only that provider's fixed official page and
    provides a **Check again** action after installation.
-10. Shows a four-quarter Harvey ball beside every AI workspace. The score
-    measures the completeness of the EAI handoff for a general user: automatic
-    project opening, a prepared first request, EAI/Gofer repository support,
-    and an integrated visual project and chat workspace. The clickable
-    **Recommendation** heading explains the score and keeps it separate from
-    installation status or provider quality.
+10. Groups the AI workspaces into the ones already on this computer and the
+    ones that come from their makers, and says which is which in words. The
+    four-quarter Harvey ball that used to score each workspace has been
+    removed: it scored somebody else's product on the screen where the user
+    picks it, and was read as a quality rating rather than as a measure of how
+    complete the EAI handoff is.
+11. Runs as a state machine of seven screens — Sign in, Signed in, Set up,
+    Creating, Choose a harness, Hand-off, Built — each of which knows the
+    specific ways it can break and how to leave them. The screens and their
+    wording are the same story on macOS, Windows and Linux; only the names of
+    the machine, its file manager and its package manager change.
+
+## Review the screens without installing anything
+
+```bash
+npm run prototype        # then open http://localhost:4321/ and leave it open
+```
+
+Opens every state the setup app can be in — seven screens, ten
+failures, three platforms — in the real app at the real window size,
+with a rail to reach them. It renders `ui/` in a frame rather than
+keeping a copy, so it cannot drift from what ships, and it is outside
+the folder Tauri bundles so it cannot reach a signed build. See
+`prototype/README.md`.
 
 ## Download the installer
 

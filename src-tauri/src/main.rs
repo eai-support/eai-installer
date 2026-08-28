@@ -77,6 +77,36 @@ struct BootstrapSummary {
     detail: String,
 }
 
+/// The browser sign-in link, lifted out of the CLI's own output.
+///
+/// `eai login` prints the URL it is opening and then blocks until the
+/// browser comes home. When the tab is closed, or a proxy eats the
+/// callback, the only thing that can rescue the person in front of the
+/// window is that link — so it is forwarded to the UI the moment it is
+/// printed rather than at the end of a command that may never return.
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SigninUrl {
+    url: String,
+}
+
+/// Whether EAI is reachable from here, and what we tried to reach.
+///
+/// `ok: false` is a claim, and the sign-in screen turns it into a
+/// sentence about the user's network. It is only made when the probe
+/// actually ran and actually failed — a machine with no way to run the
+/// probe reports `checked: false` and is treated as reachable, because
+/// sending somebody to their VPN settings over a missing curl is worse
+/// than letting sign-in discover the truth a moment later.
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Connectivity {
+    ok: bool,
+    checked: bool,
+    host: String,
+    detail: String,
+}
+
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct AiSurface {
@@ -216,6 +246,41 @@ fn emit_summary(app: &AppHandle, step: &str, detail: &str) {
             detail: detail.to_string(),
         },
     );
+}
+
+fn emit_signin_url(app: &AppHandle, url: &str) {
+    let _ = app.emit("bootstrap-signin-url", SigninUrl { url: url.to_string() });
+}
+
+/// The first https:// token on a line, when the line looks like a
+/// sign-in prompt.
+///
+/// Deliberately narrow. Every command in this file streams its output
+/// through here, and forwarding any URL any of them happens to print
+/// would put npm registry addresses and template repositories in front
+/// of somebody as "your sign-in link".
+fn signin_url_in(line: &str) -> Option<String> {
+    let lower = line.to_ascii_lowercase();
+    if !(lower.contains("sign in")
+        || lower.contains("sign-in")
+        || lower.contains("signin")
+        || lower.contains("log in")
+        || lower.contains("login")
+        || lower.contains("authenticate")
+        || lower.contains("authorize")
+        || lower.contains("authorise")
+        || lower.contains("open the following"))
+    {
+        return None;
+    }
+    let start = line.find("https://")?;
+    let url: String = line[start..]
+        .chars()
+        .take_while(|character| !character.is_whitespace() && *character != '"' && *character != '\'')
+        .collect();
+    // Trailing sentence punctuation is not part of an address.
+    let url = url.trim_end_matches(|character| matches!(character, '.' | ',' | ')' | ']' | '>'));
+    if url.len() > "https://".len() { Some(url.to_string()) } else { None }
 }
 
 fn nvm_version_key(path: &Path) -> (u64, u64, u64) {
@@ -578,8 +643,15 @@ where
             if clean.is_empty() {
                 continue;
             }
-            if let (Some((app, step)), Some(summary)) = (progress.as_ref(), safe_build_summary(&clean)) {
-                emit_summary(app, step, summary);
+            if let Some((app, step)) = progress.as_ref() {
+                if let Some(summary) = safe_build_summary(&clean) {
+                    emit_summary(app, step, summary);
+                }
+                if step == "login" {
+                    if let Some(url) = signin_url_in(&clean) {
+                        emit_signin_url(app, &url);
+                    }
+                }
             }
             captured.push(clean);
         }
@@ -1104,6 +1176,82 @@ fn project_directory(parent: &Path, project_name: &str) -> PathBuf {
     } else {
         parent.join(project_name)
     }
+}
+
+/// Where EAI lives, unless this machine has been pointed somewhere else.
+///
+/// The CLI resolves its own regional API URL after sign-in; before
+/// sign-in there is nothing to resolve from, so the probe uses the same
+/// default the CLI falls back to, and honours the same environment
+/// override so a tenant on another region is not told its own network
+/// is broken.
+fn public_api_probe_url() -> String {
+    env::var("BASE_URL_PUBLIC_API")
+        .ok()
+        .filter(|value| value.starts_with("https://"))
+        .unwrap_or_else(|| "https://api.au.myenterprise.ai/public".to_string())
+}
+
+fn probe_host(url: &str) -> String {
+    url.trim_start_matches("https://")
+        .split('/')
+        .next()
+        .unwrap_or(url)
+        .to_string()
+}
+
+/// Can this machine reach EAI at all?
+///
+/// Sign-in is the first thing that needs the network, so this is where a
+/// VPN or a blocked domain shows up — and the sign-in screen would
+/// rather say so before somebody presses a button and watches a browser
+/// open onto nothing.
+///
+/// A non-2xx answer still counts as reachable: the probe is asking
+/// whether packets get there, not whether an unauthenticated GET is
+/// welcome. Only a transport failure — DNS, TLS, refused, timed out —
+/// is reported as unreachable.
+#[tauri::command]
+fn check_connectivity() -> Connectivity {
+    let url = public_api_probe_url();
+    let host = probe_host(&url);
+
+    #[cfg(target_os = "windows")]
+    let attempts: Vec<(&str, Vec<String>)> = vec![
+        ("curl", vec!["--silent".into(), "--show-error".into(), "--head".into(), "--max-time".into(), "8".into(), "--proto".into(), "=https".into(), "--tlsv1.2".into(), url.clone()]),
+        ("powershell", vec!["-NoProfile".into(), "-NonInteractive".into(), "-Command".into(),
+            format!("try {{ [void](Invoke-WebRequest -UseBasicParsing -Method Head -TimeoutSec 8 -Uri '{url}'); exit 0 }} catch {{ if ($_.Exception.Response) {{ exit 0 }} else {{ exit 1 }} }}")]),
+    ];
+    #[cfg(not(target_os = "windows"))]
+    let attempts: Vec<(&str, Vec<String>)> = vec![
+        ("curl", vec!["--silent".into(), "--show-error".into(), "--head".into(), "--max-time".into(), "8".into(), "--proto".into(), "=https".into(), "--tlsv1.2".into(), url.clone()]),
+    ];
+
+    let mut last_error = String::new();
+    for (program, args) in attempts {
+        if version(program, &["--version"]).is_none() && program != "powershell" {
+            continue;
+        }
+        let borrowed = args.iter().map(String::as_str).collect::<Vec<_>>();
+        match run_program(program, &borrowed) {
+            Ok(_) => {
+                return Connectivity { ok: true, checked: true, host, detail: String::new() };
+            }
+            Err(error) => {
+                // curl exits 22 only with --fail, which is not used here, so
+                // any error from this call is a transport error.
+                last_error = clean_process_output(&error);
+            }
+        }
+    }
+
+    if last_error.is_empty() {
+        // Nothing on this machine could run the probe. That is not
+        // evidence of a broken network, and must not be reported as one.
+        return Connectivity { ok: true, checked: false, host, detail: "No way to test the connection from here.".to_string() };
+    }
+
+    Connectivity { ok: false, checked: true, host, detail: last_error }
 }
 
 #[tauri::command]
@@ -1723,6 +1871,14 @@ fn run_bootstrap_sync(app: AppHandle, step: String, project_name: Option<String>
             if !directory.is_dir() {
                 return command_result("init", false, "The app folder could not be created.", Some("Choose a writable parent folder and retry."), None, true);
             }
+            emit_progress(
+                &app,
+                "init",
+                "Folder created",
+                "Created the app folder on this computer.",
+                Some(25),
+                Some(90),
+            );
             let Some(company_tenant_id) = company_tenant_id.filter(|value| !value.trim().is_empty()) else {
                 return command_result("init", false, "Choose a company workspace before creating the app.", Some("Select a company workspace in EAI Setup, then retry."), None, true);
             };
@@ -1741,6 +1897,14 @@ fn run_bootstrap_sync(app: AppHandle, step: String, project_name: Option<String>
                 init_args.extend(["--app-key".to_string(), app_key]);
             }
             let init_args_ref = init_args.iter().map(String::as_str).collect::<Vec<_>>();
+            emit_progress(
+                &app,
+                "init",
+                "Creating the app on EAI",
+                "Waiting for the platform to create the app and download its template.",
+                Some(40),
+                Some(90),
+            );
             match run_program_in_directory_with_progress(&app, "init", "eai", &init_args_ref, Some(&directory)) {
                 Ok((stdout, stderr)) => {
                     emit_progress(
@@ -1917,7 +2081,7 @@ fn local_device_id() -> Result<String, String> {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![detect_environment, run_bootstrap, get_company_tenants, get_company_apps, get_e2e_configuration, verify_e2e_auth, write_e2e_receipt, open_signup, detect_ai_surfaces, start_ai_surface, install_ai_surface, open_project, local_device_id])
+        .invoke_handler(tauri::generate_handler![detect_environment, check_connectivity, run_bootstrap, get_company_tenants, get_company_apps, get_e2e_configuration, verify_e2e_auth, write_e2e_receipt, open_signup, detect_ai_surfaces, start_ai_surface, install_ai_surface, open_project, local_device_id])
         .run(tauri::generate_context!())
         .expect("error while running EAI Setup");
 }
@@ -1934,6 +2098,32 @@ mod tests {
         assert_eq!(usable_home_path(PathBuf::from("relative/home")), None);
         #[cfg(unix)]
         assert_eq!(usable_home_path(PathBuf::from("/Users/example")), Some(PathBuf::from("/Users/example")));
+    }
+
+    /// The sign-in link is forwarded only when the line is about signing
+    /// in. Every command in this file streams through the same reader,
+    /// and an npm registry address presented as "your sign-in link" is
+    /// worse than no link at all.
+    #[test]
+    fn only_sign_in_lines_yield_a_sign_in_link() {
+        assert_eq!(
+            signin_url_in("Open the following URL to sign in: https://login.example.com/device?code=ABCD"),
+            Some("https://login.example.com/device?code=ABCD".to_string())
+        );
+        assert_eq!(
+            signin_url_in("Please authenticate at https://auth.example.com/start."),
+            Some("https://auth.example.com/start".to_string())
+        );
+        assert_eq!(signin_url_in("Cloned from https://github.com/eai-support/eai-app-template.git"), None);
+        assert_eq!(signin_url_in("added 225 packages from https://registry.npmjs.org"), None);
+        assert_eq!(signin_url_in("Sign in with your browser."), None);
+        assert_eq!(signin_url_in("Login at http://insecure.example.com"), None);
+    }
+
+    #[test]
+    fn the_connectivity_probe_names_the_host_it_tried() {
+        assert_eq!(probe_host("https://api.au.myenterprise.ai/public"), "api.au.myenterprise.ai");
+        assert_eq!(probe_host("https://api.eu.myenterprise.ai"), "api.eu.myenterprise.ai");
     }
 
     #[test]
