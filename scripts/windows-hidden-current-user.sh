@@ -13,11 +13,11 @@ windows_hidden_current_user_ps() {
   [[ -n "$script" ]] || return 2
   nonce="$(/usr/bin/uuidgen | /usr/bin/tr -d '-' | /usr/bin/tr '[:upper:]' '[:lower:]')"
   base="C:\\Users\\Public\\eai-hidden-${nonce}"
-  ps_path="${base}.ps1"
-  vbs_path="${base}.vbs"
-  stdout_path="${base}.stdout"
-  stderr_path="${base}.stderr"
-  status_path="${base}.status"
+  ps_path="${base}\\runner.ps1"
+  vbs_path="${base}\\runner.vbs"
+  stdout_path="${base}\\runner.stdout"
+  stderr_path="${base}\\runner.stderr"
+  status_path="${base}\\runner.status"
   payload="$(printf '%s' "$stdin_payload" | /usr/bin/base64 | /usr/bin/tr -d '\n')"
   wrapper="$(printf '%s\n' \
     "\$ErrorActionPreference = 'Stop'" \
@@ -56,6 +56,17 @@ windows_hidden_current_user_ps() {
     "f.MoveFile \"$status_path.tmp\",\"$status_path\"")"
   vbs_base64="$(printf '%s' "$vbs" | /usr/bin/base64 | /usr/bin/tr -d '\n')"
   stage="$(printf '%s\n' \
+    "\$interactiveUser = (Get-CimInstance Win32_ComputerSystem).UserName" \
+    "if ([string]::IsNullOrWhiteSpace(\$interactiveUser)) { throw 'No interactive Windows user is available' }" \
+    "\$interactiveSid = ([Security.Principal.NTAccount]::new(\$interactiveUser)).Translate([Security.Principal.SecurityIdentifier])" \
+    "New-Item -ItemType Directory -Path '$base' -ErrorAction Stop | Out-Null" \
+    "\$acl = [Security.AccessControl.DirectorySecurity]::new()" \
+    "\$acl.SetAccessRuleProtection(\$true, \$false)" \
+    "foreach (\$identity in @('S-1-5-18','S-1-5-32-544',\$interactiveSid.Value)) {" \
+    "  \$rule = [Security.AccessControl.FileSystemAccessRule]::new(\$identity,'FullControl','ContainerInherit,ObjectInherit','None','Allow')" \
+    "  [void]\$acl.AddAccessRule(\$rule)" \
+    "}" \
+    "Set-Acl -LiteralPath '$base' -AclObject \$acl -ErrorAction Stop" \
     "[IO.File]::WriteAllBytes('$ps_path',[Convert]::FromBase64String('$wrapper_base64'))" \
     "[IO.File]::WriteAllBytes('$vbs_path',[Convert]::FromBase64String('$vbs_base64'))" \
     '')"
@@ -80,7 +91,7 @@ windows_hidden_current_user_ps() {
   printf '%s\n' "$output"
   [[ -z "$error_text" ]] || printf '%s\n' "$error_text" >&2
   if [[ "${EAI_WINDOWS_HIDDEN_KEEP_FILES:-0}" != 1 ]]; then
-    printf '%s\n' "Remove-Item -LiteralPath '$ps_path','$vbs_path','$stdout_path','$stderr_path','$status_path' -Force -ErrorAction SilentlyContinue" \
+    printf '%s\n' "Remove-Item -LiteralPath '$base' -Recurse -Force -ErrorAction SilentlyContinue" \
       | prlctl exec "$vm_name" powershell.exe -NoLogo -NoProfile -NonInteractive \
         -InputFormat Text -OutputFormat Text -Command - >/dev/null 2>&1 || true
   fi

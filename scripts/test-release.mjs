@@ -35,6 +35,7 @@ const windowsDiagnosticCleanup = path.join(root, "scripts", "run-windows-diagnos
 const windowsPortalEvidenceFinalizer = path.join(root, "scripts", "finalize-windows-portal-evidence.mjs");
 const windowsDiagnosticCleanupPowerShell = path.join(root, "scripts", "windows-diagnostic-cleanup.ps1");
 const windowsDiagnosticCleanupTest = path.join(root, "scripts", "test-windows-diagnostic-cleanup.sh");
+const windowsDiagnosticCleanupGate = path.join(root, "scripts", "write-windows-diagnostic-cleanup-gate.mjs");
 const keychainE2eLauncher = path.join(root, "scripts", "run-release-e2e-from-keychain.sh");
 const ubuntuGuestCore = path.join(root, "scripts", "ubuntu-guest-test-core.sh");
 const ubuntuGuestSession = path.join(root, "scripts", "ubuntu-guest-session.sh");
@@ -248,8 +249,7 @@ assert.doesNotMatch(macosGuestPreparerSource, /EAI_VM_GUEST_PASSWORD/);
 assert.match(macosGuestPreparerSource, /source "\$ROOT\/scripts\/parallels-macos-current-user[.]sh"/);
 assert.match(macosGuestPreparerSource, /macos_prl_current_user_configure "\$vm_name" "\$guest_user" "\$work_dir"/);
 assert.doesNotMatch(macosGuestPreparerSource, /prlctl exec[^\n]*--current-user/);
-assert.doesNotMatch(macosGuestPreparerSource, /-maxdepth/);
-assert.match(macosGuestPreparerSource, /guest_idempotent \/usr\/bin\/find "\$guest_mount" -type d \| \/usr\/bin\/awk/);
+assert.match(macosGuestPreparerSource, /guest_idempotent \/usr\/bin\/find "\$guest_mount" -mindepth 1 -maxdepth 1 -type d -name '[*][.]app'/);
 assert.match(macosGuestPreparerSource, /application must be at the top level/);
 assert.doesNotMatch(macosGuestPreparerSource, /guest_idempotent \/usr\/bin\/open/);
 assert.match(macosGuestPreparerSource, /The signed-in macOS user's home directory could not be resolved/);
@@ -619,6 +619,11 @@ assert.match(windowsHiddenCurrentUserSource, /payload="\$\(printf '%s' "\$stdin_
 assert.match(windowsHiddenCurrentUserSource, /\[Console\]::SetIn\(\[IO[.]StringReader\]::new\(\$__eaiInput\)\)/);
 assert.match(windowsHiddenCurrentUserSource, /prlctl exec "\$vm_name" --current-user wscript[.]exe "\$vbs_path"/);
 assert.match(windowsHiddenCurrentUserSource, /s[.]Run\(.*powershell[.]exe.*-File/);
+assert.match(windowsHiddenCurrentUserSource, /SetAccessRuleProtection\(\\\$true, \\\$false\)/);
+assert.match(windowsHiddenCurrentUserSource, /'S-1-5-18','S-1-5-32-544',\\\$interactiveSid[.]Value/);
+assert.match(windowsHiddenCurrentUserSource, /'ContainerInherit,ObjectInherit'/);
+assert.match(windowsHiddenCurrentUserSource, /Remove-Item -LiteralPath '\$base' -Recurse/);
+assert.doesNotMatch(windowsHiddenCurrentUserSource, /base="C:\\\\Users\\\\Public\\\\eai-hidden-\$\{nonce\}"[\s\S]*ps_path="\$\{base\}[.]ps1"/);
 assert.doesNotMatch(windowsHiddenCurrentUserSource, /EncodedCommand|Invoke-Expression|ScriptBlock|AddScript|iex\b/i);
 assert.match(
   windowsSystemPayloadPowerShellSource,
@@ -2446,6 +2451,15 @@ const blocked = spawnSync(process.execPath, [runner, "--version", "0.2.0", "--ou
 assert.equal(blocked.status, 1);
 assert.match(blocked.stderr, /EAI_HARNESS_TENANT_ID is required/);
 assert.doesNotMatch(blocked.stderr, /mock/i);
+
+const missingDiagnosticEvidence = spawnSync(process.execPath, [
+  windowsDiagnosticCleanupGate,
+  "--run-dir", path.join(output, "missing-diagnostic-run"),
+  "--confirm-zero-services-workflows-setup",
+], { cwd: root, encoding: "utf8" });
+assert.equal(missingDiagnosticEvidence.status, 1);
+assert.match(missingDiagnosticEvidence.stderr, /^Windows diagnostic cleanup gate failed: Required cleanup evidence is missing, unreadable, or malformed[.]\n$/);
+assert.doesNotMatch(missingDiagnosticEvidence.stderr, /at file:|ENOENT|node:internal/);
 
 const mockVmAdapter = process.platform === "win32"
   ? path.join(process.env.ProgramFiles || "C:\\Program Files", "Git", "usr", "bin", "true.exe")

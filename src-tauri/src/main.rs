@@ -140,8 +140,12 @@ fn validate_ai_surface_inventory(inventory: &AiSurfaceInventory) -> Result<(), S
     {
         if surface.id != *expected_id || surface.kind != *expected_kind {
             return Err(format!(
-                "EAI returned an unexpected AI workspace at position {}.",
-                index + 1
+                "EAI returned AI workspace '{}' ({}) at position {}; expected '{}' ({}).",
+                surface.id,
+                surface.kind,
+                index + 1,
+                expected_id,
+                expected_kind
             ));
         }
     }

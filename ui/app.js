@@ -244,7 +244,8 @@ function aiSurfaceCopy(surface) {
 function aiSurfaceReadyDetail(surface) {
   if (surface?.launchSupport === "launch-only") return "; opens the app only";
   if (surface?.launchSupport === "manual-project") return "; connect the project when it opens";
-  return "; opens this project";
+  if (["project-and-prompt", "project-only"].includes(surface?.launchSupport)) return "; opens this project";
+  return "; verify the project after opening";
 }
 
 function updateAiSurfaceControls(surface) {
@@ -1162,7 +1163,9 @@ async function startAiSurface() {
       ? `${copy.label} opened without a local-project handoff.`
       : surface.launchSupport === "manual-project"
         ? `${copy.label} opened; connect the project in the app.`
-        : `${copy.label} opened with this project.`;
+        : ["project-and-prompt", "project-only"].includes(surface.launchSupport)
+          ? `${copy.label} opened with this project.`
+          : `${copy.label} opened; verify the project before continuing.`;
     setJourneyStage("ai", "done", journeyDetail);
   } catch (error) {
     setJourneyStage("ai", "error", "The selected AI workspace could not be opened.");

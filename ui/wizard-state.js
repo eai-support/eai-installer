@@ -40,7 +40,7 @@
 
   function journeyStageForActivity(activeStep, title) {
     const context = `${activeStep || ""} ${title || ""}`;
-    if (/ai workspace|copilot|antigravity|agy|claude|chatgpt|codex|grok/i.test(context)) return "ai";
+    if (/ai workspace|copilot|antigravity|\bagy\b|claude|chatgpt|codex|grok/i.test(context)) return "ai";
     if (/sign[ -]?in|login|signup|account/i.test(context)) return "signin";
     if (/company workspace|\bapp\b|project|folder|tenant/i.test(context)) return "app";
     if (/eai[ -]?cli/i.test(context)) return "eai-cli";
@@ -246,7 +246,10 @@
     if (surface?.launchSupport === "manual-project") {
       return `${label} is open. Complete sign-in and choose this project folder to start building.`;
     }
-    return `${label} is open with this project. Complete sign-in if requested to start building.`;
+    if (["project-and-prompt", "project-only"].includes(surface?.launchSupport)) {
+      return `${label} is open with this project. Complete sign-in if requested to start building.`;
+    }
+    return `${label} is open, but its project handoff mode is unknown. Confirm the project before you start building.`;
   }
 
   root.EAIWizard = {

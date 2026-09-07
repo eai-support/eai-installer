@@ -117,6 +117,9 @@ for (const step of ["homebrew", "git", "node", "eai-cli", "login", "init", "star
 for (const value of ["detect_ai_surfaces", "start_ai_surface", "install_ai_surface", "AiSurfaceInventory", "eai", "start", "--check"]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing AI workspace handoff: ${value}`);
 }
+if (!rust.includes("at position {}; expected '{}' ({})")) {
+  throw new Error("Tauri adapter AI inventory mismatch does not report expected and observed surface details");
+}
 for (const value of ["get_company_tenants", "get_company_apps", "list_company_apps", "app", "tenant", "list", "--format", "json", "directMembership", "app_key", "--app-key"]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing company workspace discovery: ${value}`);
 }

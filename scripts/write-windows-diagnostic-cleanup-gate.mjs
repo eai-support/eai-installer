@@ -12,6 +12,10 @@ function fail(message) {
   process.exit(1);
 }
 
+process.on("uncaughtException", () => {
+  fail("Required cleanup evidence is missing, unreadable, or malformed.");
+});
+
 const args = process.argv.slice(2);
 let runDirInput = "";
 let confirmed = false;
@@ -51,7 +55,11 @@ const readSafeJson = (name) => {
   const target = path.join(windowsDir, name);
   const stat = fs.lstatSync(target);
   if (!stat.isFile() || stat.isSymbolicLink()) fail(`${name} is missing or unsafe.`);
-  return JSON.parse(fs.readFileSync(target, "utf8"));
+  try {
+    return JSON.parse(fs.readFileSync(target, "utf8"));
+  } catch {
+    fail(`${name} is unreadable or malformed.`);
+  }
 };
 const fileEvidence = (name, minimumMtime) => {
   const target = path.join(windowsDir, name);

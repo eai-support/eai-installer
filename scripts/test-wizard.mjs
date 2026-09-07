@@ -36,6 +36,12 @@ if (wizard.journeyStageForActivity("git", "Apple Software Update is installing G
 if (wizard.journeyStageForActivity(null, "Creating your EAI app") !== "app") {
   throw new Error("wizard does not recognise the explicit app-creation stage");
 }
+if (wizard.journeyStageForActivity(null, "Preparing strategy notes") === "ai") {
+  throw new Error("wizard mistakes an agy substring for the Antigravity CLI command");
+}
+if (wizard.journeyStageForActivity(null, "Opening agy") !== "ai") {
+  throw new Error("wizard does not recognise the standalone Antigravity CLI command");
+}
 if (wizard.initButtonLabel(null, false) !== "Create and initialise app" || wizard.initButtonLabel("existing-app", false) !== "Use app and initialise project") {
   throw new Error("wizard app action labels are wrong");
 }
@@ -174,6 +180,10 @@ if (!launchOnlyMessage.includes("did not hand off the local project") || launchO
 const manualProjectMessage = wizard.aiSurfaceCompletionMessage({ launchSupport: "manual-project" }, "Antigravity");
 if (!manualProjectMessage.includes("choose this project folder")) {
   throw new Error("wizard must explain manual project selection");
+}
+const unknownHandoffMessage = wizard.aiSurfaceCompletionMessage({ launchSupport: "future-mode" }, "Future AI");
+if (!unknownHandoffMessage.includes("handoff mode is unknown") || unknownHandoffMessage.includes("open with this project")) {
+  throw new Error("wizard must not claim a project handoff for an unknown launch-support mode");
 }
 
 console.log("wizard state tests ok");
