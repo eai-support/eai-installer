@@ -6,6 +6,10 @@ use std::env;
 use std::fs;
 use std::fs::OpenOptions;
 use std::io::{BufRead, BufReader, Read, Write};
+#[cfg(unix)]
+use std::os::unix::fs::OpenOptionsExt;
+#[cfg(target_os = "windows")]
+use std::os::windows::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 #[cfg(target_os = "windows")]
@@ -86,6 +90,7 @@ struct AiSurface {
     kind: String,
     install_url: String,
     launch_support: String,
+    capabilities: Vec<String>,
     installed: bool,
     recommended: bool,
     previously_used: bool,
@@ -102,6 +107,61 @@ struct AiSurfaceInventory {
     preferred_surface: Option<String>,
     recommended_surface: Option<String>,
     surfaces: Vec<AiSurface>,
+}
+
+const EXPECTED_AI_SURFACES: [(&str, &str); 11] = [
+    ("vscode-copilot", "editor"),
+    ("copilot-desktop", "desktop"),
+    ("antigravity-desktop", "desktop"),
+    ("claude-desktop", "desktop"),
+    ("codex-desktop", "desktop"),
+    ("grok-bot", "desktop"),
+    ("copilot-cli", "cli"),
+    ("antigravity-cli", "cli"),
+    ("claude-cli", "cli"),
+    ("codex-cli", "cli"),
+    ("grok-cli", "cli"),
+];
+
+fn validate_ai_surface_inventory(inventory: &AiSurfaceInventory) -> Result<(), String> {
+    if inventory.surfaces.len() != EXPECTED_AI_SURFACES.len() {
+        return Err(format!(
+            "EAI returned {} AI workspaces; this setup release requires exactly {}.",
+            inventory.surfaces.len(),
+            EXPECTED_AI_SURFACES.len()
+        ));
+    }
+
+    for (index, (surface, (expected_id, expected_kind))) in inventory
+        .surfaces
+        .iter()
+        .zip(EXPECTED_AI_SURFACES.iter())
+        .enumerate()
+    {
+        if surface.id != *expected_id || surface.kind != *expected_kind {
+            return Err(format!(
+                "EAI returned an unexpected AI workspace at position {}.",
+                index + 1
+            ));
+        }
+    }
+
+    for selected_id in [
+        inventory.preferred_surface.as_deref(),
+        inventory.recommended_surface.as_deref(),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        if !EXPECTED_AI_SURFACES
+            .iter()
+            .any(|(expected_id, _)| *expected_id == selected_id)
+        {
+            return Err("EAI returned an unknown selected AI workspace.".to_string());
+        }
+    }
+
+    Ok(())
 }
 
 #[derive(Deserialize, Serialize)]
@@ -133,7 +193,7 @@ const EAI_SIGNUP_URL: &str = "https://www.enterpriseaigroup.com/signup/developer
 // release. The installer updates an older CLI during bootstrap, but local
 // readiness must not depend on a live npm metadata request: an offline check
 // must distinguish "not compatible yet" from "not installed" deterministically.
-const MIN_EAI_CLI_VERSION: (u64, u64, u64) = (3, 15, 8);
+const MIN_EAI_CLI_VERSION: (u64, u64, u64) = (3, 15, 10);
 const MIN_NODE_MAJOR_VERSION: u64 = 24;
 
 fn usable_home_path(path: PathBuf) -> Option<PathBuf> {
@@ -1081,6 +1141,102 @@ fn verify_e2e_auth() -> Result<(), String> {
         .map_err(|error| format!("The saved EAI sign-in could not be verified: {error}"))
 }
 
+#[cfg(target_os = "windows")]
+fn replace_file_atomically(source: &Path, destination: &Path) -> Result<(), String> {
+    const MOVEFILE_REPLACE_EXISTING: u32 = 0x1;
+    const MOVEFILE_WRITE_THROUGH: u32 = 0x8;
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn MoveFileExW(
+            existing_file_name: *const u16,
+            new_file_name: *const u16,
+            flags: u32,
+        ) -> i32;
+    }
+
+    let source = source
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect::<Vec<_>>();
+    let destination = destination
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect::<Vec<_>>();
+    let replaced = unsafe {
+        MoveFileExW(
+            source.as_ptr(),
+            destination.as_ptr(),
+            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+        )
+    };
+    if replaced == 0 {
+        return Err(std::io::Error::last_os_error().to_string());
+    }
+    Ok(())
+}
+
+#[cfg(not(target_os = "windows"))]
+fn replace_file_atomically(source: &Path, destination: &Path) -> Result<(), String> {
+    fs::rename(source, destination).map_err(|error| error.to_string())
+}
+
+fn write_e2e_receipt_atomically(path: &Path, content: &[u8]) -> Result<(), String> {
+    if !path.is_absolute() {
+        return Err("The E2E receipt path must be absolute.".to_string());
+    }
+    let file_name = path
+        .file_name()
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| "The E2E receipt path has no file name.".to_string())?;
+    let parent = path
+        .parent()
+        .filter(|value| !value.as_os_str().is_empty())
+        .ok_or_else(|| "The E2E receipt path has no parent directory.".to_string())?;
+    fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    let canonical_parent = fs::canonicalize(parent).map_err(|error| error.to_string())?;
+    if !canonical_parent.is_dir() {
+        return Err("The E2E receipt parent is not a directory.".to_string());
+    }
+    let destination = canonical_parent.join(file_name);
+    if let Ok(metadata) = fs::symlink_metadata(&destination) {
+        if metadata.file_type().is_symlink() || !metadata.is_file() {
+            return Err("The E2E receipt destination is not a regular file.".to_string());
+        }
+    }
+
+    let temporary = canonical_parent.join(format!(
+        ".{}.{}.tmp",
+        file_name.to_string_lossy(),
+        Uuid::new_v4()
+    ));
+    let result = (|| {
+        let mut options = OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        options.mode(0o600);
+        let mut file = options.open(&temporary).map_err(|error| error.to_string())?;
+        file.write_all(content).map_err(|error| error.to_string())?;
+        file.flush().map_err(|error| error.to_string())?;
+        file.sync_all().map_err(|error| error.to_string())?;
+        drop(file);
+        replace_file_atomically(&temporary, &destination)?;
+        #[cfg(unix)]
+        if let Ok(directory) = fs::File::open(&canonical_parent) {
+            // The receipt file itself is already synchronized. Some supported
+            // Unix filesystems do not allow fsync on directories, so this
+            // additional rename-durability barrier is best effort.
+            let _ = directory.sync_all();
+        }
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&temporary);
+    }
+    result
+}
+
 #[tauri::command]
 fn write_e2e_receipt(receipt_file: String, receipt: serde_json::Value) -> Result<(), String> {
     if env::var("EAI_SETUP_E2E").ok().as_deref() != Some("1") {
@@ -1090,11 +1246,8 @@ fn write_e2e_receipt(receipt_file: String, receipt: serde_json::Value) -> Result
     if path.as_os_str().is_empty() {
         return Err("The E2E receipt path is empty.".to_string());
     }
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
     let content = serde_json::to_string_pretty(&receipt).map_err(|error| error.to_string())?;
-    fs::write(path, format!("{content}\n")).map_err(|error| error.to_string())
+    write_e2e_receipt_atomically(&path, format!("{content}\n").as_bytes())
 }
 
 fn project_directory(parent: &Path, project_name: &str) -> PathBuf {
@@ -1850,14 +2003,18 @@ fn open_signup() -> Result<String, String> {
 
 #[tauri::command]
 fn detect_ai_surfaces(directory: String) -> Result<AiSurfaceInventory, String> {
-    let (stdout, stderr) = run_program("eai", &["start", &directory, "--check", "--format", "json"])?;
+    let (stdout, stderr) = run_program(
+        "eai",
+        &["start", &directory, "--check", "--format", "json", "--contract-version", "v2"],
+    )?;
     let inventory: AiSurfaceInventory = serde_json::from_str(&stdout).map_err(|error| {
         let detail = if stderr.is_empty() { stdout } else { stderr };
         format!("EAI could not read the installed AI workspaces: {error}. {detail}")
     })?;
-    if inventory.contract_version != "eai.ai-surfaces/v1" {
+    if inventory.contract_version != "eai.ai-surfaces/v2" {
         return Err(format!("EAI returned an unsupported AI workspace contract: {}", inventory.contract_version));
     }
+    validate_ai_surface_inventory(&inventory)?;
     Ok(inventory)
 }
 
@@ -1956,6 +2113,65 @@ mod tests {
         assert!(output.contains("first"));
         assert!(output.contains("invalid-�-line"));
         assert!(output.contains("last"));
+    }
+
+    #[test]
+    fn e2e_receipt_write_atomically_replaces_a_regular_file() {
+        let directory = env::temp_dir().join(format!(
+            "eai-setup-receipt-test-{}",
+            Uuid::new_v4()
+        ));
+        fs::create_dir(&directory).expect("receipt test directory should be created");
+        let receipt = directory.join("receipt.json");
+
+        write_e2e_receipt_atomically(&receipt, b"{\"status\":\"checkpoint\"}\n")
+            .expect("creation checkpoint should be written");
+        write_e2e_receipt_atomically(&receipt, b"{\"status\":\"passed\"}\n")
+            .expect("final receipt should atomically replace the checkpoint");
+
+        assert_eq!(
+            fs::read_to_string(&receipt).expect("receipt should remain readable"),
+            "{\"status\":\"passed\"}\n"
+        );
+        assert_eq!(
+            fs::read_dir(&directory)
+                .expect("receipt directory should be readable")
+                .count(),
+            1,
+            "no same-directory temporary receipt should remain"
+        );
+        fs::remove_dir_all(directory).expect("receipt test directory should be removed");
+    }
+
+    #[test]
+    fn e2e_receipt_write_rejects_relative_and_symlink_targets() {
+        assert_eq!(
+            write_e2e_receipt_atomically(Path::new("relative-receipt.json"), b"{}\n"),
+            Err("The E2E receipt path must be absolute.".to_string())
+        );
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::symlink;
+            let directory = env::temp_dir().join(format!(
+                "eai-setup-receipt-symlink-test-{}",
+                Uuid::new_v4()
+            ));
+            fs::create_dir(&directory).expect("receipt symlink test directory should be created");
+            let real = directory.join("real.json");
+            let receipt = directory.join("receipt.json");
+            fs::write(&real, "unchanged\n").expect("symlink target should be created");
+            symlink(&real, &receipt).expect("receipt symlink should be created");
+            assert_eq!(
+                write_e2e_receipt_atomically(&receipt, b"changed\n"),
+                Err("The E2E receipt destination is not a regular file.".to_string())
+            );
+            assert_eq!(
+                fs::read_to_string(&real).expect("symlink target should remain readable"),
+                "unchanged\n"
+            );
+            fs::remove_dir_all(directory).expect("receipt symlink test directory should be removed");
+        }
     }
 
     #[test]

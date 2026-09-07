@@ -148,11 +148,14 @@ const expectedRecommendationScores = {
   "vscode-copilot": 4,
   "copilot-cli": 3,
   "copilot-desktop": 2,
-  "claude-desktop": 2,
+  "antigravity-desktop": 2,
+  "antigravity-cli": 3,
+  "claude-desktop": 4,
   "claude-cli": 3,
   "codex-desktop": 3,
   "codex-cli": 3,
-  "grok-cli": 1,
+  "grok-bot": 1,
+  "grok-cli": 3,
 };
 for (const [surfaceId, score] of Object.entries(expectedRecommendationScores)) {
   const recommendation = wizard.aiSurfaceRecommendation(surfaceId);
@@ -161,5 +164,16 @@ for (const [surfaceId, score] of Object.entries(expectedRecommendationScores)) {
   }
 }
 if (wizard.aiSurfaceRecommendation("unknown").score !== 0) throw new Error("wizard unknown AI surface must not receive a recommendation score");
+if (wizard.aiSurfaceRecommendation({ id: "claude-desktop", launchSupport: "manual-project" }).score !== 2) {
+  throw new Error("wizard must score detected launch support rather than a stale catalog default");
+}
+const launchOnlyMessage = wizard.aiSurfaceCompletionMessage({ launchSupport: "launch-only" }, "Grok Bot");
+if (!launchOnlyMessage.includes("did not hand off the local project") || launchOnlyMessage.includes("choose this project folder")) {
+  throw new Error("wizard must not describe a launch-only app as a project handoff");
+}
+const manualProjectMessage = wizard.aiSurfaceCompletionMessage({ launchSupport: "manual-project" }, "Antigravity");
+if (!manualProjectMessage.includes("choose this project folder")) {
+  throw new Error("wizard must explain manual project selection");
+}
 
 console.log("wizard state tests ok");

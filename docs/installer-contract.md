@@ -51,7 +51,9 @@ commands.
 - Gofer and the app template are fetched by `eai init`, so the CLI's supported
   provenance and compatibility checks remain in charge.
 - Supported AI workspaces are detected through `eai start --check --format
-  json`. Detection reads installed command and application metadata only.
+  json --contract-version v2`. Detection reads installed command and
+  application metadata only. Explicit negotiation lets the EAI CLI keep its
+  v1 default for compatibility with EAI Setup 0.3.19 during the rollout.
 - The first use asks the user which ready AI workspace to use. Later uses may
   preselect the last workspace that opened successfully, while still allowing
   the user to switch.
@@ -59,8 +61,32 @@ commands.
   separate choices. The app requires the user to sign in and connect the local
   project; the CLI is the terminal/headless installation option but still
   requires first-use GitHub sign-in; VS Code requires the Copilot extension.
+- Google Antigravity 2.0 desktop and Antigravity CLI (`agy`) are separate choices
+  and separate installation checks. Google Gemini desktop/CLI is not used as a
+  substitute. Antigravity 2.0 desktop requires manual project-folder selection;
+  `agy` opens as a bare interactive session in the generated project folder,
+  where the user enters the prepared EAI request after startup.
+- Claude Desktop/Claude Code and ChatGPT desktop/Codex CLI remain separate
+  choices. Their current official desktop and CLI installation pages are used,
+  and Linux desktop package launchers are detected where the vendors publish
+  them.
+- Grok Build (`grok`) is the xAI local-project CLI. Grok Bot is the current xAI
+  desktop client for macOS, Windows, and Linux, but it is launch-only because
+  xAI documents it as a thin client for cloud Bot chat, review, and approvals
+  rather than a local-project Grok Build desktop wrapper. EAI detects native
+  app and package-manager installations; a portable Linux AppImage must be
+  registered with the app launcher or exposed through a stable executable path.
+- These records use `eai.ai-surfaces/v2`. Setup rejects older or unknown
+  catalog contracts instead of guessing how a new launch mode behaves. The
+  v2 capability list is preserved through the native adapter so launch plans
+  can require a command such as `copilot app` or `codex app` before using it.
+- CLI detection validates the provider's own `--version` identity instead of
+  accepting an unrelated executable with the same short name. Optional launch
+  features are then checked from command help; a valid older CLI remains
+  available but falls back to the provider's supported manual flow.
 - GitHub Copilot in VS Code is the default recommendation when no supported
-  workspace is installed. Claude, Codex, and Grok remain explicit choices.
+  workspace is installed. Antigravity, Claude, Codex, Grok Build, and Grok Bot
+  remain explicit choices.
 - The recommendation score is shown as a four-quarter Harvey ball. It scores
   automatic project opening, automatic delivery of the EAI first request,
   repository-owned EAI/Gofer instruction support, and an integrated visual
@@ -76,6 +102,24 @@ commands.
 - The prepared first request starts with the business outcome, teaches EAI as
   it becomes relevant, keeps internal stage names hidden, and pauses once for
   approval of the business specification.
+
+### Official AI workspace sources
+
+The catalog uses rolling vendor-owned pages instead of pinning transient asset
+URLs. Desktop and CLI products are always separate detection records.
+
+| Surface | Catalog ID | Official Get page | Handoff |
+| --- | --- | --- | --- |
+| Google Antigravity 2.0 | `antigravity-desktop` | <https://antigravity.google/download> | Open app; add the project folder manually |
+| Antigravity CLI | `antigravity-cli` | <https://antigravity.google/docs/cli/install/> | Open bare `agy` interactively in the project; enter the prepared request after startup |
+| GitHub Copilot app | `copilot-desktop` | <https://docs.github.com/en/copilot/get-started/quickstart-copilot-app> | `copilot app` in the project when Copilot CLI is ready; otherwise open the app |
+| GitHub Copilot CLI | `copilot-cli` | <https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/install-copilot-cli> | `copilot -C <project> -i <request>` |
+| Claude Desktop | `claude-desktop` | <https://claude.com/download> | Official `claude://code/new` project deep link when registered |
+| Claude Code | `claude-cli` | <https://code.claude.com/docs/en/setup> | `claude <request>` when help advertises an initial prompt; otherwise `claude` in the project |
+| ChatGPT desktop (Codex) | `codex-desktop` | <https://learn.chatgpt.com/docs/app> | `codex app <project>` when Codex CLI is also ready; otherwise open the app |
+| Codex CLI | `codex-cli` | <https://learn.chatgpt.com/docs/codex/cli> | `codex <request>` in the project |
+| Grok Bot | `grok-bot` | <https://docs.x.ai/grok-bot/get-started> | Open the macOS, Windows, or Linux app only; no local-project contract |
+| Grok Build | `grok-cli` | <https://x.ai/build> | `grok --cwd <project> <request>` when current help advertises the positional interactive prompt; otherwise open Grok Build in the project |
 
 ## Failure categories
 

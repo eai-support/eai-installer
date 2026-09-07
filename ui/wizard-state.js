@@ -40,7 +40,7 @@
 
   function journeyStageForActivity(activeStep, title) {
     const context = `${activeStep || ""} ${title || ""}`;
-    if (/ai workspace|copilot|claude|codex|grok/i.test(context)) return "ai";
+    if (/ai workspace|copilot|antigravity|agy|claude|chatgpt|codex|grok/i.test(context)) return "ai";
     if (/sign[ -]?in|login|signup|account/i.test(context)) return "signin";
     if (/company workspace|\bapp\b|project|folder|tenant/i.test(context)) return "app";
     if (/eai[ -]?cli/i.test(context)) return "eai-cli";
@@ -213,17 +213,40 @@
     "vscode-copilot": 4,
     "copilot-cli": 3,
     "copilot-desktop": 2,
-    "claude-desktop": 2,
+    "antigravity-desktop": 2,
+    "antigravity-cli": 3,
+    "claude-desktop": 4,
     "claude-cli": 3,
     "codex-desktop": 3,
     "codex-cli": 3,
-    "grok-cli": 1,
+    "grok-bot": 1,
+    "grok-cli": 3,
   });
 
-  function aiSurfaceRecommendation(surfaceId) {
-    const score = aiSurfaceRecommendationScores[surfaceId] ?? 0;
+  function aiSurfaceRecommendation(surfaceOrId) {
+    const surfaceId = typeof surfaceOrId === "string" ? surfaceOrId : surfaceOrId?.id;
+    const launchSupportScores = {
+      "project-and-prompt": 4,
+      "project-only": 3,
+      "manual-project": 2,
+      "launch-only": 1,
+    };
+    const catalogScore = aiSurfaceRecommendationScores[surfaceId] ?? 0;
+    const score = typeof surfaceOrId === "object" && surfaceOrId
+      ? Math.min(catalogScore, launchSupportScores[surfaceOrId.launchSupport] ?? catalogScore)
+      : catalogScore;
     const labels = ["Not scored", "Basic handoff", "Supported", "Strong fit", "Best fit"];
     return { score, maximum: 4, label: labels[score] };
+  }
+
+  function aiSurfaceCompletionMessage(surface, label) {
+    if (surface?.launchSupport === "launch-only") {
+      return `${label} is open. Complete its sign-in step to use the app; this did not hand off the local project.`;
+    }
+    if (surface?.launchSupport === "manual-project") {
+      return `${label} is open. Complete sign-in and choose this project folder to start building.`;
+    }
+    return `${label} is open with this project. Complete sign-in if requested to start building.`;
   }
 
   root.EAIWizard = {
@@ -237,6 +260,7 @@
     isKebabCase,
     prerequisitesReady,
     chooseAiSurface,
+    aiSurfaceCompletionMessage,
     aiSurfaceRecommendation,
     retryActionLabel,
     resolveTenantSelection,

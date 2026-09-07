@@ -92,7 +92,7 @@ const stepEstimates = {
 const aiSurfaceGuidance = {
   "copilot-desktop": {
     label: "GitHub Copilot app",
-    ready: "GitHub Copilot will open. Sign in to GitHub if asked, choose Add local repositories, and select the project folder shown above.",
+    ready: "GitHub Copilot will open this project when Copilot CLI is also ready. Otherwise sign in to GitHub if asked, choose Add local repositories, and select the project folder shown above.",
     notInstalled: "Download GitHub Copilot from GitHub. After installing it, return here and select Check again.",
   },
   "copilot-cli": {
@@ -104,6 +104,46 @@ const aiSurfaceGuidance = {
     label: "GitHub Copilot in VS Code",
     ready: "VS Code will open this project. Sign in to GitHub in VS Code if asked, then open Copilot Chat.",
     notInstalled: "Install VS Code and the GitHub Copilot extension from the official page. Return here and select Check again.",
+  },
+  "antigravity-desktop": {
+    label: "Google Antigravity 2.0",
+    ready: "Google Antigravity 2.0 will open. Choose New Project, add the project folder shown above, and use the repository EAI skill.",
+    notInstalled: "Download Google Antigravity 2.0. The desktop app and agy CLI are separate installs; after installing the desktop app, return here and select Check again.",
+  },
+  "antigravity-cli": {
+    label: "Antigravity CLI (agy)",
+    ready: "A terminal will open Antigravity CLI in this project. Enter the EAI first request after it starts. Complete Google sign-in or folder trust if Antigravity asks.",
+    notInstalled: "Install the agy CLI from Google's Antigravity page. This is separate from the desktop app; after installing it, return here and select Check again.",
+  },
+  "claude-desktop": {
+    label: "Claude Desktop",
+    ready: "Claude Desktop will open a Code session for this project when its deep link is available. Confirm the folder if asked.",
+    notInstalled: "Download Claude Desktop from Anthropic. After installing it, return here and select Check again.",
+  },
+  "claude-cli": {
+    label: "Claude Code",
+    ready: "A terminal will open in this project. Current Claude Code releases receive the EAI first request automatically; otherwise enter it after startup. Complete Anthropic sign-in or folder trust if asked.",
+    notInstalled: "Install Claude Code from Anthropic's official setup page. After installing it, return here and select Check again.",
+  },
+  "codex-desktop": {
+    label: "ChatGPT desktop (Codex)",
+    ready: "ChatGPT will open this project in Codex when the Codex CLI launcher is available. Otherwise choose the project and Codex in the app.",
+    notInstalled: "Download the ChatGPT desktop app from OpenAI. After installing it, return here and select Check again.",
+  },
+  "codex-cli": {
+    label: "Codex CLI",
+    ready: "A terminal will open in this project with the EAI first request. Complete OpenAI sign-in or folder trust if asked.",
+    notInstalled: "Install Codex CLI from OpenAI's official page. After installing it, return here and select Check again.",
+  },
+  "grok-bot": {
+    label: "Grok Bot",
+    ready: "Grok Bot will open for cloud Bot chat, review, and approvals. It does not automatically open this local project; choose Grok Build for local coding.",
+    notInstalled: "Download Grok Bot for macOS, Windows, or Linux from xAI's official page. It is a cloud Bot desktop client, not the Grok Build CLI; after installing it, return here and select Check again.",
+  },
+  "grok-cli": {
+    label: "Grok Build",
+    ready: "A terminal will open in this project. Current Grok Build releases receive the EAI first request as the documented interactive prompt; otherwise enter it after startup. Complete xAI sign-in or folder trust if asked.",
+    notInstalled: "Install Grok Build from xAI's official page. After installing it, return here and select Check again.",
   },
 };
 
@@ -201,6 +241,12 @@ function aiSurfaceCopy(surface) {
   };
 }
 
+function aiSurfaceReadyDetail(surface) {
+  if (surface?.launchSupport === "launch-only") return "; opens the app only";
+  if (surface?.launchSupport === "manual-project") return "; connect the project when it opens";
+  return "; opens this project";
+}
+
 function updateAiSurfaceControls(surface) {
   if (!surface) {
     if (aiSurfaceNext) aiSurfaceNext.hidden = true;
@@ -216,7 +262,7 @@ function updateAiSurfaceControls(surface) {
 }
 
 function createHarveyBall(surface) {
-  const recommendation = EAIWizard.aiSurfaceRecommendation(surface.id);
+  const recommendation = EAIWizard.aiSurfaceRecommendation(surface);
   const wrapper = document.createElement("span");
   wrapper.className = "harvey-ball-label";
   wrapper.setAttribute("aria-label", `Recommendation: ${recommendation.score} of ${recommendation.maximum}, ${recommendation.label}`);
@@ -614,15 +660,46 @@ async function writeE2eReceipt(failedCheck, message) {
     await invoke("write_e2e_receipt", {
       receiptFile: e2eConfig.receiptFile,
       receipt: {
+        schemaVersion: "eai.setup.e2e-receipt.v1",
         status: failedCheck ? "failed" : "passed",
         message,
         checks,
+        appName: e2eConfig.projectName || null,
         appCreated: e2eAppCreated,
       },
     });
   } catch (error) {
     console.error("Could not write the E2E receipt", error);
   }
+}
+
+async function writeE2eAppCreationCheckpoint(result, appName) {
+  if (!e2eConfig?.receiptFile || result?.app_created !== true) return;
+  if (!e2eConfig.projectName || e2eConfig.projectName !== appName) {
+    throw new Error("The E2E app-creation checkpoint is not bound to the configured test app.");
+  }
+  await invoke("write_e2e_receipt", {
+    receiptFile: e2eConfig.receiptFile,
+    receipt: {
+      schemaVersion: "eai.setup.e2e-app-created.v1",
+      status: "checkpoint",
+      checkpoint: "app-created",
+      message: "The exact release-test app was created; project and AI handoff checks are still pending.",
+      checks: {
+        prerequisites: "passed",
+        authentication: "passed",
+        tenant: "passed",
+        app: "passed",
+        project: "not-run",
+        aiHandoff: "not-run",
+      },
+      appName,
+      appCreated: true,
+      cleanupRequired: true,
+      cleanupRequested: true,
+      recordedAt: new Date().toISOString(),
+    },
+  });
 }
 
 async function runE2eFlow() {
@@ -664,10 +741,12 @@ async function runE2eFlow() {
     await writeE2eReceipt(e2eAppCreated ? "project" : "app", "The EAI app could not be initialised by the desktop bootstrap path.");
     return;
   }
-  const surface = aiSurfaceInventory?.surfaces?.find((item) => item.id === selectedAiSurfaceId && item.installed)
-    || aiSurfaceInventory?.surfaces?.find((item) => item.installed);
+  const canProveProjectHandoff = (item) => item?.installed
+    && ["project-and-prompt", "project-only"].includes(item.launchSupport);
+  const surface = aiSurfaceInventory?.surfaces?.find((item) => item.id === selectedAiSurfaceId && canProveProjectHandoff(item))
+    || aiSurfaceInventory?.surfaces?.find(canProveProjectHandoff);
   if (!surface) {
-    await writeE2eReceipt("aiHandoff", "No installed AI workspace was available for the release-test handoff.");
+    await writeE2eReceipt("aiHandoff", "No installed project-capable AI workspace was available for the release-test handoff.");
     return;
   }
   try {
@@ -903,6 +982,8 @@ async function runInit() {
   let result;
   try {
     result = await invoke("run_bootstrap", { step: "init", projectName: name, directory: directory || null, companyTenantId: selectedCompanyTenantId, appKey: selectedCompanyAppKey });
+    e2eAppCreated = Boolean(result?.app_created);
+    await writeE2eAppCreationCheckpoint(result, name);
   } catch (error) {
     const failure = EAIWizard.describeInitFailure(error, environmentReport?.platform);
     showOutput(failure.title, `${failure.detail} Next: ${failure.next}`);
@@ -918,7 +999,6 @@ async function runInit() {
   if (result?.output) {
     recordCommandSummaries("init", result.output);
   }
-  e2eAppCreated = Boolean(result?.app_created);
   if (result?.project_directory) {
     createdProjectDirectory = result.project_directory;
     projectPath = result.project_path || result.project_directory;
@@ -974,7 +1054,7 @@ function renderAiSurfaces() {
     name.textContent = aiSurfaceCopy(surface).label;
     const detail = document.createElement("small");
     detail.textContent = surface.installed
-      ? `${surface.provider} · Ready${surface.launchSupport === "manual-project" ? "; connect the project when it opens" : "; opens this project"}`
+      ? `${surface.provider} · Ready${aiSurfaceReadyDetail(surface)}`
       : `${surface.provider} · Not installed`;
     copy.append(name, detail);
     const badge = document.createElement("span");
@@ -996,8 +1076,8 @@ function renderAiSurfaces() {
   updateAiSurfaceControls(selected);
   const readyCount = aiSurfaceInventory.surfaces.filter((surface) => surface.installed).length;
   aiSurfaceStatus.innerHTML = readyCount
-    ? `<strong>${readyCount} AI workspace${readyCount === 1 ? " is" : "s are"} ready</strong><p>Choose one below. EAI will open the project and explain the next step.</p>`
-    : "<strong>Choose an AI workspace</strong><p>GitHub Copilot, Claude, Codex, and Grok can work with your EAI project. Install one only if you need it.</p>";
+    ? `<strong>${readyCount} AI workspace${readyCount === 1 ? " is" : "s are"} ready</strong><p>Choose one below. EAI will open it and explain its project support.</p>`
+    : "<strong>Choose an AI workspace</strong><p>Google Antigravity 2.0, GitHub Copilot, Claude, Codex, and Grok Build can work with your EAI project. Install one only if you need it.</p>";
 }
 
 recommendationHelp?.addEventListener("click", () => recommendationDialog?.showModal());
@@ -1015,14 +1095,17 @@ async function loadAiSurfaces() {
         preferredSurface: null,
         recommendedSurface: "vscode-copilot",
         surfaces: [
-          { id: "vscode-copilot", name: "GitHub Copilot in VS Code", provider: "GitHub", launchSupport: "project-and-prompt", installed: false, recommended: true },
-          { id: "copilot-cli", name: "GitHub Copilot CLI", provider: "GitHub", launchSupport: "project-and-prompt", installed: false, recommended: false },
-          { id: "copilot-desktop", name: "GitHub Copilot app", provider: "GitHub", launchSupport: "manual-project", installed: false, recommended: false },
-          { id: "claude-desktop", name: "Claude Desktop", provider: "Anthropic", launchSupport: "manual-project", installed: false, recommended: false },
-          { id: "claude-cli", name: "Claude Code", provider: "Anthropic", launchSupport: "project-and-prompt", installed: false, recommended: false },
-          { id: "codex-desktop", name: "Codex Desktop", provider: "OpenAI", launchSupport: "project-only", installed: false, recommended: false },
-          { id: "codex-cli", name: "Codex CLI", provider: "OpenAI", launchSupport: "project-and-prompt", installed: false, recommended: false },
-          { id: "grok-cli", name: "Grok Build", provider: "xAI", launchSupport: "project-and-prompt", installed: false, recommended: false },
+          { id: "vscode-copilot", name: "GitHub Copilot in VS Code", provider: "GitHub", kind: "editor", launchSupport: "project-and-prompt", installed: false, recommended: true },
+          { id: "copilot-desktop", name: "GitHub Copilot app", provider: "GitHub", kind: "desktop", launchSupport: "manual-project", installed: false, recommended: false },
+          { id: "antigravity-desktop", name: "Google Antigravity 2.0", provider: "Google", kind: "desktop", launchSupport: "manual-project", installed: false, recommended: false },
+          { id: "claude-desktop", name: "Claude Desktop", provider: "Anthropic", kind: "desktop", launchSupport: "project-and-prompt", installed: false, recommended: false },
+          { id: "codex-desktop", name: "ChatGPT desktop (Codex)", provider: "OpenAI", kind: "desktop", launchSupport: "manual-project", installed: false, recommended: false },
+          { id: "grok-bot", name: "Grok Bot", provider: "xAI", kind: "desktop", launchSupport: "launch-only", installed: false, recommended: false },
+          { id: "copilot-cli", name: "GitHub Copilot CLI", provider: "GitHub", kind: "cli", launchSupport: "project-and-prompt", installed: false, recommended: false },
+          { id: "antigravity-cli", name: "Antigravity CLI (agy)", provider: "Google", kind: "cli", launchSupport: "project-only", installed: false, recommended: false },
+          { id: "claude-cli", name: "Claude Code", provider: "Anthropic", kind: "cli", launchSupport: "project-and-prompt", installed: false, recommended: false },
+          { id: "codex-cli", name: "Codex CLI", provider: "OpenAI", kind: "cli", launchSupport: "project-and-prompt", installed: false, recommended: false },
+          { id: "grok-cli", name: "Grok Build", provider: "xAI", kind: "cli", launchSupport: "project-and-prompt", installed: false, recommended: false },
         ],
       };
     }
@@ -1072,10 +1155,15 @@ async function startAiSurface() {
     }
     const result = await invoke("start_ai_surface", { directory: createdProjectDirectory, surfaceId: surface.id });
     setActivity(`${copy.label} opened`, copy.ready, 100, false, "", "Ready");
-    completeMessage.textContent = `${copy.label} is open. Complete its sign-in or project connection step to start building.`;
+    completeMessage.textContent = EAIWizard.aiSurfaceCompletionMessage(surface, copy.label);
     startAiButton.textContent = `Open ${copy.label} again`;
     showOutput(`${copy.label} opened.`, copy.ready);
-    setJourneyStage("ai", "done", `${copy.label} opened with this project.`);
+    const journeyDetail = surface.launchSupport === "launch-only"
+      ? `${copy.label} opened without a local-project handoff.`
+      : surface.launchSupport === "manual-project"
+        ? `${copy.label} opened; connect the project in the app.`
+        : `${copy.label} opened with this project.`;
+    setJourneyStage("ai", "done", journeyDetail);
   } catch (error) {
     setJourneyStage("ai", "error", "The selected AI workspace could not be opened.");
     setActivity("AI workspace could not start", "The selected AI workspace could not be opened. Your app remains ready.", 0, false, "", "Error");
