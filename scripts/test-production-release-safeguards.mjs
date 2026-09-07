@@ -12,9 +12,10 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const workflowPath = path.join(root, ".github", "workflows", "release.yml");
 const readinessWorkflowPath = path.join(root, ".github", "workflows", "release-readiness.yml");
 const adapterPath = path.join(root, "scripts", "run-v4-app-deprovision.sh");
-const workflow = fs.readFileSync(workflowPath, "utf8");
-const readinessWorkflow = fs.readFileSync(readinessWorkflowPath, "utf8");
-const adapter = fs.readFileSync(adapterPath, "utf8");
+const readSource = (sourcePath) => fs.readFileSync(sourcePath, "utf8").replace(/\r\n/g, "\n");
+const workflow = readSource(workflowPath);
+const readinessWorkflow = readSource(readinessWorkflowPath);
+const adapter = readSource(adapterPath);
 
 const section = (start, end) => {
   const startIndex = workflow.indexOf(start);
@@ -176,6 +177,9 @@ assert.doesNotMatch(adapter, /mv -- "\$receipt_tmp" "\$receipt_file"/);
 const syntax = spawnSync("bash", ["-n", adapterPath], { cwd: root, encoding: "utf8" });
 assert.equal(syntax.status, 0, syntax.stderr);
 
+// The release controller runs on macOS; these fixtures require POSIX shebang
+// execution and hard-link semantics. Windows still validates the static contract.
+if (process.platform !== "win32") {
 const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "eai-v4-adapter-test-"));
 const fixtureBin = path.join(fixtureRoot, "bin");
 fs.mkdirSync(fixtureBin, { recursive: true });
@@ -464,6 +468,7 @@ try {
   assert.match(occupiedAtPublish.result.stderr, /occupied before atomic publication/);
 } finally {
   fs.rmSync(fixtureRoot, { recursive: true, force: true });
+}
 }
 
 console.log("production release safeguard checks ok");

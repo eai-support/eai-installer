@@ -2447,14 +2447,17 @@ assert.equal(blocked.status, 1);
 assert.match(blocked.stderr, /EAI_HARNESS_TENANT_ID is required/);
 assert.doesNotMatch(blocked.stderr, /mock/i);
 
+const mockVmAdapter = process.platform === "win32"
+  ? path.join(process.env.ProgramFiles || "C:\\Program Files", "Git", "usr", "bin", "true.exe")
+  : "/usr/bin/true";
 const diagnosticEnvironment = {
   ...cleanEnvironment,
   EAI_HARNESS_TENANT_ID: "00000000-0000-4000-8000-000000000000",
   EAI_HARNESS_TENANT_NAME: "Fixture tenant",
   EAI_HARNESS_USER_EMAIL: "release-test@example.invalid",
-  EAI_VM_MACOS_COMMAND: "/usr/bin/true",
-  EAI_VM_WINDOWS_COMMAND: "/usr/bin/true",
-  EAI_VM_UBUNTU_COMMAND: "/usr/bin/true",
+  EAI_VM_MACOS_COMMAND: fs.realpathSync(mockVmAdapter),
+  EAI_VM_WINDOWS_COMMAND: fs.realpathSync(mockVmAdapter),
+  EAI_VM_UBUNTU_COMMAND: fs.realpathSync(mockVmAdapter),
   EAI_RELEASE_VMS: "macos",
 };
 const mockWithoutFlag = spawnSync(process.execPath, [runner, "--version", "0.2.0", "--output", path.join(output, "mock-without-flag"), "--deprovision", "mock", "--preflight"], {
@@ -2516,7 +2519,7 @@ const selectedVmEnvironment = {
   EAI_HARNESS_TENANT_NAME: "Fixture tenant",
   EAI_HARNESS_USER_EMAIL: "release-test@example.invalid",
   EAI_RELEASE_VMS: "windows",
-  EAI_VM_WINDOWS_COMMAND: "/usr/bin/true",
+  EAI_VM_WINDOWS_COMMAND: fs.realpathSync(mockVmAdapter),
 };
 const selectedVmPreflight = spawnSync(process.execPath, [runner, "--version", "0.2.0", "--repo", "fixture/repo", "--output", path.join(output, "selected-vm"), "--deprovision", "mock", "--diagnostic", "--preflight"], {
   cwd: root,
@@ -2543,6 +2546,9 @@ const diagnosticWithApi = spawnSync(process.execPath, [runner, "--version", "0.2
 assert.equal(diagnosticWithApi.status, 1);
 assert.match(diagnosticWithApi.stderr, /only valid with --deprovision mock/);
 
+// These controller fixtures exercise POSIX shebang executables and signal delivery.
+// The release controller runs on macOS; Windows runners still cover its static contracts.
+if (process.platform !== "win32") {
 const cleanupFixtureRoot = path.join(output, "cleanup-fixtures");
 const cleanupFixtureBin = path.join(cleanupFixtureRoot, "bin");
 fs.mkdirSync(cleanupFixtureBin, { recursive: true });
@@ -2927,6 +2933,7 @@ assert.match(forcedInterrupt.report.machines[0].cleanupError, /non-empty deletio
 assert.equal(fs.readFileSync(forcedInterrupt.vmStartCountFile, "utf8"), "1");
 assert.equal(fs.readFileSync(forcedInterrupt.cleanupCountFile, "utf8"), "1");
 assert.doesNotMatch(forcedInterrupt.stderr, /UnhandledPromiseRejection|unhandled rejection/i);
+}
 
 const shellSyntax = execFileSync("bash", ["-n", path.join(root, "release.sh")], {
   cwd: root,
@@ -2954,15 +2961,19 @@ assert.equal(
 assert.equal(execFileSync("bash", ["-n", windowsGuestLogin], { cwd: root, encoding: "utf8" }), "");
 assert.equal(execFileSync("bash", ["-n", windowsPortalCleanupUi], { cwd: root, encoding: "utf8" }), "");
 assert.equal(execFileSync("bash", ["-n", windowsPortalCleanupUiTest], { cwd: root, encoding: "utf8" }), "");
+if (process.platform !== "win32") {
 assert.equal(
   execFileSync("bash", [windowsPortalCleanupUiTest], { cwd: root, encoding: "utf8" }),
   "Windows portal cleanup UI checks ok\n",
 );
+}
 assert.equal(execFileSync("bash", ["-n", windowsDiagnosticCleanupTest], { cwd: root, encoding: "utf8" }), "");
+if (process.platform !== "win32") {
 assert.equal(
   execFileSync("bash", [windowsDiagnosticCleanupTest], { cwd: root, encoding: "utf8" }),
   "Windows diagnostic cleanup host regression passed.\n",
 );
+}
 for (const ubuntuShell of [ubuntuGuestCore, ubuntuGuestSession, ubuntuGuestLogin, ubuntuAiWorkspacePreparer, ubuntuGuestTest]) {
   assert.equal(execFileSync("bash", ["-n", ubuntuShell], { cwd: root, encoding: "utf8" }), "");
 }
