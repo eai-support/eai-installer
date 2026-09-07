@@ -115,7 +115,18 @@ jobs:
           if ($installed.Count -eq 0) { throw "Windows installer did not create an executable in the expected install roots" }
           $appExecutable = $installed | Where-Object { $_.Name -ieq 'eai-setup.exe' } | Select-Object -First 1
           if (-not $appExecutable) { throw "Windows installer did not install eai-setup.exe" }
-          $binary = [IO.File]::ReadAllBytes($appExecutable.FullName)
+          $binary = $null
+          for ($attempt = 0; $attempt -lt 30 -and $null -eq $binary; $attempt++) {
+            try {
+              $appExecutable = Get-Item -LiteralPath $appExecutable.FullName -ErrorAction Stop
+              if ($appExecutable.Length -le 0) { throw "Installed executable is not fully written yet" }
+              $binary = [IO.File]::ReadAllBytes($appExecutable.FullName)
+            } catch {
+              $binary = $null
+              Start-Sleep -Seconds 1
+            }
+          }
+          if ($null -eq $binary) { throw "Installed eai-setup.exe did not become non-empty and readable" }
           $manifestText = [Text.Encoding]::UTF8.GetString($binary) + [Text.Encoding]::Unicode.GetString($binary)
           if ($manifestText -notmatch 'requestedExecutionLevel' -or $manifestText -notmatch 'asInvoker') {
             throw "Installed Windows app does not contain the standard-user execution manifest"

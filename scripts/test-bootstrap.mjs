@@ -420,6 +420,9 @@ if (!bundles.includes("expected install roots") || !bundles.includes("Where-Obje
 if (!bundles.includes("Start-Sleep -Seconds 1")) {
   throw new Error("test-bundles workflow does not wait for the Windows installer handoff");
 }
+if (!bundles.includes("$appExecutable.Length -le 0") || !bundles.includes("did not become non-empty and readable")) {
+  throw new Error("test-bundles workflow does not wait for the installed Windows executable to become readable");
+}
 const debSelector = await readFile(new URL("./find-valid-deb.sh", import.meta.url), "utf8");
 if (!debSelector.includes("dpkg-deb --contents") || !debSelector.includes("usr\\/bin\\/eai-setup")) {
   throw new Error("Linux package selector does not verify the installed executable payload");
