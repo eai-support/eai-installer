@@ -861,8 +861,8 @@ production-release approval.
 ### Test Ubuntu clean-snapshot and evidence baseline
 
 The controlled ARM64 Linux guest is named `Ubuntu 24.04.3 ARM64`, its release
-test user is `parallels`, and its approved snapshot is `28-8-2026`
-(`{00f4cb1b-09ea-4f06-b41b-3d1d2085e8c7}`). The adapter restores that exact
+test user is `parallels`, and its approved snapshot is `8-9-2026-tools-27.0.1`
+(`{2119c623-791d-411a-b599-087dfc5eb9fb}`). The adapter restores that exact
 snapshot and selects only the expected user's active, local, non-root `seat0`
 graphical session through `loginctl`. Every user command is then launched with
 the verified session's `XDG_SESSION_ID`, X11 or Wayland display, runtime

@@ -3036,7 +3036,7 @@ assert.match(windowsGuestAdapterSource, /eai-douglasross/);
 assert.match(ubuntuGuestAdapterSource, /exec \/bin\/bash "\$hardened_core" "\$@"/);
 assert.doesNotMatch(ubuntuGuestAdapterSource, /EAI_SETUP_E2E_COMPANY_TENANT/);
 assert.match(ubuntuGuestCoreSource, /Ubuntu 24[.]04[.]3 ARM64/);
-assert.match(ubuntuGuestCoreSource, /00f4cb1b-09ea-4f06-b41b-3d1d2085e8c7/);
+assert.match(ubuntuGuestCoreSource, /2119c623-791d-411a-b599-087dfc5eb9fb/);
 for (const effectiveAutologinCheck of [
   /gdm_autologin_parser_source\(\)/,
   /configparser[.]ConfigParser\(/,

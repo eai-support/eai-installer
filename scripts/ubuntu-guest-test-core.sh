@@ -9,7 +9,7 @@ source "$ROOT/scripts/guest-test-lib.sh"
 source "$ROOT/scripts/ubuntu-guest-session.sh"
 
 vm_name="${EAI_UBUNTU_VM_NAME:-Ubuntu 24.04.3 ARM64}"
-snapshot_id="${EAI_UBUNTU_SNAPSHOT_ID:-00f4cb1b-09ea-4f06-b41b-3d1d2085e8c7}"
+snapshot_id="${EAI_UBUNTU_SNAPSHOT_ID:-2119c623-791d-411a-b599-087dfc5eb9fb}"
 guest_user="${EAI_UBUNTU_GUEST_USER:-parallels}"
 autologin_user="${EAI_UBUNTU_AUTOLOGIN_USER:-$guest_user}"
 expected_cli_version="${EAI_EXPECTED_CLI_VERSION:-3.15.10}"
