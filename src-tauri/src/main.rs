@@ -2026,7 +2026,7 @@ fn detect_ai_surfaces(directory: String) -> Result<AiSurfaceInventory, String> {
 fn start_ai_surface(directory: String, surface_id: String) -> Result<AiLaunchResult, String> {
     let (stdout, stderr) = run_program(
         "eai",
-        &["start", &directory, "--surface", &surface_id, "--format", "json"],
+        &["start", &directory, "--surface", &surface_id, "--format", "json", "--contract-version", "v2"],
     )?;
     serde_json::from_str(&stdout).map_err(|error| {
         let detail = if stderr.is_empty() { stdout } else { stderr };
@@ -2038,7 +2038,7 @@ fn start_ai_surface(directory: String, surface_id: String) -> Result<AiLaunchRes
 fn install_ai_surface(surface_id: String) -> Result<String, String> {
     let (stdout, _) = run_program(
         "eai",
-        &["start", "--surface", &surface_id, "--install", "--format", "json"],
+        &["start", "--surface", &surface_id, "--install", "--format", "json", "--contract-version", "v2"],
     )?;
     Ok(stdout)
 }

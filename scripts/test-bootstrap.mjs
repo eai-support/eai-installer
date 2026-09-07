@@ -193,8 +193,8 @@ if (initInvoke < 0 || appCreatedAssignment < initInvoke || creationCheckpoint < 
 if (!rust.includes('inventory.contract_version != "eai.ai-surfaces/v2"')) {
   throw new Error("Tauri adapter does not enforce the versioned AI surface contract");
 }
-if (!rust.includes('"--contract-version", "v2"')) {
-  throw new Error("Tauri adapter does not explicitly negotiate the EAI AI surface v2 contract");
+if ((rust.match(/"--contract-version", "v2"/g) ?? []).length !== 3) {
+  throw new Error("Tauri adapter does not explicitly negotiate the EAI AI surface v2 contract for detect, launch, and install");
 }
 if (!rust.includes("capabilities: Vec<String>")) {
   throw new Error("Tauri adapter drops AI workspace v2 capability metadata");
