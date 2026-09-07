@@ -3017,7 +3017,7 @@ for (const [index, adapter] of guestAdapters.entries()) {
 }
 assert.match(fs.readFileSync(guestAdapters[0], "utf8"), /prepare-macos-guest-dmg\.sh/);
 assert.match(macosGuestAdapterSource, /vm_name="\$\{EAI_MACOS_VM_NAME:-macOS\}"/);
-assert.match(macosGuestAdapterSource, /snapshot_id="\$\{EAI_MACOS_SNAPSHOT_ID:-d67a4cdf-bd15-46aa-963b-19a6ab49ebce\}"/);
+assert.match(macosGuestAdapterSource, /snapshot_id="\$\{EAI_MACOS_SNAPSHOT_ID:-462d2ce7-701e-4257-a95d-545590e86784\}"/);
 assert.match(macosGuestAdapterSource, /mac_admin_service="eai-installer-parallels-macos-admin"/);
 assert.match(macosGuestAdapterSource, /mac_admin_account="testmac"/);
 assert.match(macosGuestAdapterSource, /The controlled macOS release guest must use the testmac account/);

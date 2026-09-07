@@ -9,7 +9,7 @@ source "$ROOT/scripts/guest-test-lib.sh"
 source "$ROOT/scripts/parallels-macos-current-user.sh"
 
 vm_name="${EAI_MACOS_VM_NAME:-macOS}"
-snapshot_id="${EAI_MACOS_SNAPSHOT_ID:-d67a4cdf-bd15-46aa-963b-19a6ab49ebce}"
+snapshot_id="${EAI_MACOS_SNAPSHOT_ID:-462d2ce7-701e-4257-a95d-545590e86784}"
 expected_cli_version="${EAI_EXPECTED_CLI_VERSION:-3.15.10}"
 if [[ "${1:-}" == "--preflight" ]]; then
   [[ "$#" -eq 1 ]] || guest_test_fail "The macOS adapter preflight accepts no additional arguments."

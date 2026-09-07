@@ -136,8 +136,8 @@ that flag.
 ### Test Mac clean-snapshot baseline
 
 The controlled Apple Silicon guest is named `macOS`, its release-test user is
-`testmac`, and its approved snapshot is `29-8-2026`
-(`{d67a4cdf-bd15-46aa-963b-19a6ab49ebce}`). The approved snapshot contains the Parallels control plane, not the
+`testmac`, and its approved snapshot is `8-9-2026-tools-27.0.1`
+(`{462d2ce7-701e-4257-a95d-545590e86784}`). The approved snapshot contains the Parallels control plane, not the
 developer prerequisites or EAI state that the released installer is meant to
 create. Its required baseline is:
 
