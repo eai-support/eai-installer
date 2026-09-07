@@ -18,7 +18,7 @@ Signed EAI Setup
        -> supported Gofer assets
        -> eai-app-template
        -> user-selected project folder
-  -> eai start --check
+  -> eai start --check --format json --contract-version v2
   -> user confirms the selected AI provider may open the project
   -> eai start --surface <supported-surface>
 ```
@@ -41,8 +41,17 @@ local device ID is an authorization decision.
 
 ## AI workspace handoff
 
-The installer delegates detection and launch to the versioned
-`eai.ai-surfaces/v1` CLI contract. Detection reads command and application
+The installer explicitly requests `--contract-version v2` and delegates
+detection and launch to the versioned `eai.ai-surfaces/v2` CLI contract. The
+CLI keeps v1 as its default so the already-published 0.3.19 installer remains
+compatible during rollout. Version 2 adds launch-only desktop surfaces
+without allowing older installers to describe them as project handoffs and
+carries probed launch capabilities across the native/UI boundary.
+The catalog contains exactly six graphical surfaces—VS Code with Copilot,
+GitHub Copilot, Google Antigravity 2.0, Claude, ChatGPT with Codex, and Grok
+Bot—plus five provider CLIs. Repository tests bind this `6 + 5` inventory so a
+supported surface cannot disappear silently.
+Detection reads command and application
 metadata only. It does not inspect provider accounts or project contents.
 
 The user chooses the workspace on first use; the last successfully opened

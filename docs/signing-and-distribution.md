@@ -7,9 +7,9 @@ This repository separates three concerns:
 3. The GitHub release must remain a draft until the published-asset VM gate
    has passed.
 
-The production workflow uses the protected GitHub `release` environment. The
-environment currently has no signing secrets, so production releases are
-intentionally blocked until the account owners complete the setup below.
+The production workflow uses the GitHub `release` environment. Production
+remains intentionally blocked until the missing Apple credentials and GitHub
+environment/tag protections described below are configured.
 Do not put any certificate, password, private key, or token in git.
 
 ## Apple distribution
@@ -57,28 +57,45 @@ normal internet-download consent step.
 
 ## Windows distribution
 
-The immediate workflow path uses a password-protected PFX code-signing
-certificate:
+The production workflow uses Microsoft Artifact Signing (formerly Trusted
+Signing) with GitHub Actions OIDC. Configure these variables in the protected
+GitHub `release` environment:
 
-| Secret | Value |
+| Variable | Value |
 | --- | --- |
-| `WINDOWS_CERTIFICATE` | Base64 contents of the PFX certificate |
-| `WINDOWS_CERTIFICATE_PASSWORD` | Password used for the PFX |
+| `AZURE_CLIENT_ID` | Client ID of the federated release identity |
+| `AZURE_TENANT_ID` | Microsoft Entra tenant containing that identity |
+| `AZURE_SUBSCRIPTION_ID` | Subscription containing the signing account |
+| `AZURE_SIGNING_RESOURCE_GROUP` | Exact resource group containing `eai-installer-signing` |
+| `AZURE_SIGNING_SUBJECT` | Exact certificate subject expected on the staged installer |
 
-The certificate must identify the legal publishing entity and be valid for
-code signing. The workflow now runs `Get-AuthenticodeSignature` against the
-actual NSIS installer and fails if Windows does not report a valid signature.
+The federated identity must be authorized for signing account
+`eai-installer-signing` and certificate profile `eai-installer-windows` at the
+configured northern-Europe endpoint. No PFX or long-lived Windows signing
+secret belongs in GitHub. The protected readiness job also needs read-only
+Azure control-plane access at the signing-account scope so it can inspect the
+account, profile, identity-validation reference, and its own inherited role
+assignment. Assign `Reader` at the signing-account scope in addition to a
+**direct assignment to the workload identity** (not only to one of its groups)
+of `Artifact Signing Certificate Profile Signer` at the profile or a parent
+scope. The readiness check binds that role by its stable definition ID and
+allows inherited scope, but deliberately does not resolve group membership.
+Do not give the release identity Contributor, Owner, or role-assignment write
+access.
 
-For the long-term enterprise setup, Microsoft Artifact Signing (formerly
-Trusted Signing) is preferred because it integrates with CI through Azure
-identity rather than storing a long-lived PFX. That path requires an Azure
-Artifact Signing account, verified publisher identity, and a GitHub Actions
-OIDC trust configuration. It is a separate workflow change; do not upload a
-placeholder PFX. Even with a valid signature, Microsoft states that SmartScreen
-reputation builds over time for a new publisher, so no responsible release
-process can promise zero SmartScreen prompts on the first downloads. Microsoft
-Store distribution is the strongest route when zero SmartScreen download
-warnings are a hard requirement.
+Windows is intentionally built by a Tauri action invocation that has no
+`GITHUB_TOKEN`, tag, release name, or release-body inputs. It therefore cannot
+upload the unsigned NSIS output. The workflow then applies Artifact Signing,
+requires `Get-AuthenticodeSignature` to report `Valid`, copies that verified
+file to the stable platform asset name, and only then uploads that exact file to
+private Actions artifact storage. Do not add release metadata to the Tauri build
+step or move artifact upload above signature verification.
+
+Even with a valid signature, Microsoft states that SmartScreen reputation
+builds over time for a new publisher, so no responsible release process can
+promise zero SmartScreen prompts on the first downloads. Microsoft Store
+distribution is the strongest route when zero SmartScreen download warnings
+are a hard requirement.
 
 ## Linux distribution
 
@@ -103,18 +120,57 @@ The workflows use the current Node 24-compatible action majors:
 - `actions/download-artifact@v5`
 - `tauri-apps/tauri-action@v1`
 
-The release job uses minimal `contents: write` permission and the protected
-`release` environment. Configure required reviewers for that environment in
-GitHub before adding production secrets. A reviewer should confirm the
-release PR, the exact version, and the guest E2E evidence before approving
-access to the signing secrets.
+The platform matrices produce six isolated release outputs. Windows compilation
+and tests run first in two unprotected, no-OIDC build legs; two separate
+protected signing-only legs download those exact private artifacts and alone
+receive `id-token: write`. Apple signing legs use the protected `release`
+environment; Linux receives neither its credentials nor OIDC permission. Each
+release leg signs where applicable, verifies version and architecture, renames,
+and uploads one exact
+stable-named file to Actions artifact storage. Only the dependent
+`publish-draft` job receives `contents: write`; it downloads the matrix outputs,
+requires the exact six-name/non-empty set, records local SHA-256 hashes, and
+requires an already-existing immutable tag that resolves to the workflow commit
+before it creates/uploads the draft once. It then compares the remote name set
+and downloaded hashes with the staged set. A manual workflow dispatch cannot
+create a missing release tag. Configure required reviewers for the protected
+`release` environment before adding production secrets.
+
+Before `release.sh publish` creates a tag, it dispatches
+`release-readiness.yml` on `main` with a unique non-secret correlation value and
+waits for that exact run. The readiness workflow has `contents: read` and
+cannot tag or publish. Its macOS job imports the protected P12 into a temporary
+keychain, requires at least seven days of certificate validity, matches the
+exact Developer ID common name and team identifier, validates the code-signing
+chain with required OCSP, performs a timestamped signature on an ephemeral
+system-binary copy, and authenticates to notarization by reading history. Its
+Ubuntu job validates the exact Azure subscription, configured resource group
+and account ID, successful account state, North Europe data-plane URI,
+supported account SKU, active/successfully provisioned PublicTrust profile,
+UUID identity-validation reference, and the workload identity's direct or
+inherited-scope `Artifact Signing Certificate Profile Signer` assignment.
+Credential sets that are only partially configured fail closed.
+
+This is the strongest pre-tag check available without creating a release or
+requesting an Artifact Signing certificate. Azure's Artifact Signing GitHub
+action and signing tools run on Windows, and a genuine data-plane probe would
+consume a signing request and create signing audit history. The readiness job
+therefore does **not** claim that Azure's signing data plane accepted a file;
+the post-tag Windows matrix signing plus exact-file Authenticode verification is
+the authoritative proof. Likewise, the Apple check proves the certificate,
+private key, timestamp service, and notarization authentication separately;
+the release matrix's notarization and stapling checks remain authoritative for
+the built DMG.
 
 The release sequence is:
 
 ```text
 merge release PR
+  -> run local mutation-free VM/V4 preflight
+  -> run protected non-publishing signing readiness
   -> tag the exact merged commit
-  -> build signed assets into a draft GitHub release
+  -> build/sign/verify six isolated outputs (Windows build and signing separated)
+  -> one publisher creates and verifies the six-asset draft
   -> download those exact assets and run the real Mac/Windows/Ubuntu gate
   -> publish the draft only after the gate and cleanup receipt pass
 ```
@@ -129,9 +185,25 @@ following account-owned material:
 
 - Apple Developer account access and Developer ID Application certificate
 - App Store Connect API key or Apple notarization credentials
-- Windows PFX certificate, or an Azure Artifact Signing account and verified
-  publisher identity
 - GitHub environment reviewers for `release`
+- An active GitHub tag ruleset that restricts creation, update, and deletion of
+  production `v*` tags to the release operators
+
+The workflow itself fails closed if a direct or manually dispatched tag has no
+recent successful readiness run for the exact version and commit. Repository
+settings cannot be added by a pull request, however. The 2026-09-06 settings
+audit found no protection rules or deployment-branch policy on the `release`
+environment and no repository tag ruleset. Those settings are an external
+production-release blocker until an owner configures them. After configuration,
+verify them through the GitHub repository settings or API before tagging; do not
+treat the workflow provenance check as a substitute for tag-creation control.
+
+As of 2026-09-06, the Azure release variables, exact signing resource/profile,
+and direct workload-identity Reader/Signer assignments have been configured and
+their expected values match. This is configuration evidence only: the protected
+readiness workflow has not yet proved OIDC/control-plane access, and only the
+Windows signing job can prove the Artifact Signing data plane against an actual
+installer.
 
 Once those are available, add only the secret names listed above and rerun the
 release workflow. The workflow will report the exact missing item if setup is

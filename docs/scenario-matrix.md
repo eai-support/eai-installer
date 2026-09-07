@@ -50,6 +50,7 @@ visible.
 | AI-02 | AI handoff | A supported AI workspace is installed | The user can start it with the project path. |
 | AI-03 | AI handoff | Choose an AI workspace download | Only the official provider page opens; no provider account or secret is collected. |
 | AI-04 | AI handoff | AI workspace start fails | The project remains safe and the user receives a command-free recovery explanation. |
+| AI-05 | AI handoff | Choose a launch-only desktop client | The app opens without claiming that the local project was handed off; diagnostic E2E does not accept it as project-handoff evidence. |
 
 ## Evidence rules
 
