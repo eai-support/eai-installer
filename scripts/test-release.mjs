@@ -1135,7 +1135,7 @@ assert.match(windowsDetachedCleanupSource, /\$bootstrapObserved = \$true/);
 assert.match(windowsDetachedCleanupSource, /An unstarted launch cannot be proven while any exact executable process exists/);
 assert.match(windowsDetachedCleanupSource, /\$retryCandidate -and -not \$launchEvidenceObserved -and -not \$bootstrapObserved/);
 assert.match(windowsDetachedCleanupSource, /exit 4/);
-const windowsCleanupCancelWrite = windowsDetachedCleanupSource.indexOf("\nWrite-CancelSignal\n");
+const windowsCleanupCancelWrite = windowsDetachedCleanupSource.match(/^Write-CancelSignal\r?$/m)?.index ?? -1;
 const windowsCleanupFirstStateRead = windowsDetachedCleanupSource.indexOf("$state = Read-BoundLaunchState", windowsCleanupCancelWrite);
 assert.ok(windowsCleanupCancelWrite >= 0 && windowsCleanupCancelWrite < windowsCleanupFirstStateRead);
 for (const kill of windowsDetachedCleanupSource.matchAll(/[.]Kill\(\)/g)) {
