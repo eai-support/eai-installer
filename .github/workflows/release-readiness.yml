@@ -56,9 +56,16 @@ jobs:
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
+          ALLOW_UNSIGNED_MACOS_RELEASE: ${{ vars.ALLOW_UNSIGNED_MACOS_RELEASE }}
         run: |
           set -euo pipefail
           umask 077
+
+          if [ "$ALLOW_UNSIGNED_MACOS_RELEASE" = "true" ] && \
+             [ -z "$APPLE_CERTIFICATE$APPLE_CERTIFICATE_PASSWORD$APPLE_SIGNING_IDENTITY$APPLE_ID$APPLE_PASSWORD$APPLE_TEAM_ID$APPLE_API_ISSUER$APPLE_API_KEY$APPLE_API_PRIVATE_KEY" ]; then
+            echo "Apple credentials are not configured; readiness permits an explicitly labelled unsigned macOS asset."
+            exit 0
+          fi
 
           test -n "$APPLE_CERTIFICATE" || { echo "Missing release secret APPLE_CERTIFICATE." >&2; exit 1; }
           test -n "$APPLE_CERTIFICATE_PASSWORD" || { echo "Missing release secret APPLE_CERTIFICATE_PASSWORD." >&2; exit 1; }

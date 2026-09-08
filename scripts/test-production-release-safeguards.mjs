@@ -47,10 +47,12 @@ for (const build of [macBuild, windowsBuild, linuxBuild]) {
 }
 assert.doesNotMatch(windowsJob, /APPLE_CERTIFICATE|APPLE_PASSWORD|APPLE_API_PRIVATE_KEY/);
 assert.doesNotMatch(windowsBuildJob, /id-token: write|environment: release|Azure\/login|artifact-signing-action|AZURE_SIGNING_SUBJECT/);
-assert.doesNotMatch(linuxJob, /APPLE_CERTIFICATE|APPLE_PASSWORD|APPLE_API_PRIVATE_KEY|id-token: write|environment: release/);
+assert.doesNotMatch(linuxJob, /APPLE_CERTIFICATE|APPLE_PASSWORD|APPLE_API_PRIVATE_KEY|id-token: write/);
+assert.match(linuxJob, /environment: release/);
+assert.match(linuxJob, /LINUX_SIGNING_PRIVATE_KEY/);
 assert.match(windowsJob, /permissions:\n      contents: read\n      id-token: write/);
 assert.doesNotMatch(appleJob, /id-token: write|Azure\/login|artifact-signing-action/);
-assert.equal((workflow.match(/uses: tauri-apps\/tauri-action@[a-f0-9]{40}/g) ?? []).length, 3);
+assert.equal((workflow.match(/uses: tauri-apps\/tauri-action@[a-f0-9]{40}/g) ?? []).length, 4);
 
 const windowsDownloadIndex = windowsJob.indexOf("- name: Download exact unsigned Windows input");
 const azureLoginIndex = windowsJob.indexOf("- name: Sign Windows installer with Azure Artifact Signing");
@@ -87,7 +89,7 @@ assert.match(linuxJob, /dpkg-deb --field "\$package" Architecture/);
 const publisher = workflow.slice(publisherIndex);
 assert.match(publisher, /needs: \[release-windows, release-apple, release-linux\]/);
 assert.match(publisher, /actions\/download-artifact@[a-f0-9]{40} # v5/);
-assert.match(publisher, /test "\$\{#actual\[@\]\}" -eq 6/);
+assert.match(publisher, /test "\$\{#actual\[@\]\}" -eq 9/);
 assert.match(publisher, /gh release upload "\$tag" release-assets\/[*] --clobber/);
 assert.match(publisher, /gh release create "\$tag"[\s\S]*--draft/);
 assert.match(publisher, /sha256sum --check/);

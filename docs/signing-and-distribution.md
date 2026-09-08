@@ -7,10 +7,35 @@ This repository separates three concerns:
 3. The GitHub release must remain a draft until the published-asset VM gate
    has passed.
 
-The production workflow uses the GitHub `release` environment. Production
-remains intentionally blocked until the missing Apple credentials and GitHub
-environment/tag protections described below are configured.
+The production workflow uses the GitHub `release` environment. Windows and
+Linux signing are configured; macOS remains explicitly unsigned until the
+Apple credentials and GitHub environment/tag protections described below are
+configured.
 Do not put any certificate, password, private key, or token in git.
+
+## Platform signing matrix
+
+Signing is evaluated per platform in the production workflow; one platform's
+missing capability must never be used as a reason to remove signing from a
+different platform. The current contract is:
+
+| Artifact | Signing status | Verification |
+| --- | --- | --- |
+| Windows `.exe` | Required when published; Microsoft Artifact Signing | `Get-AuthenticodeSignature`, Code Signing EKU, and RFC3161 timestamp |
+| macOS `.dmg` | Required when published; Apple Developer ID plus notarization | `codesign`, `spctl`, and stapled-ticket validation |
+| Ubuntu `.deb` | Detached GPG signature, with the public release key shipped alongside the package | `gpg --verify` against the protected release key |
+
+The Windows and macOS jobs are separate signing jobs and fail closed if their
+protected credentials are incomplete. They do not fall back to publishing an
+unsigned customer artifact. Linux package signing is a different mechanism
+from Microsoft Authenticode. The direct GitHub Release channel publishes each
+`.deb`, its detached `.asc` signature, and `eai-linux-signing-key.asc`. An apt
+repository would instead require separately managed GPG-signed `InRelease`
+metadata; that is not the current distribution channel.
+
+The diagnostic `test-release.yml` workflow is intentionally unsigned on all
+platforms. Its prereleases must not be described as signed or production
+approved; use the production workflow for signed customer installers.
 
 ## Apple distribution
 
@@ -49,11 +74,13 @@ gh secret set APPLE_API_KEY --repo eai-support/eai-installer --env release
 gh secret set APPLE_API_PRIVATE_KEY --repo eai-support/eai-installer --env release < AuthKey_ABC123DEFG.p8
 ```
 
-The production workflow verifies the app with `codesign` and `spctl`, then
-validates the stapled ticket with `xcrun stapler validate`. A notarized DMG is
+When the Apple credentials are configured, the production workflow verifies
+the app with `codesign` and `spctl`, then validates the stapled ticket with
+`xcrun stapler validate`. Until then, the protected release variable
+`ALLOW_UNSIGNED_MACOS_RELEASE=true` permits an explicitly labelled unsigned
+macOS asset; it must not be described as Gatekeeper-ready. A notarized DMG is
 the requirement for removing the macOS malware warning for ordinary customer
-downloads. A first-download confirmation can still be shown by macOS as a
-normal internet-download consent step.
+downloads.
 
 ## Windows distribution
 
