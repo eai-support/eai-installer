@@ -886,7 +886,8 @@ stage clean-snapshot-preflight
 vm_info="$(prlctl list -i "$vm_name" 2>/dev/null || true)"
 grep -Fq 'GuestTools: state=installed' <<<"$vm_info" \
   || guest_test_fail "Parallels Tools are not reported as installed in the Ubuntu guest."
-guest_os="$(prlctl exec "$vm_name" /bin/bash -c '. /etc/os-release; printf "%s %s" "$ID" "$VERSION_ID"' 2>/dev/null | tr -d '\r\n')"
+guest_os="$(printf '%s\n' '. /etc/os-release; printf "%s %s" "$ID" "$VERSION_ID"' \
+  | prlctl exec "$vm_name" /bin/bash -s 2>/dev/null | tr -d '\r\n')"
 [[ "$guest_os" == 'ubuntu 24.04' ]] || guest_test_fail "The selected guest is not Ubuntu 24.04."
 guest_arch="$(prlctl exec "$vm_name" /usr/bin/uname -m 2>/dev/null | tr -d '\r\n')"
 dpkg_arch="$(prlctl exec "$vm_name" /usr/bin/dpkg --print-architecture 2>/dev/null | tr -d '\r\n')"
