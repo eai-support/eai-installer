@@ -37,6 +37,7 @@ const windowsDiagnosticCleanupPowerShell = path.join(root, "scripts", "windows-d
 const windowsDiagnosticCleanupTest = path.join(root, "scripts", "test-windows-diagnostic-cleanup.sh");
 const windowsDiagnosticCleanupGate = path.join(root, "scripts", "write-windows-diagnostic-cleanup-gate.mjs");
 const keychainE2eLauncher = path.join(root, "scripts", "run-release-e2e-from-keychain.sh");
+const keychainLoader = path.join(root, "scripts", "load-release-e2e-keychain.sh");
 const ubuntuGuestCore = path.join(root, "scripts", "ubuntu-guest-test-core.sh");
 const ubuntuGuestSession = path.join(root, "scripts", "ubuntu-guest-session.sh");
 const ubuntuGuestLogin = path.join(root, "scripts", "login-ubuntu-guest.sh");
@@ -70,6 +71,10 @@ const windowsDiagnosticCleanupSource = readSource(windowsDiagnosticCleanup);
 const windowsPortalEvidenceFinalizerSource = readSource(windowsPortalEvidenceFinalizer);
 const windowsDiagnosticCleanupPowerShellSource = readSource(windowsDiagnosticCleanupPowerShell);
 const keychainE2eLauncherSource = readSource(keychainE2eLauncher);
+const keychainLoaderSource = readSource(keychainLoader);
+assert.match(keychainLoaderSource, /EAI_HARNESS_TENANT_ID/);
+assert.match(keychainLoaderSource, /find-generic-password/);
+assert.match(releaseShell, /source "\$ROOT\/scripts\/load-release-e2e-keychain[.]sh"/);
 assert.match(keychainE2eLauncherSource, /\/usr\/sbin\/ioreg -n Root -d1/);
 assert.match(keychainE2eLauncherSource, /"IOConsoleLocked" = Yes/);
 assert.match(keychainE2eLauncherSource, /no VM was touched/);
