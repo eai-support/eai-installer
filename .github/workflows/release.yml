@@ -289,7 +289,8 @@ jobs:
           node-version: 24
           package-manager-cache: false
       - run: npm test
-      - name: Require complete Apple signing configuration
+      - name: Detect Apple signing configuration
+        id: apple_signing
         shell: bash
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
@@ -303,29 +304,52 @@ jobs:
           APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY }}
         run: |
           set -euo pipefail
-          test -n "$APPLE_CERTIFICATE" || { echo "Missing release secret APPLE_CERTIFICATE." >&2; exit 1; }
-          test -n "$APPLE_CERTIFICATE_PASSWORD" || { echo "Missing release secret APPLE_CERTIFICATE_PASSWORD." >&2; exit 1; }
-          test -n "$APPLE_SIGNING_IDENTITY" || { echo "Missing release secret APPLE_SIGNING_IDENTITY." >&2; exit 1; }
-          apple_id_value_count=0
-          api_key_value_count=0
-          for value in "$APPLE_ID" "$APPLE_PASSWORD" "$APPLE_TEAM_ID"; do
-            if [ -n "$value" ]; then apple_id_value_count=$((apple_id_value_count + 1)); fi
-          done
-          for value in "$APPLE_API_ISSUER" "$APPLE_API_KEY" "$APPLE_API_PRIVATE_KEY"; do
-            if [ -n "$value" ]; then api_key_value_count=$((api_key_value_count + 1)); fi
-          done
-          if [ "$apple_id_value_count" -ne 0 ] && [ "$apple_id_value_count" -ne 3 ]; then
-            echo "The Apple ID notarization credential set is only partially configured." >&2
-            exit 1
+          apple_values=("$APPLE_CERTIFICATE" "$APPLE_CERTIFICATE_PASSWORD" "$APPLE_SIGNING_IDENTITY")
+          apple_id_values=("$APPLE_ID" "$APPLE_PASSWORD" "$APPLE_TEAM_ID")
+          api_values=("$APPLE_API_ISSUER" "$APPLE_API_KEY" "$APPLE_API_PRIVATE_KEY")
+          apple_count=0; apple_id_count=0; api_count=0
+          for value in "${apple_values[@]}"; do [ -n "$value" ] && apple_count=$((apple_count + 1)); done
+          for value in "${apple_id_values[@]}"; do [ -n "$value" ] && apple_id_count=$((apple_id_count + 1)); done
+          for value in "${api_values[@]}"; do [ -n "$value" ] && api_count=$((api_count + 1)); done
+          if [ "$apple_count" -eq 0 ] && [ "$apple_id_count" -eq 0 ] && [ "$api_count" -eq 0 ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "Apple signing credentials are not configured; this release will label macOS assets unsigned."
+            exit 0
           fi
-          if [ "$api_key_value_count" -ne 0 ] && [ "$api_key_value_count" -ne 3 ]; then
-            echo "The App Store Connect API-key credential set is only partially configured." >&2
-            exit 1
+          [ "$apple_count" -eq 3 ] || { echo "Apple Developer ID signing credentials are incomplete." >&2; exit 1; }
+          if [ "$apple_id_count" -ne 0 ] && [ "$apple_id_count" -ne 3 ]; then
+            echo "The Apple ID notarization credential set is only partially configured." >&2; exit 1
           fi
-          if [ "$apple_id_value_count" -ne 3 ] && [ "$api_key_value_count" -ne 3 ]; then
-            echo "Configure one complete Apple notarization credential set." >&2
-            exit 1
+          if [ "$api_count" -ne 0 ] && [ "$api_count" -ne 3 ]; then
+            echo "The App Store Connect API-key credential set is only partially configured." >&2; exit 1
           fi
+          if [ "$apple_id_count" -ne 3 ] && [ "$api_count" -ne 3 ]; then
+            echo "Configure one complete Apple notarization credential set." >&2; exit 1
+          fi
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+
+      - name: Build notarized macOS bundle without publishing
+        if: steps.apple_signing.outputs.enabled == 'true'
+        uses: tauri-apps/tauri-action@944946e3e4cac6603d1fe8f514171e9ecd3c78aa # v1
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+        with:
+          projectPath: src-tauri
+          args: --ci --target ${{ matrix.target }} --bundles dmg
+
+      - name: Build unsigned macOS bundle without publishing
+        if: steps.apple_signing.outputs.enabled != 'true'
+        uses: tauri-apps/tauri-action@944946e3e4cac6603d1fe8f514171e9ecd3c78aa # v1
+        with:
+          projectPath: src-tauri
+          args: --ci --target ${{ matrix.target }} --bundles dmg
       - name: Check Rust target
         run: cargo check --manifest-path src-tauri/Cargo.toml --target ${{ matrix.target }}
       - name: Prepare Apple notarization API key
@@ -340,20 +364,6 @@ jobs:
             printf '%s\n' "$APPLE_API_PRIVATE_KEY" > "$RUNNER_TEMP/AuthKey_${APPLE_API_KEY}.p8"
             echo "APPLE_API_KEY_PATH=$RUNNER_TEMP/AuthKey_${APPLE_API_KEY}.p8" >> "$GITHUB_ENV"
           fi
-      - name: Build notarized macOS bundle without publishing
-        uses: tauri-apps/tauri-action@944946e3e4cac6603d1fe8f514171e9ecd3c78aa # v1
-        env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
-        with:
-          projectPath: src-tauri
-          args: --ci --target ${{ matrix.target }} --bundles dmg
       - name: Stage exact stable release asset
         shell: bash
         run: |
@@ -364,6 +374,7 @@ jobs:
           cp "$bundle" "staged-release/${{ matrix.asset }}"
           test -s "staged-release/${{ matrix.asset }}"
       - name: Verify Gatekeeper-ready macOS bundle
+        if: steps.apple_signing.outputs.enabled == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -398,6 +409,21 @@ jobs:
           xcrun stapler validate "$dmg"
           hdiutil detach "$mount_dir" -quiet
           mounted=0
+      - name: Verify unsigned macOS bundle metadata
+        if: steps.apple_signing.outputs.enabled != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          dmg="staged-release/${{ matrix.asset }}"
+          hdiutil imageinfo "$dmg" >/dev/null
+          mount_dir="$RUNNER_TEMP/eai-setup-unsigned-mount"
+          mkdir -p "$mount_dir"
+          hdiutil attach "$dmg" -readonly -nobrowse -mountpoint "$mount_dir" -quiet
+          trap 'hdiutil detach "$mount_dir" -quiet || true' EXIT
+          app="$(find "$mount_dir" -maxdepth 1 -type d -name '*.app' -print -quit)"
+          test -n "$app"
+          actual_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")"
+          test "$actual_version" = "$(node -p "require('./package.json').version")"
       - name: Upload verified release asset to workflow storage
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
@@ -407,7 +433,7 @@ jobs:
           retention-days: 1
 
   release-linux:
-    name: Build and verify Linux (${{ matrix.target }})
+    name: Build, sign, and verify Linux (${{ matrix.target }})
     needs: validate-readiness-provenance
     strategy:
       fail-fast: false
@@ -422,6 +448,7 @@ jobs:
             asset: eai-setup-ubuntu-arm64.deb
             deb_arch: arm64
     runs-on: ${{ matrix.os }}
+    environment: release
     permissions:
       contents: read
     steps:
@@ -449,7 +476,8 @@ jobs:
             libxdo-dev \
             librsvg2-dev \
             patchelf \
-            wget
+            wget \
+            gnupg
       - run: npm test
       - name: Check Rust target
         run: cargo check --manifest-path src-tauri/Cargo.toml --target ${{ matrix.target }}
@@ -467,6 +495,24 @@ jobs:
           test -s "$bundle"
           cp "$bundle" "staged-release/${{ matrix.asset }}"
           test -s "staged-release/${{ matrix.asset }}"
+      - name: Sign Debian package with the protected release key
+        shell: bash
+        env:
+          LINUX_SIGNING_PRIVATE_KEY: ${{ secrets.LINUX_SIGNING_PRIVATE_KEY }}
+          LINUX_SIGNING_KEY_ID: ${{ vars.LINUX_SIGNING_KEY_ID }}
+        run: |
+          set -euo pipefail
+          test -n "$LINUX_SIGNING_PRIVATE_KEY" || { echo "Missing release secret LINUX_SIGNING_PRIVATE_KEY." >&2; exit 1; }
+          test -n "$LINUX_SIGNING_KEY_ID" || { echo "Missing release variable LINUX_SIGNING_KEY_ID." >&2; exit 1; }
+          export GNUPGHOME="$RUNNER_TEMP/eai-release-gnupg"
+          install -d -m 700 "$GNUPGHOME"
+          printf '%s\n' "$LINUX_SIGNING_PRIVATE_KEY" | gpg --batch --import
+          gpg --batch --local-user "$LINUX_SIGNING_KEY_ID" --armor --detach-sign \
+            --output "staged-release/${{ matrix.asset }}.asc" "staged-release/${{ matrix.asset }}"
+          gpg --batch --verify "staged-release/${{ matrix.asset }}.asc" "staged-release/${{ matrix.asset }}"
+          if [ "${{ matrix.deb_arch }}" = "amd64" ]; then
+            gpg --batch --armor --export "$LINUX_SIGNING_KEY_ID" > staged-release/eai-linux-signing-key.asc
+          fi
       - name: Verify staged Linux package
         shell: bash
         run: |
@@ -480,12 +526,12 @@ jobs:
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: signed-release-${{ matrix.target }}
-          path: staged-release/${{ matrix.asset }}
+          path: staged-release/*
           if-no-files-found: error
           retention-days: 1
 
   publish-draft:
-    name: Publish verified six-asset draft
+    name: Publish verified cross-platform draft
     needs: [release-windows, release-apple, release-linux]
     runs-on: ubuntu-22.04
     environment: release
@@ -499,7 +545,7 @@ jobs:
           pattern: signed-release-*
           path: release-assets
           merge-multiple: true
-      - name: Verify exact six-asset release set
+      - name: Verify exact cross-platform release set
         shell: bash
         run: |
           set -euo pipefail
@@ -508,12 +554,15 @@ jobs:
             eai-setup-macos-arm64.dmg
             eai-setup-macos-x64.dmg
             eai-setup-ubuntu-amd64.deb
+            eai-setup-ubuntu-amd64.deb.asc
             eai-setup-ubuntu-arm64.deb
+            eai-setup-ubuntu-arm64.deb.asc
+            eai-linux-signing-key.asc
             eai-setup-windows-arm64.exe
             eai-setup-windows-x64.exe
           )
           mapfile -t expected < <(printf '%s\n' "${expected[@]}" | LC_ALL=C sort)
-          test "${#actual[@]}" -eq 6
+          test "${#actual[@]}" -eq 9
           test "${actual[*]}" = "${expected[*]}"
           for asset in "${actual[@]}"; do test -s "release-assets/$asset"; done
           (cd release-assets && sha256sum --binary "${actual[@]}") > local-assets.sha256
@@ -545,7 +594,7 @@ jobs:
               --target "$workflow_commit" \
               --draft \
               --title "EAI Setup v$version" \
-              --notes "Signed cross-platform EAI Setup bundle."
+              --notes "Windows installers are Microsoft Artifact Signed. Ubuntu .deb installers are accompanied by detached GPG signatures and the public release key. macOS installers are explicitly unsigned until Apple Developer ID credentials are configured."
           fi
           gh release upload "$tag" release-assets/* --clobber
           mapfile -t remote_names < <(gh release view "$tag" --json assets --jq '.assets[].name' | LC_ALL=C sort)

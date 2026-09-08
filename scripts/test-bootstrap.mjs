@@ -461,7 +461,7 @@ for (const value of ["workflow_dispatch", "gh release create", "gh release uploa
   if (!testRelease.includes(value)) throw new Error(`test-release workflow is missing: ${value}`);
 }
 const release = await readFile(new URL("../.github/workflows/release.yml", import.meta.url), "utf8");
-for (const value of ["Stage exact stable release asset", "Upload verified release asset to workflow storage", "Publish verified six-asset draft", "tauri-apps/tauri-action@", "eai-setup-macos-arm64.dmg", "eai-setup-macos-x64.dmg", "eai-setup-windows-x64.exe", "eai-setup-windows-arm64.exe", "eai-setup-ubuntu-amd64.deb", "eai-setup-ubuntu-arm64.deb", "x86_64-apple-darwin", "aarch64-pc-windows-msvc", "ubuntu-24.04-arm", "codesign --verify --deep --strict", "spctl --assess --type execute", "xcrun stapler validate", "Get-AuthenticodeSignature"]) {
+for (const value of ["Stage exact stable release asset", "Upload verified release asset to workflow storage", "Publish verified cross-platform draft", "tauri-apps/tauri-action@", "eai-setup-macos-arm64.dmg", "eai-setup-macos-x64.dmg", "eai-setup-windows-x64.exe", "eai-setup-windows-arm64.exe", "eai-setup-ubuntu-amd64.deb", "eai-setup-ubuntu-arm64.deb", "x86_64-apple-darwin", "aarch64-pc-windows-msvc", "ubuntu-24.04-arm", "codesign --verify --deep --strict", "spctl --assess --type execute", "xcrun stapler validate", "Get-AuthenticodeSignature", "LINUX_SIGNING_PRIVATE_KEY"]) {
   if (!release.includes(value)) throw new Error(`release workflow is missing: ${value}`);
 }
 const testBundles = await readFile(new URL("../.github/workflows/test-bundles.yml", import.meta.url), "utf8");
