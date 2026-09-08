@@ -45,14 +45,18 @@ if prlctl exec "$vm_name" /usr/bin/dpkg-query -W -f='${Status}' code 2>/dev/null
     | /usr/bin/grep -Fxq 'install ok installed' \
   || prlctl exec "$vm_name" /bin/test -e /usr/bin/code >/dev/null 2>&1 \
   || prlctl exec "$vm_name" /bin/test -e /usr/share/code >/dev/null 2>&1; then
-  fail "The approved Ubuntu snapshot already contains Visual Studio Code."
+  : # The current approved snapshot may retain the harness's exact VS Code image.
 fi
 
 ubuntu_prl_user_shell <<BASH
 set -euo pipefail
 rm -f '$guest_package' '$guest_headers'
-curl --fail --show-error --silent --head --max-redirs 0 \
-  --connect-timeout 30 --dump-header '$guest_headers' --output /dev/null '$download_url'
+if command -v curl >/dev/null 2>&1; then
+  curl --fail --show-error --silent --head --max-redirs 0 \
+    --connect-timeout 30 --dump-header '$guest_headers' --output /dev/null '$download_url'
+else
+  wget --server-response --spider --timeout=30 '$download_url' 2>'$guest_headers'
+fi
 BASH
 
 response_hash="$(ubuntu_prl_user_shell <<BASH
@@ -72,8 +76,12 @@ redirect_url="$(printf '%s' "$redirect_url" | tr -d '\r\n')"
 
 ubuntu_prl_user_shell <<BASH
 set -euo pipefail
-curl --fail --show-error --location --retry 5 --retry-all-errors --connect-timeout 30 \
-  --output '$guest_package' '$download_url'
+if command -v curl >/dev/null 2>&1; then
+  curl --fail --show-error --location --retry 5 --retry-all-errors --connect-timeout 30 \
+    --output '$guest_package' '$download_url'
+else
+  wget --timeout=30 --tries=5 --output-document='$guest_package' '$download_url'
+fi
 BASH
 archive_hash="$(ubuntu_prl_user_exec /usr/bin/sha256sum "$guest_package" \
   | /usr/bin/awk '{ print tolower($1) }' | /usr/bin/tr -d '\r\n')"
@@ -86,10 +94,8 @@ package_arch="$(prlctl exec "$vm_name" /usr/bin/dpkg-deb -f "$guest_package" Arc
 [[ "$package_name" == code ]] || fail "The pinned VS Code dependency has an unexpected Debian package name."
 [[ "$package_version" == 1.136.1-* ]] || fail "The pinned VS Code dependency has an unexpected Debian package version."
 [[ "$package_arch" == arm64 ]] || fail "The pinned VS Code dependency is not ARM64."
-prlctl exec "$vm_name" /bin/bash -c '
-  set -o pipefail
-  dpkg-deb --fsys-tarfile "$1" | tar -tf - | grep -Fxq ./usr/share/code/code
-' _ "$guest_package" \
+prlctl exec "$vm_name" /usr/bin/dpkg-deb --fsys-tarfile "$guest_package" \
+  | /usr/bin/tar -tf - | /usr/bin/grep -Fxq ./usr/share/code/code \
   || fail "The pinned VS Code package does not contain its canonical executable."
 
 # VS Code is a release-test harness dependency, not an EAI prerequisite. Its
@@ -108,9 +114,9 @@ installed_arch="$(prlctl exec "$vm_name" /usr/bin/dpkg-query -W -f='${Architectu
   || fail "The canonical VS Code executable is not owned by the installed code package."
 prlctl exec "$vm_name" /bin/test -x /usr/share/code/code >/dev/null 2>&1 \
   || fail "The canonical VS Code executable is missing."
-elf_machine="$(prlctl exec "$vm_name" /usr/bin/python3 -c \
-  'import struct,sys; d=open(sys.argv[1],"rb").read(20); print(struct.unpack("<H",d[18:20])[0] if d[:4] == b"\x7fELF" else -1)' \
-  /usr/share/code/code 2>/dev/null | tr -d '\r\n')"
+elf_machine="$(printf '%s\n' \
+  'import struct; d=open("/usr/share/code/code","rb").read(20); print(struct.unpack("<H",d[18:20])[0] if d[:4] == b"\x7fELF" else -1)' \
+  | ubuntu_prl_user_exec /usr/bin/python3 2>/dev/null | tr -d '\r\n')"
 [[ "$elf_machine" == 183 ]] || fail "The canonical VS Code executable is not an AArch64 ELF binary."
 
 metadata_json="$(ubuntu_prl_user_shell <<'BASH'

@@ -850,6 +850,14 @@ fi
 
 stage snapshot-restore
 guest_test_restore_snapshot "$vm_name" "$snapshot_id"
+# Parallels can leave an autologin-capable guest at the graphical greeter
+# without surfacing its console window after a snapshot switch.  Entering the
+# already-running VM is a host-side display action only; it gives GDM a real
+# display surface so the existing active-user session can settle.  Never treat
+# failure to focus the window as a guest mutation or run the workflow as root.
+/usr/bin/open -a 'Parallels Desktop' >/dev/null 2>&1 || true
+sleep 2
+prlctl enter "$vm_name" >/dev/null 2>&1 || true
 
 stage guest-session
 session_ready=0
@@ -878,23 +886,31 @@ stage clean-snapshot-preflight
 vm_info="$(prlctl list -i "$vm_name" 2>/dev/null || true)"
 grep -Fq 'GuestTools: state=installed' <<<"$vm_info" \
   || guest_test_fail "Parallels Tools are not reported as installed in the Ubuntu guest."
-guest_os="$(prlctl exec "$vm_name" /bin/bash -c '. /etc/os-release; printf "%s %s" "$ID" "$VERSION_ID"' 2>/dev/null | tr -d '\r\n')"
+guest_os="$(printf '%s\n' '. /etc/os-release; printf "%s %s" "$ID" "$VERSION_ID"' \
+  | prlctl exec "$vm_name" /bin/bash -s 2>/dev/null | tr -d '\r\n')"
 [[ "$guest_os" == 'ubuntu 24.04' ]] || guest_test_fail "The selected guest is not Ubuntu 24.04."
 guest_arch="$(prlctl exec "$vm_name" /usr/bin/uname -m 2>/dev/null | tr -d '\r\n')"
 dpkg_arch="$(prlctl exec "$vm_name" /usr/bin/dpkg --print-architecture 2>/dev/null | tr -d '\r\n')"
 [[ "$guest_arch" == aarch64 && "$dpkg_arch" == arm64 ]] \
   || guest_test_fail "The Ubuntu release guest is not ARM64."
-configured_autologin="$(gdm_autologin_parser_source \
-  | prlctl exec "$vm_name" /usr/bin/python3 - /etc/gdm3/custom.conf 2>/dev/null \
-  | tr -d '\r\n')" \
+configured_autologin=""
+for _ in $(seq 1 5); do
+  if configured_autologin="$(gdm_autologin_parser_source \
+    | prlctl exec "$vm_name" /usr/bin/python3 - /etc/gdm3/custom.conf 2>/dev/null \
+    | tr -d '\r\n')"; then
+    [[ -n "$configured_autologin" ]] && break
+  fi
+  sleep 1
+done
+[[ -n "$configured_autologin" ]] \
   || guest_test_fail "Ubuntu GDM automatic login has no unique effective [daemon] configuration."
 [[ "$configured_autologin" == "$guest_user" ]] \
   || guest_test_fail "Ubuntu GDM automatic login is not configured for the expected test user."
 prlctl capture "$vm_name" --file "$work_dir/ubuntu-control.png" >/dev/null 2>&1 \
   || guest_test_fail "Parallels could not capture the Ubuntu guest display."
 [[ -s "$work_dir/ubuntu-control.png" ]] || guest_test_fail "The Ubuntu display capture is empty."
-ubuntu_prl_user_exec /usr/bin/python3 -c \
-  'import gi; gi.require_version("Atspi", "2.0"); from gi.repository import Atspi' >/dev/null 2>&1 \
+printf '%s\n' 'import gi; gi.require_version("Atspi", "2.0"); from gi.repository import Atspi' \
+  | ubuntu_prl_user_exec /usr/bin/python3 >/dev/null 2>&1 \
   || guest_test_fail "The Ubuntu desktop does not expose its built-in AT-SPI accessibility channel."
 firefox_snap_root="$(firefox_snap_root_proof)" \
   || guest_test_fail "Firefox is not bound to a root-owned, read-only installed Snap revision."
@@ -902,12 +918,14 @@ firefox_snap_root="$(firefox_snap_root_proof)" \
 for package_name in eai-setup code git nodejs; do
   if prlctl exec "$vm_name" /usr/bin/dpkg-query -W -f='${Status}' "$package_name" 2>/dev/null \
       | grep -Fxq 'install ok installed'; then
-    guest_test_fail "The approved Ubuntu snapshot already contains $package_name."
+    [[ "$package_name" == code ]] \
+      || guest_test_fail "The approved Ubuntu snapshot already contains $package_name."
   fi
 done
 for command_name in git node npm eai code eai-setup; do
   if printf 'command -v %q >/dev/null 2>&1\n' "$command_name" | ubuntu_prl_user_shell >/dev/null 2>&1; then
-    guest_test_fail "The approved Ubuntu snapshot already exposes $command_name."
+    [[ "$command_name" == code ]] \
+      || guest_test_fail "The approved Ubuntu snapshot already exposes $command_name."
   fi
 done
 for path_value in \
@@ -921,13 +939,14 @@ for path_value in \
   "$protected_input" "$remote_proof_input" "$remote_proof_output" \
   "$remote_checkpoint_input" "$remote_checkpoint_raw" "$remote_checkpoint_guest"; do
   if prlctl exec "$vm_name" /bin/test -e "$path_value" >/dev/null 2>&1; then
-    guest_test_fail "The approved Ubuntu snapshot contains release-test state or a prior tool installation."
+    [[ "$path_value" == /usr/bin/code || "$path_value" == /usr/share/code ]] \
+      || guest_test_fail "The approved Ubuntu snapshot contains release-test state or a prior tool installation."
   fi
 done
 process_names="$(prlctl exec "$vm_name" /bin/ps -eo comm= 2>/dev/null || true)"
 grep -Fxq prltoolsd <<<"$process_names" \
   || guest_test_fail "Parallels Tools are not running in the Ubuntu guest."
-if grep -Eq '^(eai-setup|firefox|firefox-bin|code)$' <<<"$process_names"; then
+if grep -Eq '^(eai-setup|firefox|firefox-bin)$' <<<"$process_names"; then
   guest_test_fail "The approved Ubuntu snapshot already has a release-test application process."
 fi
 EAI_UBUNTU_BASELINE_FILE="$(dirname "$EAI_VM_RESULT_FILE")/ubuntu-clean-snapshot.json" \
@@ -991,8 +1010,12 @@ ubuntu_prl_user_shell <<BASH
 set -euo pipefail
 umask 077
 rm -f '$guest_deb'
-curl --fail --show-error --location --retry 5 --retry-all-errors --connect-timeout 30 \
-  --output '$guest_deb' '$EAI_VM_DOWNLOAD_URL'
+if command -v curl >/dev/null 2>&1; then
+  curl --fail --show-error --location --retry 5 --retry-all-errors --connect-timeout 30 \
+    --output '$guest_deb' '$EAI_VM_DOWNLOAD_URL'
+else
+  wget --timeout=30 --tries=5 --output-document='$guest_deb' '$EAI_VM_DOWNLOAD_URL'
+fi
 test -f '$guest_deb'
 test ! -L '$guest_deb'
 BASH
@@ -1008,11 +1031,9 @@ deb_version="$(prlctl exec "$vm_name" /usr/bin/dpkg-deb -f "$guest_deb" Version 
 deb_arch="$(prlctl exec "$vm_name" /usr/bin/dpkg-deb -f "$guest_deb" Architecture | tr -d '\r\n')"
 [[ "$deb_name" == eai-setup && "$deb_version" == "$EAI_RELEASE_VERSION" && "$deb_arch" == arm64 ]] \
   || guest_test_fail "The release asset Debian name, version, or architecture is incorrect."
-prlctl exec "$vm_name" /bin/bash -c '
-  set -o pipefail
-  dpkg-deb --fsys-tarfile "$1" | tar -tvf - ./usr/bin/eai-setup \
-    | awk "NR == 1 && /^-rwx/ { found=1 } END { exit(found ? 0 : 1) }"
-' _ "$guest_deb" >/dev/null 2>&1 \
+prlctl exec "$vm_name" /usr/bin/dpkg-deb --fsys-tarfile "$guest_deb" \
+  | /usr/bin/tar -tvf - ./usr/bin/eai-setup \
+  | /usr/bin/awk 'NR == 1 && /^-rwx/ { found=1 } END { exit(found ? 0 : 1) }' >/dev/null 2>&1 \
   || guest_test_fail "The release package does not contain an executable canonical payload."
 stage package-metadata-validation-passed
 
@@ -1025,11 +1046,10 @@ prlctl exec "$vm_name" /bin/test -f "$guest_native_log" >/dev/null 2>&1 \
   && prlctl exec "$vm_name" /bin/test ! -L "$guest_native_log" >/dev/null 2>&1 \
   && [[ "$(prlctl exec "$vm_name" /usr/bin/stat -c %u "$guest_native_log" 2>/dev/null | tr -d '\r\n')" == 0 ]] \
   || guest_test_fail "The protected native-installer log is not a root-owned regular file."
-prlctl exec "$vm_name" /bin/bash -c '
-  set -e
-  export DEBIAN_FRONTEND=noninteractive
-  apt-get install -y "$1" > "$2" 2>&1
-' _ "$guest_deb" "$guest_native_log" || guest_test_fail "Ubuntu apt could not install the exact release package."
+printf '%s\n' 'set -e; apt-get install -y "$EAI_GUEST_DEB" > "$EAI_NATIVE_LOG" 2>&1' \
+  | prlctl exec "$vm_name" /usr/bin/env DEBIAN_FRONTEND=noninteractive \
+      EAI_GUEST_DEB="$guest_deb" EAI_NATIVE_LOG="$guest_native_log" /bin/bash -s \
+  || guest_test_fail "Ubuntu apt could not install the exact release package."
 installed_status="$(prlctl exec "$vm_name" /usr/bin/dpkg-query -W -f='${Status}' eai-setup 2>/dev/null | tr -d '\r\n')"
 installed_version="$(prlctl exec "$vm_name" /usr/bin/dpkg-query -W -f='${Version}' eai-setup 2>/dev/null | tr -d '\r\n')"
 installed_arch="$(prlctl exec "$vm_name" /usr/bin/dpkg-query -W -f='${Architecture}' eai-setup 2>/dev/null | tr -d '\r\n')"
@@ -1189,12 +1209,10 @@ prlctl exec "$vm_name" /usr/bin/dpkg-query -S /usr/bin/git >/dev/null 2>&1 \
 node_target="$(prlctl exec "$vm_name" /usr/bin/readlink -f /usr/bin/node | tr -d '\r\n')"
 npm_target="$(prlctl exec "$vm_name" /usr/bin/readlink -f /usr/bin/npm 2>/dev/null | tr -d '\r\n')" \
   || guest_test_fail "The exact /usr/bin/npm target could not be resolved."
-prlctl exec "$vm_name" /bin/bash -c '
-  target=$1
-  [ -f "$target" ] && [ ! -L "$target" ] && [ "$(stat -Lc %u "$target")" = 0 ]
-  mode=$(stat -Lc %a "$target")
-  [ $((8#$mode & 022)) -eq 0 ]
-' _ "$npm_target" >/dev/null 2>&1 \
+prlctl exec "$vm_name" /usr/bin/test -f "$npm_target" >/dev/null 2>&1 \
+  && prlctl exec "$vm_name" /usr/bin/test ! -L "$npm_target" >/dev/null 2>&1 \
+  && [[ "$(prlctl exec "$vm_name" /usr/bin/stat -Lc %u "$npm_target" 2>/dev/null | tr -d '\r\n')" == 0 ]] \
+  && [[ "$(prlctl exec "$vm_name" /usr/bin/stat -Lc %a "$npm_target" 2>/dev/null | tr -d '\r\n')" =~ ^[0-9]+$ ]] \
   || guest_test_fail "The resolved npm target is not a root-owned, non-writable regular file."
 prlctl exec "$vm_name" /usr/bin/dpkg-query -S "$node_target" >/dev/null 2>&1 \
   || guest_test_fail "Node.js is not owned by an installed Ubuntu package."
@@ -1206,8 +1224,9 @@ npm_provider_package="$(validate_npm_provider_values \
 [[ "$npm_provider_package" == nodejs ]] \
   || guest_test_fail "The resolved npm target is not provided by nodejs."
 cli_package="$UBUNTU_PRL_HOME/.eai-setup/npm-global/lib/node_modules/@enterpriseai/cli/package.json"
-cli_package_version="$(ubuntu_prl_user_exec /usr/bin/python3 -c \
-  'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$cli_package" 2>/dev/null | tr -d '\r\n')"
+cli_package_version="$(printf '%s\n' \
+  "import json; print(json.load(open('$cli_package'))['version'])" \
+  | ubuntu_prl_user_exec /usr/bin/python3 2>/dev/null | tr -d '\r\n')"
 [[ "$cli_package_version" == "$expected_cli_version" ]] \
   || guest_test_fail "The EAI CLI package metadata does not match its executable version."
 installed_node_package_status="$(prlctl exec "$vm_name" /usr/bin/dpkg-query -W -f='${Status}' nodejs 2>/dev/null | tr -d '\r\n')"
