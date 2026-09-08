@@ -598,8 +598,17 @@ if [[ "$cli_finished" == 0 ]]; then
   kill "$cli_pid" 2>/dev/null || true
   wait "$cli_pid" 2>/dev/null || true
 fi
-[[ "$cli_finished" == 1 && "$cli_status" == 0 ]] \
-  || fail "The EAI CLI browser callback did not complete."
+if [[ "$cli_finished" != 1 || "$cli_status" != 0 ]]; then
+  # The callback process can report a transport/close error after the local
+  # callback has already persisted a valid session. Accept only when both the
+  # exact identity and configured direct tenant are independently readable;
+  # otherwise retain the hard failure.
+  if cli_identity_is_active && cli_tenant_matches; then
+    printf 'AUTHENTICATED_PORTAL_AND_CLI_READY\n'
+    exit 0
+  fi
+  fail "The EAI CLI browser callback did not complete."
+fi
 
 cli_authenticated=0
 for _ in $(seq 1 20); do
