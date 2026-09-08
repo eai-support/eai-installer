@@ -6039,10 +6039,7 @@ done
 
 receipt_ready=0
 liveness_failures=0
-for attempt in $(seq 1 240); do
-  receipt_probe=""
-  receipt_probe_status=0
-  if receipt_probe="$(guest_ps_readonly_run "$EAI_VM_PROJECT_NAME"$'\n' 2 2>/dev/null <<'POWERSHELL'
+receipt_probe_script=$(cat <<'POWERSHELL'
 $expectedAppName = [Console]::In.ReadLine()
 $receiptPath = 'C:\Users\Public\eai-setup-e2e-receipt.json'
 if (-not (Test-Path -LiteralPath $receiptPath -PathType Leaf)) { Write-Output 'EAI_E2E_RECEIPT_NOT_READY'; return }
@@ -6056,9 +6053,6 @@ foreach ($check in $requiredChecks) {
   if ($receipt.checks.PSObject.Properties.Name -notcontains $check) { Write-Output 'EAI_E2E_RECEIPT_NOT_READY'; return }
   if ($receipt.checks.$check -notin @('passed', 'failed', 'not-run')) { Write-Output 'EAI_E2E_RECEIPT_NOT_READY'; return }
 }
-# The released receipt schema does not duplicate the project name. Bind the
-# parsed passed receipt to the exact requested app through its generated
-# package, then repeat that proof independently on the host below.
 if ($receipt.status -eq 'passed') {
   if ($receipt.appCreated -ne $true) { Write-Output 'EAI_E2E_RECEIPT_NOT_READY'; return }
   foreach ($check in $requiredChecks) {
@@ -6073,10 +6067,25 @@ if ($receipt.status -eq 'passed') {
 }
 Write-Output 'EAI_E2E_RECEIPT_READY'
 POWERSHELL
-  )"; then
+)
+for attempt in $(seq 1 240); do
+  receipt_probe=""
+  receipt_probe_status=0
+  if receipt_probe="$(printf '%s\n' "$receipt_probe_script" | guest_ps_readonly_run "$EAI_VM_PROJECT_NAME"$'\n' 2>/dev/null)"; then
     receipt_probe_status=0
   else
     receipt_probe_status=$?
+  fi
+  if [[ "$receipt_probe_status" != 0 ]]; then
+    # During the desktop app's transition into the authenticated workspace,
+    # Parallels can transiently reject a current-user read-only session. The
+    # receipt and project are public, so retry the same non-mutating probe via
+    # LocalSystem before declaring the E2E launch failed.
+    if receipt_probe="$(printf '%s\n' "$receipt_probe_script" | guest_system_ps_readonly_run "$EAI_VM_PROJECT_NAME"$'\n' 2>/dev/null)"; then
+      receipt_probe_status=0
+    else
+      receipt_probe_status=$?
+    fi
   fi
   [[ "$receipt_probe_status" == 0 ]] \
     || guest_test_fail "The read-only Windows E2E receipt probe transport failed."
