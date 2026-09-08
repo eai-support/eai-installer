@@ -902,8 +902,8 @@ configured_autologin="$(gdm_autologin_parser_source \
 prlctl capture "$vm_name" --file "$work_dir/ubuntu-control.png" >/dev/null 2>&1 \
   || guest_test_fail "Parallels could not capture the Ubuntu guest display."
 [[ -s "$work_dir/ubuntu-control.png" ]] || guest_test_fail "The Ubuntu display capture is empty."
-ubuntu_prl_user_exec /usr/bin/python3 -c \
-  'import gi; gi.require_version("Atspi", "2.0"); from gi.repository import Atspi' >/dev/null 2>&1 \
+printf '%s\n' 'import gi; gi.require_version("Atspi", "2.0"); from gi.repository import Atspi' \
+  | ubuntu_prl_user_exec /usr/bin/python3 >/dev/null 2>&1 \
   || guest_test_fail "The Ubuntu desktop does not expose its built-in AT-SPI accessibility channel."
 firefox_snap_root="$(firefox_snap_root_proof)" \
   || guest_test_fail "Firefox is not bound to a root-owned, read-only installed Snap revision."
@@ -1215,8 +1215,9 @@ npm_provider_package="$(validate_npm_provider_values \
 [[ "$npm_provider_package" == nodejs ]] \
   || guest_test_fail "The resolved npm target is not provided by nodejs."
 cli_package="$UBUNTU_PRL_HOME/.eai-setup/npm-global/lib/node_modules/@enterpriseai/cli/package.json"
-cli_package_version="$(ubuntu_prl_user_exec /usr/bin/python3 -c \
-  'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$cli_package" 2>/dev/null | tr -d '\r\n')"
+cli_package_version="$(printf '%s\n' \
+  "import json; print(json.load(open('$cli_package'))['version'])" \
+  | ubuntu_prl_user_exec /usr/bin/python3 2>/dev/null | tr -d '\r\n')"
 [[ "$cli_package_version" == "$expected_cli_version" ]] \
   || guest_test_fail "The EAI CLI package metadata does not match its executable version."
 installed_node_package_status="$(prlctl exec "$vm_name" /usr/bin/dpkg-query -W -f='${Status}' nodejs 2>/dev/null | tr -d '\r\n')"
