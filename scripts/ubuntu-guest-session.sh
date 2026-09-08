@@ -219,8 +219,13 @@ PROBE
   [[ "$session_class" == user && "$session_state" == active && "$session_remote" == no ]] \
     || ubuntu_session_fail "the selected graphical session is not a local active user session" || return
 
-  guest_home="$(prlctl exec "$vm_name" /usr/bin/getent passwd "$expected_user" 2>/dev/null \
-    | /usr/bin/awk -F: 'NR == 1 { print $6 }' | /usr/bin/tr -d '\r\n')"
+  guest_home=""
+  for _ in $(seq 1 5); do
+    guest_home="$(prlctl exec "$vm_name" /usr/bin/getent passwd "$expected_user" 2>/dev/null \
+      | /usr/bin/awk -F: 'NR == 1 { print $6 }' | /usr/bin/tr -d '\r\n')"
+    [[ -n "$guest_home" ]] && break
+    sleep 1
+  done
   [[ "$guest_home" == "/home/$expected_user" ]] \
     || ubuntu_session_fail "the expected user's home directory is not /home/$expected_user" || return
   [[ "$(prlctl exec "$vm_name" /usr/bin/id -u "$expected_user" 2>/dev/null | /usr/bin/tr -d '\r\n')" == "$session_uid" ]] \
