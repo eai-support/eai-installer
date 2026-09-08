@@ -174,7 +174,7 @@ jobs:
           node-version: 24
           package-manager-cache: false
       - name: Download normalized assets
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           path: release-assets
           merge-multiple: true
