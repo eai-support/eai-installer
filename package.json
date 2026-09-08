@@ -8,7 +8,7 @@
     "node": ">=24"
   },
   "scripts": {
-    "test": "node scripts/verify-version.mjs && node scripts/verify-manifest.mjs && node scripts/test-bootstrap.mjs && node scripts/test-wizard.mjs && node scripts/test-scenarios.mjs && node scripts/test-release.mjs && node scripts/test-production-release-safeguards.mjs",
+    "test": "node scripts/verify-version.mjs && node scripts/verify-manifest.mjs && node scripts/test-bootstrap.mjs && node scripts/test-wizard.mjs && node scripts/test-scenarios.mjs && node scripts/test-release.mjs && bash scripts/test-windows-hidden-current-user.sh && node scripts/test-production-release-safeguards.mjs",
     "validate": "npm test"
   }
 }

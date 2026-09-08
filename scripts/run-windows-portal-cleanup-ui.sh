@@ -132,6 +132,7 @@ vm_dir="$run_dir/windows"
 report_file="$run_dir/release-e2e.json"
 state_file="$vm_dir/app-state.json"
 result_file="$vm_dir/vm-result.json"
+arm_file="$vm_dir/windows-remote-cleanup-arm.json"
 for required_file in "$report_file" "$state_file" "$result_file"; do
   [[ -f "$required_file" && ! -L "$required_file" ]] || fail "Required Windows run evidence is missing or unsafe."
 done
@@ -140,9 +141,9 @@ done
 # identifies the same run-derived app and says cleanup is still required. The
 # failed status never relaxes app identity, provenance, or later child checks.
 app_key="$({
-  node --input-type=module - "$report_file" "$state_file" "$result_file" "$run_id" <<'NODE'
+  node --input-type=module - "$report_file" "$state_file" "$result_file" "$arm_file" "$run_id" <<'NODE'
 import fs from "node:fs";
-const [reportPath, statePath, resultPath, runId] = process.argv.slice(2);
+const [reportPath, statePath, resultPath, armPath, runId] = process.argv.slice(2);
 const report = JSON.parse(fs.readFileSync(reportPath, "utf8"));
 const state = JSON.parse(fs.readFileSync(statePath, "utf8"));
 const result = JSON.parse(fs.readFileSync(resultPath, "utf8"));
@@ -154,7 +155,22 @@ const machine = machines[0];
 if (!["passed", "failed"].includes(machine.status) || machine.appName !== expected || machine.appCreated !== true || machine.cleanupVerified === true) throw new Error("machine-target");
 if (report.status === "failed" && machine.status !== "failed") throw new Error("failed-status-mismatch");
 if (state.appName !== expected || state.appCreated !== true || state.cleanupRequired !== true || state.cleanupRequested !== true) throw new Error("state-target");
-if (!["passed", "failed"].includes(result.status) || result.vm !== "windows" || result.appName !== expected || result.appCreated !== true || result.cleanupRequested !== true || result.checks?.app !== "passed") throw new Error("result-target");
+if (!["passed", "failed"].includes(result.status) || result.vm !== "windows" || result.appName !== expected || result.appCreated !== true || result.cleanupRequested !== true) throw new Error("result-target");
+const progressiveReceiptProvesCreation = result.checks?.app === "passed";
+let exactLocalProjectProvesCreation = false;
+if (result.status === "failed" && result.exactLocalProjectCheckpoint === true && state.exactLocalProjectCheckpoint === true) {
+  const armStat = fs.lstatSync(armPath);
+  if (!armStat.isFile() || armStat.isSymbolicLink()) throw new Error("remote-cleanup-arm-unsafe");
+  const arm = JSON.parse(fs.readFileSync(armPath, "utf8"));
+  exactLocalProjectProvesCreation = arm.schemaVersion === "eai.windows-remote-cleanup-arm.v1"
+    && arm.appName === expected && arm.cleanupRequired === true
+    && arm.mutationNotYetProven === true && arm.sanitized === true
+    && arm.diagnostic === true && arm.productionGate === false
+    && arm.armedAt === state.armedAt && Number.isFinite(Date.parse(arm.armedAt))
+    && Number.isFinite(Date.parse(result.completedAt))
+    && Date.parse(arm.armedAt) <= Date.parse(result.completedAt);
+}
+if (!progressiveReceiptProvesCreation && !exactLocalProjectProvesCreation) throw new Error("app-creation-not-proven");
 if (!/^test-windows-[0-9]{13}-[0-9a-f]{6}$/.test(expected) || expected.length > 128) throw new Error("app-key");
 process.stdout.write(expected);
 NODE

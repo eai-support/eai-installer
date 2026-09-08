@@ -40,16 +40,22 @@ is_parallels_session_open_failure() {
 
 is_parallels_exact_job_result_failure() {
   local normalized=""
+  local line=""
+  local count=0
   normalized="$(printf '%s' "$1" | /usr/bin/tr -d '\r')"
-  case "$normalized" in
-    'PrlJob_GetRetCode: Invalid argument. An invalid argument was passed.'|\
-    'PrlJob_GetResult: Invalid argument. An invalid argument was passed.')
-      return 0
-      ;;
-    *)
-      return 1
-      ;;
-  esac
+  while IFS= read -r line; do
+    case "$line" in
+      'PrlJob_GetRetCode: Invalid argument. An invalid argument was passed.'|\
+      'PrlJob_GetResult: Invalid argument. An invalid argument was passed.')
+        ;;
+      *)
+        return 1
+        ;;
+    esac
+    count=$((count + 1))
+    [[ "$count" -le 3 ]] || return 1
+  done <<<"$normalized"
+  [[ "$count" -ge 1 ]]
 }
 
 [[ -n "$tenant_name" ]] || fail "EAI_HARNESS_TENANT_NAME is required."
@@ -192,6 +198,41 @@ run_ui_action_once() {
     printf '%s\n' "$output"
     return 0
   fi
+  printf '%s\n' "$output" >&2
+  return "$status"
+}
+
+run_idempotent_ui_action() {
+  local action="$1"
+  local timeout_seconds="$2"
+  local output=""
+  local status=1
+  local attempt
+  case "$action" in
+    edge-first-run|focus-email|focus-password)
+      ;;
+    *)
+      fail "Unsupported idempotent Windows UI action."
+      ;;
+  esac
+  for attempt in $(seq 1 3); do
+    set +e
+    output="$(run_ui_action_once "$action" "$timeout_seconds" 2>&1)"
+    status=$?
+    set -e
+    if [[ "$status" == 0 ]]; then
+      printf '%s\n' "$output"
+      return 0
+    fi
+    if [[ "$status" == 255 ]] \
+      && is_parallels_exact_job_result_failure "$output" \
+      && [[ "$attempt" -lt 3 ]]; then
+      sleep 2
+      continue
+    fi
+    printf '%s\n' "$output" >&2
+    return "$status"
+  done
   printf '%s\n' "$output" >&2
   return "$status"
 }
@@ -397,8 +438,10 @@ if [[ "$mode" != cli ]]; then
     || fail "The Enterprise AI Group sign-in endpoint was not reachable from the Windows guest."
   launch_edge \
     || fail "Microsoft Edge could not open the Enterprise AI Group sign-in page."
-  run_ui_action_once edge-first-run 120 >/dev/null \
-    || fail "Microsoft Edge first-run setup could not be handled safely."
+  if ! run_idempotent_ui_action edge-first-run 120 >/dev/null 2>&1; then
+    run_ui_action_once invoke-public-email 30 >/dev/null \
+      || fail "Microsoft Edge first-run setup could not be handled safely."
+  fi
 
   portal_state_status=2
   if portal_ready_state; then
@@ -418,7 +461,7 @@ if [[ "$mode" != cli ]]; then
     || fail "The portal Sign in with Microsoft action did not become available."
   printf 'PORTAL_MICROSOFT_HANDOFF_READY\n'
 
-  run_ui_action_once focus-email 60 >/dev/null \
+  run_idempotent_ui_action focus-email 60 >/dev/null \
     || fail "Microsoft's Email address field did not become available."
   # The email is supplied only to a shell builtin and streamed over stdin as
   # virtual key events after UI Automation has focused the exact field.
@@ -427,7 +470,7 @@ if [[ "$mode" != cli ]]; then
     || fail "Microsoft's Next action did not become available."
   printf 'MICROSOFT_EMAIL_STAGE_SUBMITTED\n'
 
-  run_ui_action_once focus-password 60 >/dev/null \
+  run_idempotent_ui_action focus-password 60 >/dev/null \
     || fail "Microsoft's Password field did not become available."
 
   # The password is read only at the exact action that needs it. Service-only
@@ -524,6 +567,16 @@ cli_tenant_matches() {
 }
 
 cli_exists || fail "The exact EAI CLI path %APPDATA%\\npm\\eai.cmd is not installed."
+
+# Cleanup and other follow-up diagnostics may run immediately after a complete
+# E2E login. Reuse that session only when both the exact identity and exact
+# active direct tenant membership are independently proven. A restored clean
+# snapshot has no installed CLI/session, so the primary E2E path still performs
+# and proves the fresh browser callback below.
+if cli_identity_is_active && cli_tenant_matches; then
+  printf 'AUTHENTICATED_PORTAL_AND_CLI_READY\n'
+  exit 0
+fi
 
 # The CLI opens its localhost callback in the signed-in user's existing Edge
 # session. Suppress its complete output so callback URLs and account metadata

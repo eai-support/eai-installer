@@ -393,8 +393,18 @@ function Invoke-Eai {
         Assert-Condition ($currentItem.PSIsContainer) 'project-working-directory-not-directory'
         Assert-Condition (($currentItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0) 'project-working-directory-is-reparse-point'
         Assert-Condition ([string]::Equals($currentItem.FullName, $binding.ProjectPath, [StringComparison]::OrdinalIgnoreCase)) 'project-working-directory-resolved-elsewhere'
-        $lines = @(& $script:EaiPath @Arguments 2>&1)
-        $commandExitCode = if ($null -eq $LASTEXITCODE) { 1 } else { [int]$LASTEXITCODE }
+        # Non-zero CLI commands (notably the expected V4 deletion-plan
+        # fallback) write diagnostics to stderr. Capture those records and the
+        # native exit code instead of allowing the script-wide Stop policy to
+        # turn them into an unrelated terminating PowerShell exception.
+        $previousErrorActionPreference = $ErrorActionPreference
+        try {
+            $ErrorActionPreference = 'Continue'
+            $lines = @(& $script:EaiPath @Arguments 2>&1)
+            $commandExitCode = if ($null -eq $LASTEXITCODE) { 1 } else { [int]$LASTEXITCODE }
+        } finally {
+            $ErrorActionPreference = $previousErrorActionPreference
+        }
     } finally {
         Pop-Location
     }
@@ -918,7 +928,19 @@ try {
     }
 } catch {
     $errorCode = [string]$_.Exception.Message
-    if ($errorCode -notmatch '^[a-z0-9-]{3,100}$') { $errorCode = 'guest-cleanup-failed' }
+    if ($errorCode -notmatch '^[a-z0-9-]{3,100}$') {
+        $line = [int]$_.InvocationInfo.ScriptLineNumber
+        $stackLine = 0
+        $stackMatch = [regex]::Match([string]$_.ScriptStackTrace, '(?i)line\s+(\d+)')
+        if ($stackMatch.Success) { [void][int]::TryParse($stackMatch.Groups[1].Value, [ref]$stackLine) }
+        $errorCode = if ($line -gt 0 -and $stackLine -gt 0) {
+            "guest-cleanup-failed-line-$line-stack-$stackLine"
+        } elseif ($line -gt 0) {
+            "guest-cleanup-failed-line-$line"
+        } else {
+            'guest-cleanup-failed'
+        }
+    }
     $result = [ordered]@{
         schemaVersion = 'eai.windows-diagnostic-cleanup.v1'
         action = if ($mutationMayHaveOccurred) { 'mutation-uncertain' } else { 'failed' }

@@ -22,17 +22,23 @@ windows_readonly_is_session_open_failure() {
 windows_readonly_is_ambiguous_result_failure() {
   local status="$1"
   local normalized=""
+  local line=""
+  local count=0
   [[ "$status" == 255 ]] || return 1
   normalized="$(printf '%s' "$2" | /usr/bin/tr -d '\r')"
-  case "$normalized" in
-    'PrlJob_GetRetCode: Invalid argument. An invalid argument was passed.'|\
-    'PrlJob_GetResult: Invalid argument. An invalid argument was passed.')
-      return 0
-      ;;
-    *)
-      return 1
-      ;;
-  esac
+  while IFS= read -r line; do
+    case "$line" in
+      'PrlJob_GetRetCode: Invalid argument. An invalid argument was passed.'|\
+      'PrlJob_GetResult: Invalid argument. An invalid argument was passed.')
+        ;;
+      *)
+        return 1
+        ;;
+    esac
+    count=$((count + 1))
+    [[ "$count" -le 3 ]] || return 1
+  done <<<"$normalized"
+  [[ "$count" -ge 1 ]]
 }
 
 windows_readonly_powershell_transport() {
