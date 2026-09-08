@@ -138,11 +138,15 @@ jobs:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             asset: eai-setup-windows-x64.exe
-            pe_machine: "8664"
+            # NSIS installers are 32-bit bootstrapper PE files even when the
+            # bundled application is x64. The build target/path above is the
+            # architecture check for the payload; verify the signed wrapper's
+            # architecture here instead of rejecting valid signed installers.
+            pe_machine: "014C"
           - os: windows-latest
             target: aarch64-pc-windows-msvc
             asset: eai-setup-windows-arm64.exe
-            pe_machine: "AA64"
+            pe_machine: "014C"
     runs-on: ${{ matrix.os }}
     environment: release
     permissions:
