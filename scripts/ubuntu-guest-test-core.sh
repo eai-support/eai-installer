@@ -850,6 +850,12 @@ fi
 
 stage snapshot-restore
 guest_test_restore_snapshot "$vm_name" "$snapshot_id"
+# Parallels can leave an autologin-capable guest at the graphical greeter
+# without surfacing its console window after a snapshot switch.  Entering the
+# already-running VM is a host-side display action only; it gives GDM a real
+# display surface so the existing active-user session can settle.  Never treat
+# failure to focus the window as a guest mutation or run the workflow as root.
+prlctl enter "$vm_name" >/dev/null 2>&1 || true
 
 stage guest-session
 session_ready=0
