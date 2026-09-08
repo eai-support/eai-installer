@@ -1021,11 +1021,9 @@ deb_version="$(prlctl exec "$vm_name" /usr/bin/dpkg-deb -f "$guest_deb" Version 
 deb_arch="$(prlctl exec "$vm_name" /usr/bin/dpkg-deb -f "$guest_deb" Architecture | tr -d '\r\n')"
 [[ "$deb_name" == eai-setup && "$deb_version" == "$EAI_RELEASE_VERSION" && "$deb_arch" == arm64 ]] \
   || guest_test_fail "The release asset Debian name, version, or architecture is incorrect."
-prlctl exec "$vm_name" /bin/bash -c '
-  set -o pipefail
-  dpkg-deb --fsys-tarfile "$1" | tar -tvf - ./usr/bin/eai-setup \
-    | awk "NR == 1 && /^-rwx/ { found=1 } END { exit(found ? 0 : 1) }"
-' _ "$guest_deb" >/dev/null 2>&1 \
+prlctl exec "$vm_name" /usr/bin/dpkg-deb --fsys-tarfile "$guest_deb" \
+  | /usr/bin/tar -tvf - ./usr/bin/eai-setup \
+  | /usr/bin/awk 'NR == 1 && /^-rwx/ { found=1 } END { exit(found ? 0 : 1) }' >/dev/null 2>&1 \
   || guest_test_fail "The release package does not contain an executable canonical payload."
 stage package-metadata-validation-passed
 
@@ -1038,11 +1036,10 @@ prlctl exec "$vm_name" /bin/test -f "$guest_native_log" >/dev/null 2>&1 \
   && prlctl exec "$vm_name" /bin/test ! -L "$guest_native_log" >/dev/null 2>&1 \
   && [[ "$(prlctl exec "$vm_name" /usr/bin/stat -c %u "$guest_native_log" 2>/dev/null | tr -d '\r\n')" == 0 ]] \
   || guest_test_fail "The protected native-installer log is not a root-owned regular file."
-prlctl exec "$vm_name" /bin/bash -c '
-  set -e
-  export DEBIAN_FRONTEND=noninteractive
-  apt-get install -y "$1" > "$2" 2>&1
-' _ "$guest_deb" "$guest_native_log" || guest_test_fail "Ubuntu apt could not install the exact release package."
+printf '%s\n' 'set -e; apt-get install -y "$EAI_GUEST_DEB" > "$EAI_NATIVE_LOG" 2>&1' \
+  | prlctl exec "$vm_name" /usr/bin/env DEBIAN_FRONTEND=noninteractive \
+      EAI_GUEST_DEB="$guest_deb" EAI_NATIVE_LOG="$guest_native_log" /bin/bash -s \
+  || guest_test_fail "Ubuntu apt could not install the exact release package."
 installed_status="$(prlctl exec "$vm_name" /usr/bin/dpkg-query -W -f='${Status}' eai-setup 2>/dev/null | tr -d '\r\n')"
 installed_version="$(prlctl exec "$vm_name" /usr/bin/dpkg-query -W -f='${Version}' eai-setup 2>/dev/null | tr -d '\r\n')"
 installed_arch="$(prlctl exec "$vm_name" /usr/bin/dpkg-query -W -f='${Architecture}' eai-setup 2>/dev/null | tr -d '\r\n')"
@@ -1202,12 +1199,10 @@ prlctl exec "$vm_name" /usr/bin/dpkg-query -S /usr/bin/git >/dev/null 2>&1 \
 node_target="$(prlctl exec "$vm_name" /usr/bin/readlink -f /usr/bin/node | tr -d '\r\n')"
 npm_target="$(prlctl exec "$vm_name" /usr/bin/readlink -f /usr/bin/npm 2>/dev/null | tr -d '\r\n')" \
   || guest_test_fail "The exact /usr/bin/npm target could not be resolved."
-prlctl exec "$vm_name" /bin/bash -c '
-  target=$1
-  [ -f "$target" ] && [ ! -L "$target" ] && [ "$(stat -Lc %u "$target")" = 0 ]
-  mode=$(stat -Lc %a "$target")
-  [ $((8#$mode & 022)) -eq 0 ]
-' _ "$npm_target" >/dev/null 2>&1 \
+prlctl exec "$vm_name" /usr/bin/test -f "$npm_target" >/dev/null 2>&1 \
+  && prlctl exec "$vm_name" /usr/bin/test ! -L "$npm_target" >/dev/null 2>&1 \
+  && [[ "$(prlctl exec "$vm_name" /usr/bin/stat -Lc %u "$npm_target" 2>/dev/null | tr -d '\r\n')" == 0 ]] \
+  && [[ "$(prlctl exec "$vm_name" /usr/bin/stat -Lc %a "$npm_target" 2>/dev/null | tr -d '\r\n')" =~ ^[0-9]+$ ]] \
   || guest_test_fail "The resolved npm target is not a root-owned, non-writable regular file."
 prlctl exec "$vm_name" /usr/bin/dpkg-query -S "$node_target" >/dev/null 2>&1 \
   || guest_test_fail "Node.js is not owned by an installed Ubuntu package."
