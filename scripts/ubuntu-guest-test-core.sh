@@ -893,9 +893,16 @@ guest_arch="$(prlctl exec "$vm_name" /usr/bin/uname -m 2>/dev/null | tr -d '\r\n
 dpkg_arch="$(prlctl exec "$vm_name" /usr/bin/dpkg --print-architecture 2>/dev/null | tr -d '\r\n')"
 [[ "$guest_arch" == aarch64 && "$dpkg_arch" == arm64 ]] \
   || guest_test_fail "The Ubuntu release guest is not ARM64."
-configured_autologin="$(gdm_autologin_parser_source \
-  | prlctl exec "$vm_name" /usr/bin/python3 - /etc/gdm3/custom.conf 2>/dev/null \
-  | tr -d '\r\n')" \
+configured_autologin=""
+for _ in $(seq 1 5); do
+  if configured_autologin="$(gdm_autologin_parser_source \
+    | prlctl exec "$vm_name" /usr/bin/python3 - /etc/gdm3/custom.conf 2>/dev/null \
+    | tr -d '\r\n')"; then
+    [[ -n "$configured_autologin" ]] && break
+  fi
+  sleep 1
+done
+[[ -n "$configured_autologin" ]] \
   || guest_test_fail "Ubuntu GDM automatic login has no unique effective [daemon] configuration."
 [[ "$configured_autologin" == "$guest_user" ]] \
   || guest_test_fail "Ubuntu GDM automatic login is not configured for the expected test user."
