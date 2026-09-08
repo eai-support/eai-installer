@@ -1398,6 +1398,7 @@ for (const step of mandatoryFreshLoginSteps) {
 }
 assert.match(windowsBrowserLoginFlow, /replacement snapshot already has an authenticated portal session/);
 assert.match(windowsGuestLoginSource, /Join-Path \$env:APPDATA "npm\\eai[.]cmd"\) login/);
+assert.match(windowsGuestLoginSource, /if \[\[ "\$cli_finished" != 1 \|\| "\$cli_status" != 0 \]\]; then[\s\S]*cli_identity_is_active && cli_tenant_matches[\s\S]*AUTHENTICATED_PORTAL_AND_CLI_READY/);
 assert.match(windowsGuestLoginSource, /Join-Path \$env:APPDATA "npm\\eai[.]cmd"\) whoami/);
 assert.match(windowsGuestLoginSource, /tenant list --format json/);
 assert.match(
