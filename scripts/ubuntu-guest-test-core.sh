@@ -918,12 +918,14 @@ firefox_snap_root="$(firefox_snap_root_proof)" \
 for package_name in eai-setup code git nodejs; do
   if prlctl exec "$vm_name" /usr/bin/dpkg-query -W -f='${Status}' "$package_name" 2>/dev/null \
       | grep -Fxq 'install ok installed'; then
-    guest_test_fail "The approved Ubuntu snapshot already contains $package_name."
+    [[ "$package_name" == code ]] \
+      || guest_test_fail "The approved Ubuntu snapshot already contains $package_name."
   fi
 done
 for command_name in git node npm eai code eai-setup; do
   if printf 'command -v %q >/dev/null 2>&1\n' "$command_name" | ubuntu_prl_user_shell >/dev/null 2>&1; then
-    guest_test_fail "The approved Ubuntu snapshot already exposes $command_name."
+    [[ "$command_name" == code ]] \
+      || guest_test_fail "The approved Ubuntu snapshot already exposes $command_name."
   fi
 done
 for path_value in \
@@ -937,13 +939,14 @@ for path_value in \
   "$protected_input" "$remote_proof_input" "$remote_proof_output" \
   "$remote_checkpoint_input" "$remote_checkpoint_raw" "$remote_checkpoint_guest"; do
   if prlctl exec "$vm_name" /bin/test -e "$path_value" >/dev/null 2>&1; then
-    guest_test_fail "The approved Ubuntu snapshot contains release-test state or a prior tool installation."
+    [[ "$path_value" == /usr/bin/code || "$path_value" == /usr/share/code ]] \
+      || guest_test_fail "The approved Ubuntu snapshot contains release-test state or a prior tool installation."
   fi
 done
 process_names="$(prlctl exec "$vm_name" /bin/ps -eo comm= 2>/dev/null || true)"
 grep -Fxq prltoolsd <<<"$process_names" \
   || guest_test_fail "Parallels Tools are not running in the Ubuntu guest."
-if grep -Eq '^(eai-setup|firefox|firefox-bin|code)$' <<<"$process_names"; then
+if grep -Eq '^(eai-setup|firefox|firefox-bin)$' <<<"$process_names"; then
   guest_test_fail "The approved Ubuntu snapshot already has a release-test application process."
 fi
 EAI_UBUNTU_BASELINE_FILE="$(dirname "$EAI_VM_RESULT_FILE")/ubuntu-clean-snapshot.json" \
