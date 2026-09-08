@@ -44,6 +44,12 @@ work_dir="$(mktemp -d "${TMPDIR:-/tmp}/eai-v4-app-deprovision.XXXXXX")" \
   || fail "Could not create the private validation directory."
 receipt_tmp=""
 
+# CLI 3.15.10 requires authenticated resource and app commands to run from a
+# recognized EAI project. Keep release cleanup isolated from whichever source
+# repository launched it by supplying a private, empty project marker.
+: >"$work_dir/eai.config.ts"
+cd "$work_dir" || fail "Could not enter the private validation directory."
+
 cleanup() {
   if [[ -n "$receipt_tmp" ]]; then
     rm -f -- "$receipt_tmp"

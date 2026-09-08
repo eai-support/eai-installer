@@ -403,6 +403,10 @@ try {
   assert.deepEqual(preflightCalls[0].slice(0, 3), ["resources", "list", "tenant-vertical-enrollment"]);
   assert.equal(preflightCalls.some((args) => args[0] === "app" && args[1] === "delete"), false);
 
+  const adapterSource = fs.readFileSync(adapterPath, "utf8");
+  assert.match(adapterSource, /: >"\$work_dir\/eai\.config\.ts"/);
+  assert.match(adapterSource, /cd "\$work_dir" \|\| fail/);
+
   const oldCli = spawnSync("bash", [adapterPath, "--preflight"], {
     cwd: root,
     encoding: "utf8",
