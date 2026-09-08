@@ -86,6 +86,12 @@ prlctl() {
         return 255
       fi
       ;;
+    duplicate-result-then-success)
+      if [[ "$attempt" == 1 ]]; then
+        printf 'PrlJob_GetResult: Invalid argument. An invalid argument was passed.\n%.0s' 1 2 >&2
+        return 255
+      fi
+      ;;
     session-result-success)
       if [[ "$attempt" == 1 ]]; then
         printf 'PrlVmGuest_RunProgram: Invalid argument\n' >&2
@@ -102,6 +108,12 @@ prlctl() {
     extra-text)
       printf 'PrlJob_GetResult: Invalid argument. An invalid argument was passed.\nextra\n' >&2
       return 255
+      ;;
+    mixed-known-then-success)
+      if [[ "$attempt" == 1 ]]; then
+        printf 'PrlJob_GetResult: Invalid argument. An invalid argument was passed.\nPrlJob_GetRetCode: Invalid argument. An invalid argument was passed.\n' >&2
+        return 255
+      fi
       ;;
     partial-text)
       printf 'PrlJob_GetResult: Invalid argument.\n' >&2
@@ -182,6 +194,9 @@ for index in "${!sites[@]}"; do
   fi
   run_site_fixture "${sites[$index]}" "${channels[$index]}" "$fixture_mode"
 done
+
+run_site_fixture receipt-polling current-user duplicate-result-then-success
+run_site_fixture receipt-polling current-user mixed-known-then-success
 
 reset_fake session-result-success current-user
 output="$(guest_ps_readonly_run fixture 4 2>"$test_dir/stderr" <<'POWERSHELL'

@@ -617,7 +617,9 @@ assert.match(windowsStreamedPowerShellSource, /printf '%s\\n' "\$script" \| wind
 assert.doesNotMatch(windowsStreamedPowerShellSource, /EncodedCommand/);
 assert.match(windowsHiddenCurrentUserSource, /payload="\$\(printf '%s' "\$stdin_payload" \| \/usr\/bin\/base64 \| \/usr\/bin\/tr -d '\\n'\)"/);
 assert.match(windowsHiddenCurrentUserSource, /\[Console\]::SetIn\(\[IO[.]StringReader\]::new\(\$__eaiInput\)\)/);
-assert.match(windowsHiddenCurrentUserSource, /prlctl exec "\$vm_name" --current-user wscript[.]exe "\$vbs_path"/);
+assert.match(windowsHiddenCurrentUserSource, /windows_hidden_bounded_prlctl 600 exec "\$vm_name" --current-user wscript[.]exe "\$vbs_path"/);
+assert.match(windowsHiddenCurrentUserSource, /"\$prlctl_bin" "\$@" <&0 &/);
+assert.match(windowsHiddenCurrentUserSource, /\) <\/dev\/null >\/dev\/null 2>&1 &/);
 assert.match(windowsHiddenCurrentUserSource, /s[.]Run\(.*powershell[.]exe.*-File/);
 assert.match(windowsHiddenCurrentUserSource, /SetAccessRuleProtection\(\\\$true, \\\$false\)/);
 assert.match(windowsHiddenCurrentUserSource, /SecurityIdentifier\]::new\('S-1-5-18'\)/);
@@ -1271,6 +1273,8 @@ assert.match(windowsGuestLoginSource, /printf '%s\\n' "\$script" \| windows_hidd
 assert.match(windowsGuestLoginSource, /for _ in \$\(seq 1 120\); do/);
 assert.match(windowsGuestLoginSource, /is_parallels_session_open_failure "\$output"/);
 assert.match(windowsGuestLoginSource, /is_parallels_exact_job_result_failure\(\) \{/);
+assert.match(windowsGuestLoginSource, /run_idempotent_ui_action\(\) \{/);
+assert.match(windowsGuestLoginSource, /if ! run_idempotent_ui_action edge-first-run 120[\s\S]*run_ui_action_once invoke-public-email 30/);
 assert.match(windowsGuestLoginSource, /'PrlVmGuest_RunProgram: Invalid argument'/);
 assert.match(windowsGuestLoginSource, /'PrlJob_GetResult: Invalid argument[.] An invalid argument was passed[.]'/);
 assert.doesNotMatch(windowsGuestLoginSource, /\[\[ "\$output" == \*"Invalid argument"\*/);
@@ -1279,11 +1283,16 @@ assert.match(windowsHiddenCurrentUserSource, /-InputFormat Text -OutputFormat Te
 assert.match(windowsHiddenCurrentUserSource, /stage_base="\$\{base\}[.]tmp"/);
 assert.match(windowsHiddenCurrentUserSource, /Move-Item -LiteralPath '\$stage_base' -Destination '\$base' -ErrorAction Stop/);
 assert.match(windowsHiddenCurrentUserSource, /EAI_HIDDEN_WORKER_STAGED/);
-assert.match(windowsHiddenCurrentUserSource, /if ! prlctl exec "\$vm_name" --current-user wscript[.]exe/);
+assert.match(windowsHiddenCurrentUserSource, /if ! windows_hidden_bounded_prlctl 600 exec "\$vm_name" --current-user wscript[.]exe/);
 assert.doesNotMatch(
   windowsHiddenCurrentUserSource,
-  /prlctl exec "\$vm_name" --current-user wscript[.]exe[^\n]*\|\| true/,
+  /windows_hidden_bounded_prlctl 600 exec "\$vm_name" --current-user wscript[.]exe[^\n]*\|\| true/,
 );
+assert.match(windowsDiagnosticCleanupPowerShellSource, /guest-cleanup-failed-line-\$line-stack-\$stackLine/);
+assert.match(windowsDiagnosticCleanupSource, /source "\$ROOT\/scripts\/windows-hidden-current-user[.]sh"/);
+assert.match(windowsDiagnosticCleanupSource, /\} \| run_hidden_cleanup_ps >"\$raw_stdout" 2>"\$raw_stderr"/);
+assert.match(windowsDiagnosticCleanupSource, /windows_hidden_current_user_ps "\$vm_name" ""/);
+assert.doesNotMatch(windowsDiagnosticCleanupSource, /\} \| "\$prlctl_bin" exec "\$vm_name" --current-user powershell[.]exe/);
 assert.doesNotMatch(windowsGuestLoginSource, /Shell[.]Application|ShellExecute/);
 assert.match(windowsGuestLoginSource, /\[wmiclass\]'\\\\[.]\\root\\cimv2:Win32_ProcessStartup'/);
 assert.match(windowsGuestLoginSource, /\$startup[.]WinstationDesktop = 'winsta0\\default'/);
@@ -1309,12 +1318,14 @@ assert.match(windowsGuestLoginSource, /EAI_EFFECTIVE_URL=%\{url_effective\}/);
 assert.match(windowsGuestLoginSource, /ENTERPRISE_PORTAL_HTTPS_READY/);
 const windowsLoginReadOnlyPowerShellStart = windowsGuestLoginSource.indexOf("run_guest_powershell_readonly() {");
 const windowsLoginUiActionOnceStart = windowsGuestLoginSource.indexOf("run_ui_action_once() {");
+const windowsLoginIdempotentUiStart = windowsGuestLoginSource.indexOf("run_idempotent_ui_action() {");
 const windowsLoginReadOnlyUiStart = windowsGuestLoginSource.indexOf("run_readonly_ui_action() {");
 const windowsLoginLaunchEdgeStart = windowsGuestLoginSource.indexOf("launch_edge() {");
 assert.ok(
   windowsLoginReadOnlyPowerShellStart >= 0
     && windowsLoginUiActionOnceStart > windowsLoginReadOnlyPowerShellStart
-    && windowsLoginReadOnlyUiStart > windowsLoginUiActionOnceStart
+    && windowsLoginIdempotentUiStart > windowsLoginUiActionOnceStart
+    && windowsLoginReadOnlyUiStart > windowsLoginIdempotentUiStart
     && windowsLoginLaunchEdgeStart > windowsLoginReadOnlyUiStart,
 );
 const windowsLoginReadOnlyPowerShellSource = windowsGuestLoginSource.slice(
@@ -1323,6 +1334,10 @@ const windowsLoginReadOnlyPowerShellSource = windowsGuestLoginSource.slice(
 );
 const windowsLoginUiActionOnceSource = windowsGuestLoginSource.slice(
   windowsLoginUiActionOnceStart,
+  windowsLoginIdempotentUiStart,
+);
+const windowsLoginIdempotentUiSource = windowsGuestLoginSource.slice(
+  windowsLoginIdempotentUiStart,
   windowsLoginReadOnlyUiStart,
 );
 const windowsLoginReadOnlyUiSource = windowsGuestLoginSource.slice(
@@ -1335,6 +1350,12 @@ assert.match(windowsLoginReadOnlyPowerShellSource, /is_parallels_exact_job_resul
 assert.match(windowsLoginReadOnlyPowerShellSource, /sleep 2/);
 assert.doesNotMatch(windowsLoginReadOnlyPowerShellSource, /input|Invoke-WindowsUiAction|Remove-Item|Start-Process/);
 assert.doesNotMatch(windowsLoginUiActionOnceSource, /for attempt|is_parallels_exact_job_result_failure/);
+assert.match(windowsLoginIdempotentUiSource, /edge-first-run\|focus-email\|focus-password/);
+assert.match(windowsLoginIdempotentUiSource, /for attempt in \$\(seq 1 3\); do/);
+assert.match(windowsLoginIdempotentUiSource, /is_parallels_exact_job_result_failure "\$output"/);
+assert.doesNotMatch(windowsLoginIdempotentUiSource, /invoke-next|invoke-sign-in|input type/);
+assert.match(windowsGuestLoginSource, /run_idempotent_ui_action focus-email 60/);
+assert.match(windowsGuestLoginSource, /run_idempotent_ui_action focus-password 60/);
 assert.match(windowsLoginReadOnlyUiSource, /"\$action" == probe-portal-ready \|\| "\$action" == wait-portal-ready/);
 assert.match(windowsLoginReadOnlyUiSource, /for attempt in \$\(seq 1 3\); do/);
 assert.match(windowsLoginReadOnlyUiSource, /"\$status" == 255/);
@@ -1359,10 +1380,10 @@ const mandatoryFreshLoginSteps = [
   "if portal_ready_state",
   "run_ui_action_once invoke-public-email",
   "run_ui_action_once invoke-portal-microsoft",
-  "run_ui_action_once focus-email",
+  "run_idempotent_ui_action focus-email",
   "input type --stdin",
   "run_ui_action_once invoke-next",
-  "run_ui_action_once focus-password",
+  "run_idempotent_ui_action focus-password",
   "find-generic-password -s \"$keychain_service\" -w",
   "run_ui_action_once invoke-sign-in",
   "wait_portal_ready 120",
@@ -1379,6 +1400,15 @@ assert.match(windowsBrowserLoginFlow, /replacement snapshot already has an authe
 assert.match(windowsGuestLoginSource, /Join-Path \$env:APPDATA "npm\\eai[.]cmd"\) login/);
 assert.match(windowsGuestLoginSource, /Join-Path \$env:APPDATA "npm\\eai[.]cmd"\) whoami/);
 assert.match(windowsGuestLoginSource, /tenant list --format json/);
+assert.match(
+  windowsGuestLoginSource,
+  /if cli_identity_is_active && cli_tenant_matches; then[\s\S]*AUTHENTICATED_PORTAL_AND_CLI_READY[\s\S]*exit 0/,
+);
+assert.ok(
+  windowsGuestLoginSource.indexOf("if cli_identity_is_active && cli_tenant_matches; then")
+    < windowsGuestLoginSource.indexOf("# The CLI opens its localhost callback"),
+  "verified CLI-session reuse must precede a fresh browser callback",
+);
 const windowsCliTenantStart = windowsGuestLoginSource.indexOf("cli_tenant_matches() {");
 const windowsCliTenantEnd = windowsGuestLoginSource.indexOf(
   '\n}\n\ncli_exists ||',
@@ -1462,7 +1492,8 @@ assert.match(windowsUiActionSource, /EAI_MANAGE_APP_SEARCH_ABSENT/);
 assert.match(windowsUiActionSource, /Delete \{0\}" -f \$Target[.]DisplayName/);
 assert.match(windowsUiActionSource, /ValuePattern\]\$pattern\)[.]Current[.]Value/);
 assert.match(windowsPortalCleanupUiSource, /state[.]cleanupRequired !== true/);
-assert.match(windowsPortalCleanupUiSource, /result[.]checks[?][.]app !== "passed"/);
+assert.match(windowsPortalCleanupUiSource, /result[.]exactLocalProjectCheckpoint === true/);
+assert.match(windowsPortalCleanupUiSource, /windows-remote-cleanup-arm[.]v1/);
 assert.match(windowsPortalCleanupUiSource, /PortalTargetOnly/);
 assert.match(windowsPortalCleanupUiSource, /servicesBeforeDeletion !== 0/);
 assert.match(windowsPortalCleanupUiSource, /workflowExactMatchesBeforeDeletion !== 0/);
@@ -2123,9 +2154,10 @@ const windowsConsoleTransitionSource = windowsGuestAdapterSource.slice(
   windowsConsoleTransitionEnd,
 );
 assert.ok(
-  windowsConsoleTransitionSource.indexOf("exit_vm_coherence_if_needed")
-    < windowsConsoleTransitionSource.indexOf("show_vm_console"),
+  windowsConsoleTransitionSource.indexOf("show_vm_console")
+    < windowsConsoleTransitionSource.indexOf("exit_vm_coherence_if_needed"),
 );
+assert.equal((windowsConsoleTransitionSource.match(/show_vm_console/g) ?? []).length, 2);
 assert.match(windowsConsoleTransitionSource, /one-shot Coherence exit/);
 const windowsUacStart = windowsGuestAdapterSource.indexOf("unexpected_prerequisite_uac_visible() {");
 const windowsUacEnd = windowsGuestAdapterSource.indexOf("\n}\n\nstart_prerequisite_uac_watcher()", windowsUacStart);
@@ -2276,12 +2308,17 @@ assert.match(windowsAiWorkspacePowerShellSource, /extensions\\copilot/);
 assert.match(windowsAiWorkspacePowerShellSource, /GitHub[.]copilot-chat/);
 assert.match(windowsAiWorkspacePreparerSource, /Windows AI-workspace evidence mismatch/);
 assert.match(windowsAiWorkspacePreparerSource, /windows-ai-workspace[.]json/);
+assert.match(windowsAiWorkspacePreparerSource, /source "\$ROOT\/scripts\/windows-readonly-powershell[.]sh"/);
 assert.match(windowsAiWorkspacePreparerSource, /prlctl exec "\$vm_name" cmd[.]exe \/D \/S \/C powershell[.]exe/);
-assert.match(windowsAiWorkspacePreparerSource, /printf '& \{\\n'/);
-assert.match(windowsAiWorkspacePreparerSource, /printf '\\n\}\\n\\n'/);
-assert.match(windowsAiWorkspacePreparerSource, /is_parallels_session_open_failure "\$evidence_output"/);
-assert.equal((windowsAiWorkspacePreparerSource.match(/for _ in \$\(seq 1 120\); do/g) ?? []).length, 2);
-assert.match(windowsAiWorkspacePreparerSource, /evidence_output="\$\(printf '%s\\n'[\s\S]*windows_hidden_current_user_ps "\$vm_name"/);
+assert.match(windowsAiWorkspacePreparerSource, /eai-ai-workspace-\$\{nonce\}/);
+assert.match(windowsAiWorkspacePreparerSource, /FromBase64String\('\$payload'\)/);
+assert.match(windowsAiWorkspacePreparerSource, /SetAccessRuleProtection\(\\\$true,\\\$false\)/);
+assert.match(windowsAiWorkspacePreparerSource, /-ExecutionPolicy Bypass -File \\\$script/);
+assert.match(windowsAiWorkspacePreparerSource, /if \[\[ -n "\$guest_json" \]\]; then/);
+assert.match(windowsAiWorkspacePreparerSource, /Get-Content -Raw[\s\S]*\| guest_ps_readonly/);
+assert.equal((windowsAiWorkspacePreparerSource.match(/for _ in \$\(seq 1 120\); do/g) ?? []).length, 1);
+assert.match(windowsAiWorkspacePreparerSource, /for _ in \$\(seq 1 5\); do/);
+assert.match(windowsAiWorkspacePreparerSource, /evidence_output="\$\(printf '%s\\n'[\s\S]*guest_ps_readonly\)/);
 assert.match(windowsAiWorkspacePreparerSource, /Get-Content -Raw -LiteralPath/);
 assert.doesNotMatch(windowsAiWorkspacePreparerSource, /type "\$guest_evidence" 2>\/dev\/null/);
 assert.doesNotMatch(windowsAiWorkspacePreparerSource, /\[\[ "\$output" == \*"Invalid argument"\*/);
@@ -2302,6 +2339,15 @@ assert.match(windowsGuestAdapterSource, /The generated project has no usable scr
 assert.match(windowsGuestAdapterSource, /handoff_candidate="\$work_dir\/windows-ai-handoff[.]png"/);
 assert.match(windowsGuestAdapterSource, /Edge still owned the callback window/);
 assert.match(windowsGuestAdapterSource, /The Windows handoff screenshot contains protected or callback data/);
+const windowsReceiptProbeStart = windowsGuestAdapterSource.indexOf("receipt_ready=0");
+const windowsReceiptValidationStart = windowsGuestAdapterSource.indexOf("stage receipt-validation");
+assert.ok(windowsReceiptProbeStart >= 0 && windowsReceiptValidationStart > windowsReceiptProbeStart);
+const windowsReceiptProbeSource = windowsGuestAdapterSource.slice(
+  windowsReceiptProbeStart,
+  windowsReceiptValidationStart,
+);
+assert.match(windowsReceiptProbeSource, /EAI_E2E_RECEIPT_NOT_READY'; return/);
+assert.doesNotMatch(windowsReceiptProbeSource, /Write-NotReady|exit 0/);
 assert.match(guestTestLibrarySource, /&& aiHandoffScreenshotVerified === "1" \? "passed" : "failed"/);
 assert.match(windowsGuestAdapterSource, /for \(const key of \["EAI_HARNESS_TENANT_ID", "EAI_HARNESS_TENANT_NAME", "EAI_HARNESS_USER_EMAIL"\]\)/);
 assert.doesNotMatch(windowsGuestAdapterSource, /Set-Clipboard|Get-Clipboard|clip[.]exe|pbcopy/);

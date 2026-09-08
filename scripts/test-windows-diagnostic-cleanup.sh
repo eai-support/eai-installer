@@ -59,6 +59,9 @@ const invokeBody = source.slice(invokeStart, invokeEnd);
 if (invokeBody.indexOf("Resolve-ExactEaiCleanupProject") > invokeBody.indexOf("& $script:EaiPath")) {
   throw new Error("The EAI command can run before its exact project is revalidated.");
 }
+if (!/\$previousErrorActionPreference = \$ErrorActionPreference[\s\S]*\$ErrorActionPreference = 'Continue'[\s\S]*& \$script:EaiPath @Arguments 2>&1[\s\S]*\$ErrorActionPreference = \$previousErrorActionPreference/.test(invokeBody)) {
+  throw new Error("Native CLI stderr is not safely captured around the exact invocation.");
+}
 NODE
 
 if command -v pwsh >/dev/null 2>&1; then
@@ -67,10 +70,10 @@ if command -v pwsh >/dev/null 2>&1; then
     || fail "The PowerShell cleanup self-test failed."
 fi
 
-grep -Fq -- '--current-user powershell.exe' \
+grep -Fq -- 'windows_hidden_current_user_ps "$vm_name" ""' \
   "$ROOT/scripts/run-windows-diagnostic-cleanup.sh" \
   || fail "Diagnostic cleanup must use the hidden current-user PowerShell transport."
-grep -Fq -- '-WindowStyle Hidden' "$ROOT/scripts/run-windows-diagnostic-cleanup.sh" \
+grep -Fq -- 'source "$ROOT/scripts/windows-hidden-current-user.sh"' "$ROOT/scripts/run-windows-diagnostic-cleanup.sh" \
   || fail "Diagnostic cleanup must keep its current-user PowerShell window hidden."
 
 fake_login="$fake_bin/login"
@@ -256,6 +259,14 @@ NODE
 esac
 EOF
 chmod +x "$fake_prlctl"
+
+fake_hidden_ps="$fake_bin/hidden-ps"
+cat >"$fake_hidden_ps" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+exec "$EAI_WINDOWS_CLEANUP_PRLCTL_BIN" exec "$1" --current-user powershell.exe
+EOF
+chmod +x "$fake_hidden_ps"
 
 make_run() {
   local run_id="$1"
@@ -615,6 +626,7 @@ run_adapter() {
   local result_mode="$1"
   shift
   EAI_WINDOWS_CLEANUP_PRLCTL_BIN="$fake_prlctl" \
+  EAI_WINDOWS_CLEANUP_HIDDEN_PS_COMMAND="$fake_hidden_ps" \
   EAI_WINDOWS_CLEANUP_LOGIN_COMMAND="$fake_login" \
   EAI_FAKE_CLEANUP_RESULT="$result_mode" \
   EAI_FAKE_LOGIN_LOG="$test_root/login.log" \
