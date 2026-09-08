@@ -855,6 +855,8 @@ guest_test_restore_snapshot "$vm_name" "$snapshot_id"
 # already-running VM is a host-side display action only; it gives GDM a real
 # display surface so the existing active-user session can settle.  Never treat
 # failure to focus the window as a guest mutation or run the workflow as root.
+/usr/bin/open -a 'Parallels Desktop' >/dev/null 2>&1 || true
+sleep 2
 prlctl enter "$vm_name" >/dev/null 2>&1 || true
 
 stage guest-session
