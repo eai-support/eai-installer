@@ -51,8 +51,12 @@ fi
 ubuntu_prl_user_shell <<BASH
 set -euo pipefail
 rm -f '$guest_package' '$guest_headers'
-curl --fail --show-error --silent --head --max-redirs 0 \
-  --connect-timeout 30 --dump-header '$guest_headers' --output /dev/null '$download_url'
+if command -v curl >/dev/null 2>&1; then
+  curl --fail --show-error --silent --head --max-redirs 0 \
+    --connect-timeout 30 --dump-header '$guest_headers' --output /dev/null '$download_url'
+else
+  wget --server-response --spider --timeout=30 '$download_url' 2>'$guest_headers'
+fi
 BASH
 
 response_hash="$(ubuntu_prl_user_shell <<BASH
@@ -72,8 +76,12 @@ redirect_url="$(printf '%s' "$redirect_url" | tr -d '\r\n')"
 
 ubuntu_prl_user_shell <<BASH
 set -euo pipefail
-curl --fail --show-error --location --retry 5 --retry-all-errors --connect-timeout 30 \
-  --output '$guest_package' '$download_url'
+if command -v curl >/dev/null 2>&1; then
+  curl --fail --show-error --location --retry 5 --retry-all-errors --connect-timeout 30 \
+    --output '$guest_package' '$download_url'
+else
+  wget --timeout=30 --tries=5 --output-document='$guest_package' '$download_url'
+fi
 BASH
 archive_hash="$(ubuntu_prl_user_exec /usr/bin/sha256sum "$guest_package" \
   | /usr/bin/awk '{ print tolower($1) }' | /usr/bin/tr -d '\r\n')"

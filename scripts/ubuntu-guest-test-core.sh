@@ -1000,8 +1000,12 @@ ubuntu_prl_user_shell <<BASH
 set -euo pipefail
 umask 077
 rm -f '$guest_deb'
-curl --fail --show-error --location --retry 5 --retry-all-errors --connect-timeout 30 \
-  --output '$guest_deb' '$EAI_VM_DOWNLOAD_URL'
+if command -v curl >/dev/null 2>&1; then
+  curl --fail --show-error --location --retry 5 --retry-all-errors --connect-timeout 30 \
+    --output '$guest_deb' '$EAI_VM_DOWNLOAD_URL'
+else
+  wget --timeout=30 --tries=5 --output-document='$guest_deb' '$EAI_VM_DOWNLOAD_URL'
+fi
 test -f '$guest_deb'
 test ! -L '$guest_deb'
 BASH
