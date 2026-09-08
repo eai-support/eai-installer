@@ -249,7 +249,7 @@ assert.doesNotMatch(macosGuestPreparerSource, /EAI_VM_GUEST_PASSWORD/);
 assert.match(macosGuestPreparerSource, /source "\$ROOT\/scripts\/parallels-macos-current-user[.]sh"/);
 assert.match(macosGuestPreparerSource, /macos_prl_current_user_configure "\$vm_name" "\$guest_user" "\$work_dir"/);
 assert.doesNotMatch(macosGuestPreparerSource, /prlctl exec[^\n]*--current-user/);
-assert.match(macosGuestPreparerSource, /guest_idempotent \/usr\/bin\/find "\$guest_mount" -mindepth 1 -maxdepth 1 -type d -name '[*][.]app'/);
+assert.match(macosGuestPreparerSource, /-name '[*][.]app'.*macos_prl_current_user_shell_idempotent/s);
 assert.match(macosGuestPreparerSource, /application must be at the top level/);
 assert.doesNotMatch(macosGuestPreparerSource, /guest_idempotent \/usr\/bin\/open/);
 assert.match(macosGuestPreparerSource, /The signed-in macOS user's home directory could not be resolved/);
