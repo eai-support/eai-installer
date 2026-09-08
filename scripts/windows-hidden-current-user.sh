@@ -6,13 +6,14 @@
 windows_hidden_current_user_ps() {
   local vm_name="$1"
   local stdin_payload="${2:-}"
-  local script nonce base payload wrapper wrapper_base64 vbs vbs_base64
+  local script nonce base stage_base payload wrapper wrapper_base64 vbs vbs_base64
   local ps_path vbs_path stdout_path stderr_path status_path
   local stage status_text output error_text attempt
   script="$(/bin/cat)"
   [[ -n "$script" ]] || return 2
   nonce="$(/usr/bin/uuidgen | /usr/bin/tr -d '-' | /usr/bin/tr '[:upper:]' '[:lower:]')"
   base="C:\\Users\\Public\\eai-hidden-${nonce}"
+  stage_base="${base}.tmp"
   ps_path="${base}\\runner.ps1"
   vbs_path="${base}\\runner.vbs"
   stdout_path="${base}\\runner.stdout"
@@ -56,27 +57,53 @@ windows_hidden_current_user_ps() {
     "f.MoveFile \"$status_path.tmp\",\"$status_path\"")"
   vbs_base64="$(printf '%s' "$vbs" | /usr/bin/base64 | /usr/bin/tr -d '\n')"
   stage="$(printf '%s\n' \
+    "\$ErrorActionPreference = 'Stop'" \
+    "try {" \
     "\$interactiveUser = (Get-CimInstance Win32_ComputerSystem).UserName" \
     "if ([string]::IsNullOrWhiteSpace(\$interactiveUser)) { throw 'No interactive Windows user is available' }" \
     "\$interactiveSid = ([Security.Principal.NTAccount]::new(\$interactiveUser)).Translate([Security.Principal.SecurityIdentifier])" \
-    "New-Item -ItemType Directory -Path '$base' -ErrorAction Stop | Out-Null" \
+    "Remove-Item -LiteralPath '$stage_base' -Recurse -Force -ErrorAction SilentlyContinue" \
+    "New-Item -ItemType Directory -Path '$stage_base' -ErrorAction Stop | Out-Null" \
     "\$acl = [Security.AccessControl.DirectorySecurity]::new()" \
     "\$acl.SetAccessRuleProtection(\$true, \$false)" \
-    "foreach (\$identity in @('S-1-5-18','S-1-5-32-544',\$interactiveSid.Value)) {" \
+    "\$identities = @([Security.Principal.SecurityIdentifier]::new('S-1-5-18'),[Security.Principal.SecurityIdentifier]::new('S-1-5-32-544'),\$interactiveSid)" \
+    "foreach (\$identity in \$identities) {" \
     "  \$rule = [Security.AccessControl.FileSystemAccessRule]::new(\$identity,'FullControl','ContainerInherit,ObjectInherit','None','Allow')" \
     "  [void]\$acl.AddAccessRule(\$rule)" \
     "}" \
-    "Set-Acl -LiteralPath '$base' -AclObject \$acl -ErrorAction Stop" \
-    "[IO.File]::WriteAllBytes('$ps_path',[Convert]::FromBase64String('$wrapper_base64'))" \
-    "[IO.File]::WriteAllBytes('$vbs_path',[Convert]::FromBase64String('$vbs_base64'))" \
+    "Set-Acl -LiteralPath '$stage_base' -AclObject \$acl -ErrorAction Stop" \
+    "[IO.File]::WriteAllBytes('$stage_base\\runner.ps1',[Convert]::FromBase64String('$wrapper_base64'))" \
+    "[IO.File]::WriteAllBytes('$stage_base\\runner.vbs',[Convert]::FromBase64String('$vbs_base64'))" \
+    "Move-Item -LiteralPath '$stage_base' -Destination '$base' -ErrorAction Stop" \
+    "Write-Output 'EAI_HIDDEN_WORKER_STAGED'" \
+    "exit 0" \
+    "} catch {" \
+    "  [Console]::Error.WriteLine((\$_ | Out-String))" \
+    "  exit 1" \
+    "}" \
     '')"
-  if ! printf '%s\n' "$stage" | prlctl exec "$vm_name" powershell.exe \
+  # `prlctl exec ... powershell -Command -` evaluates complete input records.
+  # Keep the protected staging transaction on one record so a compound try
+  # block cannot be accepted without ever being invoked.
+  stage="$(printf '%s' "$stage" | /usr/bin/perl -0pe 's/\r?\n/;/g; s/\{;/\{ /g; s/;\}/ \}/g')"
+  local stage_output=""
+  if ! stage_output="$(printf '%s\n' "$stage" | prlctl exec "$vm_name" powershell.exe \
       -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass \
-      -InputFormat Text -OutputFormat Text -Command - >/dev/null 2>&1; then
+      -InputFormat Text -OutputFormat Text -Command - 2>&1)" \
+      || [[ "$(printf '%s' "$stage_output" | /usr/bin/tr -d '\r')" != *EAI_HIDDEN_WORKER_STAGED* ]]; then
+    [[ -z "$stage_output" ]] || printf '%s\n' "$stage_output" >&2
+    printf '%s\n' "Remove-Item -LiteralPath '$stage_base','$base' -Recurse -Force -ErrorAction SilentlyContinue" \
+      | prlctl exec "$vm_name" powershell.exe -NoLogo -NoProfile -NonInteractive \
+        -InputFormat Text -OutputFormat Text -Command - >/dev/null 2>&1 || true
     return 3
   fi
 
-  prlctl exec "$vm_name" --current-user wscript.exe "$vbs_path" >/dev/null 2>&1 || true
+  if ! prlctl exec "$vm_name" --current-user wscript.exe "$vbs_path" >/dev/null 2>&1; then
+    printf '%s\n' "Remove-Item -LiteralPath '$base' -Recurse -Force -ErrorAction SilentlyContinue" \
+      | prlctl exec "$vm_name" powershell.exe -NoLogo -NoProfile -NonInteractive \
+        -InputFormat Text -OutputFormat Text -Command - >/dev/null 2>&1 || true
+    return 4
+  fi
   status_text=""
   for attempt in $(seq 1 1800); do
     status_text="$(prlctl exec "$vm_name" cmd.exe /D /Q /C type "$status_path" 2>/dev/null | /usr/bin/tr -d '\r\n' || true)"

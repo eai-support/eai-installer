@@ -620,7 +620,9 @@ assert.match(windowsHiddenCurrentUserSource, /\[Console\]::SetIn\(\[IO[.]StringR
 assert.match(windowsHiddenCurrentUserSource, /prlctl exec "\$vm_name" --current-user wscript[.]exe "\$vbs_path"/);
 assert.match(windowsHiddenCurrentUserSource, /s[.]Run\(.*powershell[.]exe.*-File/);
 assert.match(windowsHiddenCurrentUserSource, /SetAccessRuleProtection\(\\\$true, \\\$false\)/);
-assert.match(windowsHiddenCurrentUserSource, /'S-1-5-18','S-1-5-32-544',\\\$interactiveSid[.]Value/);
+assert.match(windowsHiddenCurrentUserSource, /SecurityIdentifier\]::new\('S-1-5-18'\)/);
+assert.match(windowsHiddenCurrentUserSource, /SecurityIdentifier\]::new\('S-1-5-32-544'\)/);
+assert.match(windowsHiddenCurrentUserSource, /,\\\$interactiveSid\)/);
 assert.match(windowsHiddenCurrentUserSource, /'ContainerInherit,ObjectInherit'/);
 assert.match(windowsHiddenCurrentUserSource, /Remove-Item -LiteralPath '\$base' -Recurse/);
 assert.doesNotMatch(windowsHiddenCurrentUserSource, /base="C:\\\\Users\\\\Public\\\\eai-hidden-\$\{nonce\}"[\s\S]*ps_path="\$\{base\}[.]ps1"/);
@@ -1274,6 +1276,14 @@ assert.match(windowsGuestLoginSource, /'PrlJob_GetResult: Invalid argument[.] An
 assert.doesNotMatch(windowsGuestLoginSource, /\[\[ "\$output" == \*"Invalid argument"\*/);
 assert.doesNotMatch(windowsGuestLoginSource, /--current-user cmd[.]exe/);
 assert.match(windowsHiddenCurrentUserSource, /-InputFormat Text -OutputFormat Text -Command -/);
+assert.match(windowsHiddenCurrentUserSource, /stage_base="\$\{base\}[.]tmp"/);
+assert.match(windowsHiddenCurrentUserSource, /Move-Item -LiteralPath '\$stage_base' -Destination '\$base' -ErrorAction Stop/);
+assert.match(windowsHiddenCurrentUserSource, /EAI_HIDDEN_WORKER_STAGED/);
+assert.match(windowsHiddenCurrentUserSource, /if ! prlctl exec "\$vm_name" --current-user wscript[.]exe/);
+assert.doesNotMatch(
+  windowsHiddenCurrentUserSource,
+  /prlctl exec "\$vm_name" --current-user wscript[.]exe[^\n]*\|\| true/,
+);
 assert.doesNotMatch(windowsGuestLoginSource, /Shell[.]Application|ShellExecute/);
 assert.match(windowsGuestLoginSource, /\[wmiclass\]'\\\\[.]\\root\\cimv2:Win32_ProcessStartup'/);
 assert.match(windowsGuestLoginSource, /\$startup[.]WinstationDesktop = 'winsta0\\default'/);
