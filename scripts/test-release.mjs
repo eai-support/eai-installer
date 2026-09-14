@@ -485,7 +485,7 @@ for (const step of mandatoryFailFastMacosRootInstallSteps) {
 assert.match(macosGuestAdapterSource, /EAI_VM_AI_HANDOFF_PROCESS_VERIFIED=1/);
 assert.match(macosGuestAdapterSource, /EAI_VM_AI_HANDOFF_SCREENSHOT_VERIFIED=1/);
 assert.match(macosGuestAdapterSource, /EAI_VM_PROJECT_VERIFIED=1/);
-assert.match(macosGuestAdapterSource, /Visual Studio Code[.]app\/Contents\/MacOS\/Code/);
+assert.match(macosGuestAdapterSource, /Visual Studio Code[.]app\/Contents\/MacOS\/\(Code\|Electron\)/);
 assert.match(macosGuestAdapterSource, /macos-ai-handoff[.]png/);
 assert.match(macosGuestAdapterSource, /macos-project-verification[.]json/);
 assert.match(macosGuestAdapterSource, /macos-ai-handoff-evidence[.]json/);

@@ -770,7 +770,10 @@ stage ai-handoff-process-validation
 ai_workspace_running=0
 ai_workspace_pid=""
 for _ in $(seq 1 30); do
-  ai_workspace_pid="$(printf '%s\n' "/usr/bin/pgrep -f '/Applications/Visual Studio Code.app/Contents/MacOS/Code' | /usr/bin/head -1" \
+  # VS Code has used both `Code` and `Electron` as the macOS launcher
+  # executable across official builds. Keep the process proof exact to the
+  # installed app bundle while accepting either documented launcher name.
+  ai_workspace_pid="$(printf '%s\n' "/usr/bin/pgrep -f '/Applications/Visual Studio Code.app/Contents/MacOS/(Code|Electron)' | /usr/bin/head -1" \
     | macos_prl_current_user_shell_idempotent 2>/dev/null | tr -d '\r\n' || true)"
   if [[ "$ai_workspace_pid" =~ ^[1-9][0-9]*$ ]]; then
     ai_workspace_running=1
@@ -842,7 +845,7 @@ const evidence = {
   processVerified: true,
   processOwner: "testmac",
   processId: Number(process.env.EAI_HANDOFF_PROCESS_ID),
-  processMatch: "/Applications/Visual Studio Code.app/Contents/MacOS/Code",
+  processMatch: "/Applications/Visual Studio Code.app/Contents/MacOS/(Code|Electron)",
   screenshot: {
     path: "macos-ai-handoff.png",
     sha256: process.env.EAI_HANDOFF_SCREENSHOT_HASH,
