@@ -23,13 +23,14 @@ esac
 [[ "$snapshot_id" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]] \
   || fail "the configured snapshot ID is not a UUID."
 
-prlctl_bin="$(command -v prlctl 2>/dev/null || true)"
-[[ -n "$prlctl_bin" && "$prlctl_bin" == /* && -x "$prlctl_bin" ]] \
-  || fail "prlctl is unavailable."
+prlctl_bin='/Applications/Parallels Desktop.app/Contents/MacOS/prlctl'
+[[ -x "$prlctl_bin" ]] || fail "the signed Parallels prlctl binary is unavailable."
+/usr/bin/codesign --verify --deep --strict "$prlctl_bin" >/dev/null 2>&1 \
+  || fail "the signed Parallels prlctl binary does not pass macOS signature verification."
 
 # These are deliberately read-only Parallels queries. Preflight must never
 # restore, start, stop, resume, suspend, or execute a command in a guest.
-vm_info="$($prlctl_bin list "$vm_name" --info 2>/dev/null)" \
+vm_info="$("$prlctl_bin" list "$vm_name" --info 2>/dev/null)" \
   || fail "the configured VM is not available."
 grep -Fqx "Name: $vm_name" <<<"$vm_info" \
   || fail "Parallels returned information for a different VM."
@@ -44,7 +45,7 @@ case "$platform" in
   ubuntu) grep -Fqx "OS: ubuntu" <<<"$vm_info" || fail "the configured VM is not Ubuntu." ;;
 esac
 
-snapshot_list="$($prlctl_bin snapshot-list "$vm_name" 2>/dev/null)" \
+snapshot_list="$("$prlctl_bin" snapshot-list "$vm_name" 2>/dev/null)" \
   || fail "the configured VM snapshot list is unavailable."
 grep -Fq "{$snapshot_id}" <<<"$snapshot_list" \
   || fail "the configured reset snapshot is not available for this VM."
