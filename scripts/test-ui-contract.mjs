@@ -238,7 +238,7 @@ for (const source of [html, app, video]) {
     fail(`an inline style attribute will be refused by the app's content policy: ${match[0]}`);
   }
 }
-for (const name of ["vscode", "copilot", "claude", "codex", "grok"]) {
+for (const name of ["vscode", "copilot", "claude", "codex", "grok", "antigravity"]) {
   if (!css.includes(`[data-tile="${name}"]`)) fail(`the ${name} tile has no colour in the stylesheet`);
 }
 

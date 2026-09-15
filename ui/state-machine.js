@@ -730,6 +730,10 @@
    * running.
    */
   function runRows(state, { reached = "workspace", values = {}, failedAt = null } = {}) {
+    // `done` is the completion sentinel rather than a member of RUN_ROWS.
+    // Handle it before finding a stopping row, otherwise it falls back to
+    // the first row and makes a completed app look three-quarters unfinished.
+    if (!failedAt && reached === "done") return runRowsComplete(values);
     const order = RUN_ROWS.map((row) => row.id);
     const failed = failedAt && order.includes(failedAt) ? failedAt : null;
     const stop = failed || (order.includes(reached) ? reached : "workspace");
@@ -757,10 +761,8 @@
 
   function startCopy({ ready = false } = {}) {
     return {
-      title: "Build with Enterprise AI",
-      sub: ready
-        ? "Your computer is ready. Sign in, pick a workspace, and create your first app — it takes about a minute."
-        : "Sign in, pick a workspace, and create your first app in its own folder. Checking this computer…",
+      title: "Let’s set up Enterprise AI",
+      sub: "We’ll make sure this computer has the few tools Enterprise AI needs. If anything is missing, we’ll download it for you. Then you’ll sign in, choose a workspace, and create your first app.",
     };
   }
 

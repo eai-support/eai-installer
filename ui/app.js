@@ -81,6 +81,9 @@ const facts = {
   demo: false,
   prereqBusy: null,         // the step whose row is spinning
   prereqDetail: "",
+  prereqPlan: [],           // every prerequisite identified at the start of this readiness pass
+  prereqCompleted: 0,
+  preparationStarted: false,
   signinWaiting: false,
   signinEscapeShown: false,   // the way out, once waiting has become a problem
 };
@@ -215,7 +218,7 @@ function onBootstrapProgress(payload) {
   if (["git", "node", "eai-cli", "homebrew", "detect"].includes(payload.step)) {
     facts.prereqBusy = payload.step;
     facts.prereqDetail = payload.detail;
-    if (state.screen === "signin") paint();
+    if (state.screen === "start") paint();
   }
 }
 
@@ -291,6 +294,9 @@ function reset() {
   el("runLines").replaceChildren();
   el("runNote").hidden = true;
   el("runActs").hidden = true;
+  el("runBack").hidden = false;
+  el("runRetry").hidden = false;
+  el("runContinue").hidden = true;
 
   // Choose a harness
   el("harnessRows").replaceChildren();
@@ -346,6 +352,106 @@ function addCheckRow(mark, title, body) {
   return row;
 }
 
+function renderReadinessProgress() {
+  const panel = el("readinessProgress");
+  const checking = facts.prereqBusy === "detect";
+  // Detection happens before the installer knows which tools are missing.
+  // It is one live check, not the eventual Git/Node/CLI checklist.
+  const plan = checking ? ["detect"] : facts.prereqPlan;
+  if (!facts.preparationStarted) {
+    panel.hidden = true;
+    return;
+  }
+
+  if (!facts.prereqBusy) {
+    const device = { macos: "Mac", windows: "Windows PC", linux: "Linux PC" }[platform()] || "computer";
+    el("readinessProgressTitle").textContent = `This ${device} is ready`;
+    el("readinessProgressPercent").textContent = "Ready";
+    el("readinessProgressDetail").textContent = "Everything Enterprise AI needs is in place. You can sign in when you’re ready.";
+    el("readinessProgressBar").style.width = "100%";
+    panel.querySelector("[role=progressbar]").setAttribute("aria-valuenow", "100");
+    const log = el("readinessProgressLog");
+    log.replaceChildren();
+    const item = document.createElement("li");
+    item.className = "done";
+    item.innerHTML = "<i>✓</i><span>Computer preparation complete</span>";
+    log.append(item);
+    panel.hidden = false;
+    return;
+  }
+
+  if (!plan.length) {
+    panel.hidden = true;
+    return;
+  }
+
+  const active = Math.max(0, plan.indexOf(facts.prereqBusy));
+  const completed = Math.max(facts.prereqCompleted, active);
+  const percent = Math.round((completed / plan.length) * 100);
+  const device = { macos: "Mac", windows: "Windows PC", linux: "Linux PC" }[platform()] || "computer";
+  el("readinessProgressTitle").textContent = checking
+    ? `Checking this ${device}`
+    : `Preparing this computer · ${completed + 1} of ${plan.length}`;
+  el("readinessProgressPercent").textContent = checking ? "" : `${percent}%`;
+  el("readinessProgressDetail").textContent = facts.prereqDetail
+    || (checking
+      ? "Finding the few tools Enterprise AI needs."
+      : `${machine.toolName(facts.prereqBusy)} is being prepared. You can leave this running.`);
+  el("readinessProgressBar").style.width = `${percent}%`;
+  const track = panel.querySelector("[role=progressbar]");
+  track.setAttribute("aria-valuenow", String(percent));
+
+  const log = el("readinessProgressLog");
+  log.replaceChildren();
+  for (const [index, step] of plan.entries()) {
+    const item = document.createElement("li");
+    const status = index < completed ? "done" : index === active ? "active" : "pending";
+    item.className = status;
+    const marker = document.createElement("i");
+    marker.textContent = status === "done" ? "✓" : "";
+    const label = document.createElement("span");
+    label.textContent = checking
+      ? "Checking what this computer already has"
+      : status === "done"
+      ? `${machine.toolName(step)} ready`
+      : status === "active"
+        ? `Installing ${machine.toolName(step)}`
+        : `${machine.toolName(step)} waiting`;
+    item.append(marker, label);
+    log.append(item);
+  }
+  panel.hidden = false;
+}
+
+function renderAdminPrompt() {
+  const panel = el("adminPanel");
+  const visible = Boolean(pendingAdminPassword);
+  panel.hidden = !visible;
+  if (!visible) return;
+
+  const prompt = {
+    macos: {
+      title: "Authorise the Git installation",
+      body: "Enter your Mac login password once. EAI Setup uses it only for Apple's minimal Command Line Tools, never saves it, and does not open Terminal.",
+      password: true,
+    },
+    windows: {
+      title: "Approve the Windows permission prompt",
+      body: "Windows may ask you to allow the developer tools to be installed. Approve that Windows prompt to continue; do not enter your EAI password here.",
+      password: false,
+    },
+    linux: {
+      title: "Approve the Linux system prompt",
+      body: "Your Linux desktop may ask you to approve the developer-tools installation. Approve that system prompt to continue; do not enter your EAI password here.",
+      password: false,
+    },
+  }[platform()] || {};
+  el("adminTitle").textContent = prompt.title || "Approve the system prompt";
+  el("adminBody").textContent = prompt.body || "Approve the system prompt to continue.";
+  el("adminPasswordField").hidden = !prompt.password;
+  el("adminActions").hidden = !prompt.password;
+}
+
 const PAINT = {
   start() {
     const ready = !machine.faultsInForce(state).length
@@ -353,6 +459,25 @@ const PAINT = {
     const copy = machine.startCopy({ ready });
     el("startTitle").textContent = copy.title;
     el("startSub").textContent = copy.sub;
+    const button = el("setupStart");
+    const startPanel = document.querySelector(".setup-start");
+    renderReadinessProgress();
+    renderAdminPrompt();
+    startPanel.classList.toggle("preparing", facts.preparationStarted && Boolean(facts.prereqBusy));
+    if (!facts.preparationStarted) {
+      button.textContent = "Get started";
+      button.disabled = false;
+      button.hidden = false;
+      startPanel.classList.remove("ready-to-go");
+    } else if (facts.prereqBusy) {
+      button.hidden = true;
+      startPanel.classList.remove("ready-to-go");
+    } else {
+      button.textContent = "Let’s go";
+      button.disabled = false;
+      button.hidden = false;
+      startPanel.classList.add("ready-to-go");
+    }
   },
 
   /**
@@ -366,6 +491,7 @@ const PAINT = {
    */
   signin(faults) {
     el("signinSub").textContent = machine.signinHead(state, facts.failureContext);
+    renderReadinessProgress();
 
     if (faults.length) {
       for (const [title, body] of machine.signinProblems(state, facts.failureContext)) {
@@ -384,7 +510,6 @@ const PAINT = {
       addCheckRow("busy", row.title, row.body);
       el("setupSignin").classList.add("off");
       el("setupSignin").disabled = true;
-      el("adminPanel").hidden = !pendingAdminPassword;
       return;
     }
 
@@ -537,6 +662,16 @@ const PAINT = {
       el("runNoteBody").textContent = fault.noteBody(platform(), context);
       el("runNote").hidden = false;
       el("runActs").hidden = false;
+      return;
+    }
+
+    if (facts.runReached === "done") {
+      el("runTitle").textContent = `${facts.projectName} is ready`;
+      el("runSub").textContent = "Everything is finished. Choose the AI tool you want to bring to your new app.";
+      el("runActs").hidden = false;
+      el("runBack").hidden = true;
+      el("runRetry").hidden = true;
+      el("runContinue").hidden = false;
       return;
     }
 
@@ -874,13 +1009,43 @@ const TILES = {
   copilot: '<svg viewBox="0 0 64 64" fill="none"><path d="M32 20c8 0 12 3 12 3s4-1 6 1c1.6 1.6 1.4 6 1.4 6s2.6 1.4 2.6 5.6c0 6-4 9.4-8 11.2-4 1.8-9 2.2-14 2.2s-10-.4-14-2.2c-4-1.8-8-5.2-8-11.2 0-4.2 2.6-5.6 2.6-5.6s-.2-4.4 1.4-6c2-2 6-1 6-1s4-3 12-3z" fill="#ffffff"/><ellipse cx="24" cy="37" rx="5.4" ry="6.4" fill="#0d1117"/><ellipse cx="40" cy="37" rx="5.4" ry="6.4" fill="#0d1117"/></svg>',
   claude: '<svg viewBox="0 0 24 24" fill="none"><g stroke="#ffffff" stroke-width="2.6" stroke-linecap="round"><path d="M12 4v16"/><path d="M4 12h16"/><path d="M6.3 6.3l11.4 11.4"/><path d="M17.7 6.3L6.3 17.7"/></g></svg>',
   codex: '<svg viewBox="0 0 24 24" fill="none"><path d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.938 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.985 5.985 0 0 0-3.997 2.9 6.046 6.046 0 0 0 .742 7.097 5.98 5.98 0 0 0 .511 4.938 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.055 6.055 0 0 0-.747-7.073zM13.26 22.43a4.476 4.476 0 0 1-2.876-1.04l.141-.081 4.779-2.758a.795.795 0 0 0 .392-.681v-6.737l2.02 1.168a.071.071 0 0 1 .038.052v5.583a4.478 4.478 0 0 1-4.494 4.494zM3.6 18.304a4.47 4.47 0 0 1-.535-3.014l.142.085 4.783 2.759a.771.771 0 0 0 .78 0l5.843-3.369v2.332a.08.08 0 0 1-.033.062L9.74 19.95a4.5 4.5 0 0 1-6.14-1.646zM2.34 7.896a4.485 4.485 0 0 1 2.366-1.973V11.6a.766.766 0 0 0 .388.676l5.815 3.355-2.02 1.168a.076.076 0 0 1-.071 0l-4.83-2.786A4.504 4.504 0 0 1 2.34 7.872zm16.597 3.855l-5.833-3.387L15.16 6.2a.076.076 0 0 1 .071 0l4.83 2.791a4.494 4.494 0 0 1-.676 8.105v-5.678a.79.79 0 0 0-.407-.667zm2.01-3.023l-.141-.085-4.774-2.755a.775.775 0 0 0-.785 0L9.409 9.23V6.897a.066.066 0 0 1 .028-.061l4.83-2.787a4.5 4.5 0 0 1 6.68 4.66zm-12.64 4.135l-2.02-1.163a.077.077 0 0 1-.038-.057V6.075a4.5 4.5 0 0 1 7.375-3.453l-.142.08L8.704 5.46a.795.795 0 0 0-.393.681zm1.097-2.365l2.602-1.5 2.607 1.5v2.999l-2.597 1.5-2.607-1.5z" fill="#ffffff"/></svg>',
-  gemini: '<svg viewBox="0 0 24 24" fill="none"><path d="M12 2c.6 5.2 4.2 8.8 9.4 9.4-5.2.6-8.8 4.2-9.4 9.4-.6-5.2-4.2-8.8-9.4-9.4C7.8 10.8 11.4 7.2 12 2z" fill="#ffffff"/></svg>',
+  antigravity: '<svg viewBox="0 0 24 24" fill="none"><path d="M12 2c.6 5.2 4.2 8.8 9.4 9.4-5.2.6-8.8 4.2-9.4 9.4-.6-5.2-4.2-8.8-9.4-9.4C7.8 10.8 11.4 7.2 12 2z" fill="#ffffff"/></svg>',
   grok: '<svg viewBox="0 0 24 24" fill="none"><g stroke="#ffffff" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></g></svg>',
 };
 
 function tileFor(surface) {
   const family = Object.keys(TILES).find((key) => surface.id.includes(key));
   return { family: family || "other", svg: family ? TILES[family] : "" };
+}
+
+/* The chooser is for the place someone will work, never for its plumbing.
+   EAI installs and checks each chosen app's companion CLI in the background;
+   old v1 inventories may still use CLI-shaped ids, so keep their technical
+   ids for the command contract while giving people the desktop-app name. */
+const APP_SURFACES = Object.freeze({
+  vscode: { name: "VS Code" },
+  "vscode-copilot": { name: "VS Code" },
+  "copilot-cli": { name: "GitHub Copilot" },
+  "copilot-desktop": { name: "GitHub Copilot" },
+  "claude-cli": { name: "Claude Code" },
+  "claude-desktop": { name: "Claude Code" },
+  "codex-cli": { name: "Codex" },
+  "codex-desktop": { name: "Codex" },
+  "grok-bot": { name: "Grok Build" },
+  "grok-cli": { name: "Grok Build" },
+  "grok-desktop": { name: "Grok Build" },
+  "antigravity-cli": { name: "Antigravity" },
+  "antigravity-desktop": { name: "Antigravity" },
+});
+
+function appFacingSurface(surface) {
+  const app = APP_SURFACES[surface?.id];
+  return app ? { ...surface, ...app } : surface;
+}
+
+function appFacingInventory(inventory) {
+  if (!inventory?.surfaces) return inventory;
+  return { ...inventory, surfaces: inventory.surfaces.map(appFacingSurface) };
 }
 
 const TICK_SVG = '<svg viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.5 4.5L19 7.5" stroke="#ffffff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -1091,6 +1256,8 @@ async function runReadiness() {
        that it could not be installed when the real cause is that Node is
        missing names the wrong thing. */
     const failed = [];
+    facts.prereqPlan = missingSteps();
+    facts.prereqCompleted = 0;
     for (const step of missingSteps()) {
       if (step === "eai-cli" && failed.includes("node")) {
         note("Skipped the EAI CLI: it is installed with npm, and Node.js is not ready.");
@@ -1100,6 +1267,7 @@ async function runReadiness() {
       facts.prereqDetail = "";
       if (state.screen === "signin" || state.screen === "start") paint();
       if (!await runBootstrapStep(step, { collect: true })) failed.push(step);
+      else facts.prereqCompleted = facts.prereqPlan.indexOf(step) + 1;
       await detect();
     }
 
@@ -1425,10 +1593,6 @@ async function runInit() {
     dependencies: "installed",
   };
   note("The app and its project files are ready.");
-  // The screen moves first, so a detection failure raised below lands on
-  // the screen that owns it rather than being cleared by the move.
-  machine.goTo(state, "done");
-  await loadSurfaces();
   paint();
   return true;
 }
@@ -1463,13 +1627,14 @@ function previewInventory() {
   return {
     contractVersion: "eai.ai-surfaces/v1",
     preferredSurface: null,
-    recommendedSurface: "vscode-copilot",
+    recommendedSurface: "vscode",
     surfaces: [
-      { id: "vscode-copilot", name: "GitHub Copilot in VS Code", provider: "GitHub", installUrl: "https://code.visualstudio.com", launchSupport: "project-and-prompt", installed: false },
-      { id: "copilot-cli", name: "GitHub Copilot CLI", provider: "GitHub", installUrl: "https://github.com/features/copilot", launchSupport: "project-and-prompt", installed: false },
-      { id: "claude-cli", name: "Claude Code", provider: "Anthropic", installUrl: "https://claude.com/product/claude-code", launchSupport: "project-and-prompt", installed: false },
-      { id: "codex-cli", name: "Codex CLI", provider: "OpenAI", installUrl: "https://openai.com/codex", launchSupport: "project-and-prompt", installed: false },
-      { id: "grok-cli", name: "Grok Build", provider: "xAI", installUrl: "https://x.ai", launchSupport: "project-and-prompt", installed: false },
+      { id: "vscode", name: "VS Code", provider: "Microsoft", installUrl: "https://code.visualstudio.com", launchSupport: "project-and-prompt", installed: false, companionCli: "copilot" },
+      { id: "copilot-desktop", name: "GitHub Copilot", provider: "GitHub", installUrl: "https://github.com/features/copilot", launchSupport: "project-and-prompt", installed: false, companionCli: "copilot" },
+      { id: "claude-desktop", name: "Claude Code", provider: "Anthropic", installUrl: "https://claude.ai/download", launchSupport: "project-and-prompt", installed: false, companionCli: "claude" },
+      { id: "codex-desktop", name: "Codex", provider: "OpenAI", installUrl: "https://openai.com/codex", launchSupport: "project-and-prompt", installed: false, companionCli: "codex" },
+      { id: "grok-desktop", name: "Grok Build", provider: "xAI", installUrl: "https://x.ai", launchSupport: "project-and-prompt", installed: false, companionCli: "grok" },
+      { id: "antigravity-desktop", name: "Antigravity", provider: "Google", installUrl: "https://antigravity.google/download", launchSupport: "project-and-prompt", installed: false, companionCli: "agy" },
     ],
   };
 }
@@ -1482,7 +1647,7 @@ async function loadSurfaces() {
   }
   try {
     const inventory = await invoke("detect_ai_surfaces", { directory: facts.projectDirectory });
-    facts.surfaces = inventory?.demo ? previewInventory() : inventory;
+    facts.surfaces = appFacingInventory(inventory?.demo ? previewInventory() : inventory);
     facts.selectedSurfaceId = helpers.chooseAiSurface(facts.surfaces);
     const ready = facts.surfaces.surfaces.filter((surface) => surface.installed).length;
     note(`${ready} AI tool${ready === 1 ? " is" : "s are"} already installed.`);
@@ -1543,7 +1708,7 @@ function startHarnessPoll() {
     try {
       const inventory = await invoke("detect_ai_surfaces", { directory: facts.projectDirectory });
       if (inventory?.demo) return;
-      facts.surfaces = inventory;
+      facts.surfaces = appFacingInventory(inventory);
       const landed = inventory.surfaces.find((surface) => surface.id === facts.waitingForSurfaceId && surface.installed);
       if (landed) {
         note(`${landed.name} is installed.`);
@@ -1591,9 +1756,17 @@ async function openProjectFolder() {
 async function runSignup() {
   try {
     const result = await invoke("open_signup");
-    note(result?.demo
-      ? "Preview only: the Enterprise AI signup page would open in your browser."
-      : "The Enterprise AI signup page is open in your browser.");
+    if (result?.demo) {
+      // Tauri owns the normal hand-off.  The statemachine deliberately has
+      // no Tauri bridge, so make this one external journey visible there
+      // instead of making the account action look like a dead-end.
+      const previewWindow = window.open("https://www.enterpriseaigroup.com/signup/developer", "_blank", "noopener");
+      note(previewWindow
+        ? "The Enterprise AI signup page is open in a new browser tab."
+        : "Your browser blocked the signup tab. Open enterpriseaigroup.com/signup/developer to create an account.");
+      return;
+    }
+    note("The Enterprise AI signup page is open in your browser.");
   } catch (error) {
     note(`The signup page could not be opened: ${helpers.cleanText(error)}`, "error");
   }
@@ -1672,7 +1845,27 @@ async function runE2eFlow() {
 /* ======================== 14. THE WIRING ========================= */
 
 el("setupSignin").addEventListener("click", () => runLogin());
-el("setupStart").addEventListener("click", () => goTo("signin"));
+el("setupStart").addEventListener("click", async () => {
+  // “Let's go” is the transition into the visible first step. The browser
+  // only opens after the person sees that Sign in screen and chooses its
+  // explicit “Sign in with browser” action.
+  if (facts.preparationStarted && !facts.prereqBusy) return goTo("signin");
+  if (facts.preparationStarted) return;
+  facts.preparationStarted = true;
+  facts.prereqBusy = "detect";
+  facts.prereqDetail = "";
+  paint();
+  // The review prototype must stop on the state a person just chose so
+  // it can be inspected. The signed desktop app continues immediately
+  // into its real environment check.
+  if (window.__eaiDevAddress) {
+    window.parent?.postMessage({ type: "eai-setup-prototype-readiness", state: "checking" }, window.location.origin);
+    return;
+  }
+  await runReadiness();
+  facts.prereqBusy = null;
+  paint();
+});
 el("setupCreate").addEventListener("click", () => {
   if (machine.faultsInForce(state).length) return runReadiness();
   return runSignup();
@@ -1771,6 +1964,11 @@ el("runBack").addEventListener("click", () => {
   goTo("setup", { stage: machine.stageForAnswers({ workspace: true, name: true, folder: true }) });
 });
 el("runRetry").addEventListener("click", () => runInit());
+el("runContinue").addEventListener("click", async () => {
+  await loadSurfaces();
+  if (state.screen === "running") goTo("done");
+  else paint();
+});
 
 el("harnessBack").addEventListener("click", () => {
   stopHarnessPoll();
@@ -1911,7 +2109,7 @@ function applyDevAddress() {
   facts.surfaces = previewInventory();
   const installed = query.has("installed")
     ? query.get("installed").split(",").filter((id) => id && id !== "none")
-    : query.get("harness") === "installed" ? ["claude-cli"] : [];
+    : query.get("harness") === "installed" ? ["claude-desktop"] : [];
   for (const surface of facts.surfaces.surfaces) surface.installed = installed.includes(surface.id);
   const wanted = query.get("pick");
   facts.selectedSurfaceId = facts.surfaces.surfaces.some((surface) => surface.id === wanted)
@@ -1946,13 +2144,23 @@ function applyDevAddress() {
      neither is reachable by waiting, because in a preview build there is
      nothing to wait for. */
   const busy = query.get("busy");
+  if (query.get("prepared") === "1" && state.screen === "start") {
+    facts.preparationStarted = true;
+  }
   if (busy) {
+    facts.preparationStarted = state.screen === "start";
     facts.prereqBusy = busy;
     facts.prereqDetail = "";
+    facts.prereqPlan = ["git", "node", "eai-cli"];
+    facts.prereqCompleted = Math.max(0, facts.prereqPlan.indexOf(busy));
   }
   if (query.get("admin") === "1") {
     facts.prereqBusy = facts.prereqBusy || "git";
-    facts.prereqDetail = "Waiting for your approval before Apple's installer can run.";
+    facts.prereqDetail = {
+      macos: "Waiting for your approval before Apple's installer can run.",
+      windows: "Waiting for you to approve the Windows permission prompt.",
+      linux: "Waiting for you to approve the Linux system prompt.",
+    }[state.platform] || "Waiting for your approval.";
     pendingAdminPassword = () => {};
   }
   if (query.get("signin") === "waiting") facts.signinWaiting = true;
@@ -1978,12 +2186,15 @@ async function start() {
     e2eConfig = null;
   }
 
-  const ready = await runReadiness();
-  if (!ready) {
-    await writeE2eReceipt("prerequisites", "The required tools could not be installed.");
-    return;
+  if (e2eConfig) {
+    facts.preparationStarted = true;
+    const ready = await runReadiness();
+    if (!ready) {
+      await writeE2eReceipt("prerequisites", "The required tools could not be installed.");
+      return;
+    }
+    await runE2eFlow();
   }
-  if (e2eConfig) await runE2eFlow();
 }
 
 start();

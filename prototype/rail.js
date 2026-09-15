@@ -55,6 +55,7 @@ const fixtures = {
   steps: ["git"],         // which prerequisites failed — more than one can
   busy: null,             // the quiet fix-up, mid-run
   admin: false,           // macOS asking for the password
+  prepared: false,        // Get started has completed; Welcome can offer Let’s go
   workspaces: 1,
   reached: "template",    // how far the creating screen has got
   signin: null,           // waiting · waiting-long
@@ -105,7 +106,8 @@ function address() {
       : "none");
     if (fixtures.waiting) query.set("waiting", "1");
   }
-  if (state.screen === "signin") {
+  if (state.screen === "start") {
+    if (fixtures.prepared) query.set("prepared", "1");
     if (machine.isBroken(state, "prereq")) query.set("step", fixtures.steps.join(","));
     if (fixtures.busy) query.set("busy", fixtures.busy);
     if (fixtures.admin) query.set("admin", "1");
@@ -343,7 +345,7 @@ function renderRail() {
   }
   faults.append(pill);
 
-  if (!screen.faultIds.length) {
+  if (!screen.faultIds.length && state.screen !== "start") {
     const none = document.createElement("div");
     none.className = "rl-note";
     none.textContent = "Nothing on this screen can fail — it has no network call and nothing to answer.";
@@ -392,8 +394,8 @@ function renderRail() {
 
   if (state.screen === "running") rail.append(runProgress());
   if (state.screen === "setup") rail.append(formShape());
-  if (state.screen === "signin") {
-    const detail = signinDetail();
+  if (state.screen === "start") {
+    const detail = readinessDetail();
     if (detail) rail.append(detail);
   }
   if (state.screen === "welcome") rail.append(welcomeDetail());
@@ -469,34 +471,45 @@ function prerequisites() {
   return node;
 }
 
-function signinDetail() {
-  // The prerequisites moved under the failure they belong to; what is
-  // left here is the screen before anything has failed.
+function readinessDetail() {
+  // Preparation occurs on Welcome. Sign in begins only after this is
+  // complete, so every reviewable installation state belongs here too.
   if (machine.isBroken(state, "prereq")) return null;
 
   const node = group("Readiness");
-  node.append(option("Finished — the tick", !fixtures.busy && !fixtures.admin, () => {
+  node.append(option("Get started", !fixtures.prepared && !fixtures.busy && !fixtures.admin, () => {
+    // This rail is a state picker. Select the initial Welcome state here;
+    // the real Get started button inside the frame advances to Checking.
+    fixtures.prepared = false;
     fixtures.busy = null;
     fixtures.admin = false;
     show();
   }));
   node.append(option("Checking the computer", fixtures.busy === "detect" && !fixtures.admin, () => {
+    fixtures.prepared = true;
     fixtures.busy = "detect";
     fixtures.admin = false;
     show();
   }));
   node.append(option("Installing something", fixtures.busy === "git" && !fixtures.admin, () => {
+    fixtures.prepared = true;
     fixtures.busy = "git";
     fixtures.admin = false;
     show();
   }));
-  if (state.platform === "macos") {
-    node.append(option("Asking for the Mac password", fixtures.admin, () => {
-      fixtures.admin = true;
-      fixtures.busy = "git";
-      show();
-    }));
-  }
+  const prompt = { macos: "Asking for the Mac password", windows: "Waiting for Windows permission", linux: "Waiting for Linux permission" }[state.platform];
+  node.append(option(prompt, fixtures.admin, () => {
+    fixtures.prepared = true;
+    fixtures.admin = true;
+    fixtures.busy = "git";
+    show();
+  }));
+  node.append(option("Finished — Let’s go", fixtures.prepared && !fixtures.busy && !fixtures.admin, () => {
+    fixtures.prepared = true;
+    fixtures.busy = null;
+    fixtures.admin = false;
+    show();
+  }));
   return node;
 }
 
@@ -619,6 +632,20 @@ function stepBy(by) {
   goTo(machine.SCREEN_ORDER[index]);
 }
 
+/* The app frame owns its real buttons. In prototype mode, reflect the
+   Welcome button transition in this rail so a reviewer sees one coherent
+   state rather than an old rail beside a newer frame. */
+window.addEventListener("message", (event) => {
+  if (event.origin !== window.location.origin || event.source !== app.contentWindow) return;
+  if (event.data?.type !== "eai-setup-prototype-readiness") return;
+  if (event.data.state === "checking") {
+    fixtures.prepared = true;
+    fixtures.busy = "detect";
+    fixtures.admin = false;
+    show();
+  }
+});
+
 window.addEventListener("keydown", (event) => {
   /* Arrows belong to a field or an open select while one has focus. The
      guard checks for an Element first: a keydown whose target is the
@@ -648,6 +675,7 @@ if (initial.get("waiting") === "1") fixtures.waiting = true;
 if (initial.has("step")) fixtures.steps = initial.get("step").split(",").filter(Boolean);
 if (initial.has("busy")) fixtures.busy = initial.get("busy");
 if (initial.get("admin") === "1") fixtures.admin = true;
+if (initial.get("prepared") === "1") fixtures.prepared = true;
 if (initial.has("workspaces")) {
   const count = Number.parseInt(initial.get("workspaces"), 10);
   if (Number.isFinite(count) && count > 0) fixtures.workspaces = count;

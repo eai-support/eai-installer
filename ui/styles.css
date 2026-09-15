@@ -274,6 +274,27 @@ button, input { font-family: inherit; }
    box that failed to load. There is no state where an empty list is
    meant to be seen. */
 .eai-rows:empty { display: none; }
+.readiness-progress {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: #fbfbfb;
+}
+.readiness-progress[hidden] { display: none; }
+.readiness-progress-head { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; line-height: 18px; }
+.readiness-progress-head strong { font-weight: var(--font-weight-medium); color: var(--color-foreground); }
+.readiness-progress-head span { color: var(--color-muted-foreground); font-variant-numeric: tabular-nums; }
+.readiness-progress p { margin: 0; color: var(--color-muted-foreground); font-size: 12.5px; line-height: 17px; }
+.readiness-progress-track { height: 5px; overflow: hidden; border-radius: 999px; background: var(--color-border); }
+.readiness-progress-track span { display: block; width: 0; height: 100%; border-radius: inherit; background: var(--color-foreground); transition: width 180ms ease; }
+.readiness-progress-log { display: grid; gap: 5px; margin: 1px 0 0; padding: 0; list-style: none; }
+.readiness-progress-log li { display: flex; align-items: center; gap: 7px; color: var(--color-muted-foreground); font-size: 12px; line-height: 16px; }
+.readiness-progress-log i { display: inline-grid; width: 14px; height: 14px; place-items: center; border: 1px solid var(--color-border); border-radius: 50%; color: transparent; font-size: 9px; font-style: normal; }
+.readiness-progress-log li.done i { border-color: var(--color-tick); background: var(--color-tick); color: #fff; }
+.readiness-progress-log li.active { color: var(--color-foreground); font-weight: var(--font-weight-medium); }
+.readiness-progress-log li.active i { border: 2px solid var(--color-foreground); border-right-color: transparent; animation: eai-spin 800ms linear infinite; }
 .eai-row {
   display: flex;
   align-items: center;
@@ -960,7 +981,7 @@ button, input { font-family: inherit; }
 .i4-row .tile[data-tile="copilot"] { background: #0d1117; }
 .i4-row .tile[data-tile="claude"] { background: #d97757; }
 .i4-row .tile[data-tile="codex"] { background: #0b0b0d; }
-.i4-row .tile[data-tile="gemini"] { background: #4285f4; }
+.i4-row .tile[data-tile="antigravity"] { background: #4285f4; }
 .i4-row .tile[data-tile="grok"] { background: #111111; }
 .i4-row .tile[data-tile="other"] { background: #525252; }
 .i4-row .nm {
@@ -1333,9 +1354,9 @@ button, input { font-family: inherit; }
   flex: 1;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 40px;
-  padding: 12px 0 24px;
+  justify-content: flex-start;
+  gap: 26px;
+  padding: 70px 0 24px;
   text-align: center;
 }
 
@@ -1371,6 +1392,26 @@ button, input { font-family: inherit; }
   line-height: 1.55;
   color: #858585;
 }
+
+.setup-start .readiness-progress {
+  width: min(100%, 480px);
+  margin-top: 2px;
+  text-align: left;
+}
+.setup-start .admin-note { width: min(100%, 480px); text-align: left; }
+.setup-start.preparing { gap: 18px; padding-top: 34px; }
+.setup-start.preparing .setup-start-mark { width: 132px; }
+.setup-start.preparing .setup-start-tx { gap: 6px; }
+
+/* Once preparation is complete, the information stays near the top but
+   the decision moves back to the familiar, quiet lower-centre action.
+   The button is deliberately not left beside a completed checklist. */
+.setup-start.ready-to-go #setupStart {
+  order: 4;
+  margin-top: auto;
+  margin-bottom: 42px;
+}
+.setup-start.ready-to-go .readiness-progress { order: 3; }
 
 .eai-screen[data-screen="start"] .eai-foot {
   justify-content: center;

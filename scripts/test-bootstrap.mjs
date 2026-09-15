@@ -306,7 +306,7 @@ if (wizard.indexOf('id="wsRetry"') < wsQuestionStart || wizard.indexOf('id="wsRe
 }
 
 // Creating, as rows rather than a command log, with an honest retry.
-for (const value of ['id="runLines"', 'id="runTitle"', 'id="runSub"', 'id="runNote"', 'id="runRetry"', 'id="runBack"']) {
+for (const value of ['id="runLines"', 'id="runTitle"', 'id="runSub"', 'id="runNote"', 'id="runRetry"', 'id="runBack"', 'id="runContinue"', 'Bring your AI']) {
   if (!wizard.includes(value)) throw new Error(`wizard: the creating screen is missing ${value}`);
 }
 
@@ -325,6 +325,12 @@ for (const screen of ["setup", "running", "done", "handoff"]) {
 }
 for (const value of ['id="harnessRows"', 'id="harnessSub"', 'id="harnessNote"', 'id="harnessGo"', 'id="harnessRefresh"', 'id="harnessBack"', "Choose how to work with AI", "Check again"]) {
   if (!wizard.includes(value)) throw new Error(`wizard: AI tool selection is missing ${value}`);
+}
+for (const value of ["appFacingInventory", "antigravity-desktop", 'companionCli: "agy"']) {
+  if (!appSource.includes(value)) throw new Error(`wizard: AI chooser does not keep ${value} as background setup`);
+}
+for (const value of ["Claude Code", "Grok Build"]) {
+  if (!appSource.includes(value)) throw new Error(`wizard: AI chooser is missing the ${value} app label`);
 }
 for (const value of ['id="handoffTitle"', 'id="handoffSub"', 'id="harnessEaiBody"', 'id="harnessVideo"', 'id="handoffGo"', 'id="handoffBack"', "<code>/eai</code>"]) {
   if (!wizard.includes(value)) throw new Error(`wizard: the hand-off instruction is missing ${value}`);
