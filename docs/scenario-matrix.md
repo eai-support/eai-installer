@@ -56,6 +56,10 @@ visible.
 | STATE-02 | Sign in | A prerequisite failed and the EAI API is unreachable | Both rows appear in one list, chronologically, under "Two things are in the way"; the tick is not shown beside either. |
 | STATE-03 | Sign in | The network probe cannot run on this machine | Connectivity is treated as reachable and sign-in decides; the user is not sent to their VPN settings over a missing probe. |
 | STATE-04 | Sign in | A prerequisite install fails because the network is down | The screen reports the connection, not the prerequisite; the fix offered is the one that will work. |
+| STATE-19 | Every screen | Look at the bar across the top | Four stages, not seven screens; the current stage and preceding stages are filled, the rest are pale, and the bar is named for screen readers. |
+| STATE-20 | Every screen | A failure on the current screen | The current stage turns red and no later stage looks complete. |
+| STATE-21 | Every screen with actions | Content longer than the window | Back and the primary action stay visible while content scrolls under them. |
+| STATE-22 | Choose a harness, Hand-off | Any state | Back stays on the left of the bottom action rail. |
 | STATE-17 | Sign in | Two prerequisites both fail | Both are attempted, both are reported as rows in the same list, and the heading counts rows. Neither row claims nothing else is waiting on it. |
 | STATE-18 | Sign in | Node.js fails and the EAI CLI is also missing | The CLI is not attempted, because it is installed with npm; the failure names Node.js and does not blame the CLI. |
 | STATE-05 | Set up | Answer each question in turn | The next question appears under the answer with no Continue between them; Back and Create app are present from the first question. |

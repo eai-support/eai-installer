@@ -732,9 +732,18 @@ const PAINT = {
     const copy = machine.handoffCopy(surface, { projectName: facts.projectName });
     el("handoffTitle").textContent = copy.title;
     el("handoffSub").textContent = copy.sub;
-    // /eai is a command, and the design sets it as one. Built from nodes
-    // rather than innerHTML so a tool name from the CLI can never become
-    // markup on the way to the screen.
+    // /eai is a command when the selected surface supports an initial
+    // prompt. Build both lines from nodes so provider data is never markup.
+    const instruction = el("harnessEaiInstruction");
+    instruction.replaceChildren();
+    for (const [index, piece] of copy.instruction.split("/eai").entries()) {
+      if (index > 0) {
+        const code = document.createElement("code");
+        code.textContent = "/eai";
+        instruction.append(code);
+      }
+      instruction.append(document.createTextNode(piece));
+    }
     const body = el("harnessEaiBody");
     body.replaceChildren();
     for (const [index, piece] of copy.body.split("/eai").entries()) {
@@ -1038,6 +1047,15 @@ const APP_SURFACES = Object.freeze({
   "antigravity-desktop": { name: "Antigravity" },
 });
 
+const GRAPHICAL_SURFACE_IDS = new Set([
+  "vscode-copilot",
+  "copilot-desktop",
+  "antigravity-desktop",
+  "claude-desktop",
+  "codex-desktop",
+  "grok-bot",
+]);
+
 function appFacingSurface(surface) {
   const app = APP_SURFACES[surface?.id];
   return app ? { ...surface, ...app } : surface;
@@ -1045,7 +1063,16 @@ function appFacingSurface(surface) {
 
 function appFacingInventory(inventory) {
   if (!inventory?.surfaces) return inventory;
-  return { ...inventory, surfaces: inventory.surfaces.map(appFacingSurface) };
+  const surfaces = inventory.surfaces
+    .filter((surface) => GRAPHICAL_SURFACE_IDS.has(surface.id))
+    .map(appFacingSurface);
+  const selected = (id) => surfaces.some((surface) => surface.id === id) ? id : null;
+  return {
+    ...inventory,
+    surfaces,
+    preferredSurface: selected(inventory.preferredSurface),
+    recommendedSurface: selected(inventory.recommendedSurface),
+  };
 }
 
 const TICK_SVG = '<svg viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.5 4.5L19 7.5" stroke="#ffffff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -1625,16 +1652,16 @@ function failInit(message) {
 
 function previewInventory() {
   return {
-    contractVersion: "eai.ai-surfaces/v1",
+    contractVersion: "eai.ai-surfaces/v2",
     preferredSurface: null,
-    recommendedSurface: "vscode",
+    recommendedSurface: "vscode-copilot",
     surfaces: [
-      { id: "vscode", name: "VS Code", provider: "Microsoft", installUrl: "https://code.visualstudio.com", launchSupport: "project-and-prompt", installed: false, companionCli: "copilot" },
-      { id: "copilot-desktop", name: "GitHub Copilot", provider: "GitHub", installUrl: "https://github.com/features/copilot", launchSupport: "project-and-prompt", installed: false, companionCli: "copilot" },
-      { id: "claude-desktop", name: "Claude Code", provider: "Anthropic", installUrl: "https://claude.ai/download", launchSupport: "project-and-prompt", installed: false, companionCli: "claude" },
-      { id: "codex-desktop", name: "Codex", provider: "OpenAI", installUrl: "https://openai.com/codex", launchSupport: "project-and-prompt", installed: false, companionCli: "codex" },
-      { id: "grok-desktop", name: "Grok Build", provider: "xAI", installUrl: "https://x.ai", launchSupport: "project-and-prompt", installed: false, companionCli: "grok" },
-      { id: "antigravity-desktop", name: "Antigravity", provider: "Google", installUrl: "https://antigravity.google/download", launchSupport: "project-and-prompt", installed: false, companionCli: "agy" },
+      { id: "vscode-copilot", name: "VS Code", provider: "GitHub", installUrl: "https://code.visualstudio.com/docs/copilot/setup", launchSupport: "project-and-prompt", installed: false, companionCli: "copilot" },
+      { id: "copilot-desktop", name: "GitHub Copilot", provider: "GitHub", installUrl: "https://docs.github.com/en/copilot/get-started/quickstart-copilot-app", launchSupport: "manual-project", installed: false, companionCli: "copilot" },
+      { id: "antigravity-desktop", name: "Antigravity", provider: "Google", installUrl: "https://antigravity.google/download", launchSupport: "manual-project", installed: false, companionCli: "agy" },
+      { id: "claude-desktop", name: "Claude Code", provider: "Anthropic", installUrl: "https://claude.com/download", launchSupport: "project-and-prompt", installed: false, companionCli: "claude" },
+      { id: "codex-desktop", name: "Codex", provider: "OpenAI", installUrl: "https://learn.chatgpt.com/docs/app", launchSupport: "manual-project", installed: false, companionCli: "codex" },
+      { id: "grok-bot", name: "Grok Build", provider: "xAI", installUrl: "https://x.ai/bot", launchSupport: "launch-only", installed: false, companionCli: "grok" },
     ],
   };
 }

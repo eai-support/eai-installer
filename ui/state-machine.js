@@ -900,6 +900,25 @@
 
   function handoffCopy(surface, { projectName } = {}) {
     const name = surface?.name || "your AI tool";
+    if (surface?.launchSupport === "manual-project") {
+      return {
+        title: `Open ${projectName || "your app"} in ${name}`,
+        sub: `${name} will open next. Select your app folder when it asks for a project.`,
+        instruction: "Open the app folder, then start a new chat",
+        body: `EAI will open ${name}, but this app needs you to select ${projectName || "your app"} yourself. `
+          + "Your project folder is ready and nothing will be lost.",
+        button: `Open ${name}`,
+      };
+    }
+    if (surface?.launchSupport === "launch-only") {
+      return {
+        title: `Open ${name}`,
+        sub: `${name} can open, but it cannot receive your app automatically.`,
+        instruction: "Open your app folder when you are ready",
+        body: `${projectName || "Your app"} is ready in its folder. Open it from ${name} when you are ready to continue.`,
+        button: `Open ${name}`,
+      };
+    }
     return {
       title: "One last thing",
       sub: `${name} is ready. Here's what to do the moment it opens.`,

@@ -157,8 +157,21 @@ const appSource = await readFile(new URL("../ui/app.js", import.meta.url), "utf8
 for (const value of ["let e2eAppCreated = false", "e2eAppCreated = Boolean(result?.app_created)", "appCreated: e2eAppCreated", 'e2eAppCreated ? "project" : "app"']) {
   if (!appSource.includes(value)) throw new Error(`Desktop release receipt does not preserve app creation evidence: ${value}`);
 }
-if (!rust.includes('inventory.contract_version != "eai.ai-surfaces/v1"')) {
+if (!rust.includes('inventory.contract_version != "eai.ai-surfaces/v2"')) {
   throw new Error("Tauri adapter does not enforce the versioned AI surface contract");
+}
+if ((rust.match(/"--contract-version", "v2"/g) ?? []).length !== 3) {
+  throw new Error("Tauri adapter does not explicitly negotiate the EAI AI surface v2 contract");
+}
+for (const value of [
+  "capabilities: Vec<String>", "EXPECTED_AI_SURFACES",
+  '("vscode-copilot", "editor")', '("copilot-desktop", "desktop")',
+  '("antigravity-desktop", "desktop")', '("claude-desktop", "desktop")',
+  '("codex-desktop", "desktop")', '("grok-bot", "desktop")',
+  '("copilot-cli", "cli")', '("antigravity-cli", "cli")',
+  '("claude-cli", "cli")', '("codex-cli", "cli")', '("grok-cli", "cli")',
+]) {
+  if (!rust.includes(value)) throw new Error(`Tauri adapter does not enforce the EAI v2 surface catalog: ${value}`);
 }
 for (const value of ["Homebrew.pkg", "/usr/sbin/pkgutil", "--check-signature", "with administrator privileges", "--stdinpass", "No Terminal window will open"]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing native macOS installation control: ${value}`);
@@ -196,7 +209,7 @@ if (!rust.includes('command.env("PATH", path)') || !rust.includes(".eai-setup/no
 if (!rust.includes("fn clean_process_output") || !rust.includes("character == '\\u{1b}'")) {
   throw new Error("Tauri adapter does not remove terminal control sequences from GUI diagnostics");
 }
-if (!rust.includes("Node.js files were downloaded, but the desktop app could not run node and npm")) {
+if (!rust.includes("Node.js files were downloaded, but the desktop app could not run Node.js 24 and npm")) {
   throw new Error("Tauri adapter reports Node.js ready before verifying the installed executables");
 }
 if (!rust.includes("async fn run_bootstrap") || !rust.includes("spawn_blocking")) {
@@ -326,13 +339,13 @@ for (const screen of ["setup", "running", "done", "handoff"]) {
 for (const value of ['id="harnessRows"', 'id="harnessSub"', 'id="harnessNote"', 'id="harnessGo"', 'id="harnessRefresh"', 'id="harnessBack"', "Choose how to work with AI", "Check again"]) {
   if (!wizard.includes(value)) throw new Error(`wizard: AI tool selection is missing ${value}`);
 }
-for (const value of ["appFacingInventory", "antigravity-desktop", 'companionCli: "agy"']) {
+for (const value of ["appFacingInventory", "GRAPHICAL_SURFACE_IDS", ".filter((surface) => GRAPHICAL_SURFACE_IDS.has(surface.id))", "antigravity-desktop", 'companionCli: "agy"']) {
   if (!appSource.includes(value)) throw new Error(`wizard: AI chooser does not keep ${value} as background setup`);
 }
 for (const value of ["Claude Code", "Grok Build"]) {
   if (!appSource.includes(value)) throw new Error(`wizard: AI chooser is missing the ${value} app label`);
 }
-for (const value of ['id="handoffTitle"', 'id="handoffSub"', 'id="harnessEaiBody"', 'id="harnessVideo"', 'id="handoffGo"', 'id="handoffBack"', "<code>/eai</code>"]) {
+for (const value of ['id="handoffTitle"', 'id="handoffSub"', 'id="harnessEaiInstruction"', 'id="harnessEaiBody"', 'id="harnessVideo"', 'id="handoffGo"', 'id="handoffBack"']) {
   if (!wizard.includes(value)) throw new Error(`wizard: the hand-off instruction is missing ${value}`);
 }
 if (!wizard.includes('id="builtFolder"') || !wizard.includes('id="handoffFolder"')) {
@@ -522,7 +535,7 @@ for (const value of ["workflow_dispatch", "gh release create", "gh release uploa
   if (!testRelease.includes(value)) throw new Error(`test-release workflow is missing: ${value}`);
 }
 const release = await readFile(new URL("../.github/workflows/release.yml", import.meta.url), "utf8");
-for (const value of ["Add stable direct-download assets", "tauri-apps/tauri-action@v1", "eai-setup-macos-arm64.dmg", "eai-setup-macos-x64.dmg", "eai-setup-windows-x64.exe", "eai-setup-windows-arm64.exe", "eai-setup-ubuntu-amd64.deb", "eai-setup-ubuntu-arm64.deb", "x86_64-apple-darwin", "aarch64-pc-windows-msvc", "ubuntu-24.04-arm", "codesign --verify --deep --strict", "spctl --assess --type execute", "xcrun stapler validate", "Get-AuthenticodeSignature"]) {
+for (const value of ["Stage exact stable release asset", "tauri-apps/tauri-action@", "eai-setup-macos-arm64.dmg", "eai-setup-macos-x64.dmg", "eai-setup-windows-x64.exe", "eai-setup-windows-arm64.exe", "eai-setup-ubuntu-amd64.deb", "eai-setup-ubuntu-arm64.deb", "x86_64-apple-darwin", "aarch64-pc-windows-msvc", "ubuntu-24.04-arm", "codesign --verify --deep --strict", "spctl --assess --type execute", "xcrun stapler validate", "Get-AuthenticodeSignature"]) {
   if (!release.includes(value)) throw new Error(`release workflow is missing: ${value}`);
 }
 const testBundles = await readFile(new URL("../.github/workflows/test-bundles.yml", import.meta.url), "utf8");

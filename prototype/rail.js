@@ -64,11 +64,12 @@ const fixtures = {
 
 /* The fixtures' own vocabulary, kept next to the rail that offers it. */
 const SURFACES = [
-  { id: "vscode-copilot", name: "GitHub Copilot in VS Code" },
-  { id: "copilot-cli", name: "GitHub Copilot CLI" },
-  { id: "claude-cli", name: "Claude Code" },
-  { id: "codex-cli", name: "Codex CLI" },
-  { id: "grok-cli", name: "Grok Build" },
+  { id: "vscode-copilot", name: "VS Code" },
+  { id: "copilot-desktop", name: "GitHub Copilot" },
+  { id: "antigravity-desktop", name: "Antigravity" },
+  { id: "claude-desktop", name: "Claude Code" },
+  { id: "codex-desktop", name: "Codex" },
+  { id: "grok-bot", name: "Grok Build" },
 ];
 
 const PLATFORMS = [

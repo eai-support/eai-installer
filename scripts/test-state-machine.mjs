@@ -607,6 +607,17 @@ const installedMac = [
 const emptyMac = installedMac.map((surface) => ({ ...surface, installed: false }));
 
 {
+  const manual = machine.handoffCopy({ name: "Codex", launchSupport: "manual-project" }, { projectName: "contract-renewals" });
+  if (/\/eai/.test(`${manual.instruction} ${manual.body}`) || !manual.body.includes("select")) {
+    fail("a manual-project surface claims the universal /eai hand-off");
+  }
+  const launchOnly = machine.handoffCopy({ name: "Grok Build", launchSupport: "launch-only" }, { projectName: "contract-renewals" });
+  if (/\/eai/.test(`${launchOnly.instruction} ${launchOnly.body}`) || !launchOnly.body.includes("folder")) {
+    fail("a launch-only surface claims project hand-off");
+  }
+}
+
+{
   const groups = machine.harnessGroups(installedMac, "macos");
   if (groups.length !== 2) fail("a machine with one tool installed does not get both groups");
   if (groups[0].id !== "ready") fail("the tools that are already here are not first");
