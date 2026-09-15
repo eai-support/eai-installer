@@ -575,6 +575,23 @@ for _ in $(seq 1 30); do
 done
 guest_process_alive "$normal_pid_file" || guest_test_fail "The normal released app process did not start."
 
+stage normal-welcome-start
+welcome_started=0
+for _ in $(seq 1 30); do
+  if screen_has "Get started"; then
+    # The current release begins prerequisite setup only after this visible,
+    # user-facing action.  Keyboard input is deliberately routed through the
+    # same Parallels channel used for the native authorization dialog.
+    input key tab
+    input key enter
+    welcome_started=1
+    break
+  fi
+  sleep 1
+done
+[[ "$welcome_started" == 1 ]] \
+  || guest_test_fail "The released macOS app did not show its Get started welcome action."
+
 if [[ -z "$before_git" ]]; then
   stage mac-admin-authorization
   admin_prompt_seen=0
@@ -614,11 +631,9 @@ for attempt in $(seq 1 600); do
     liveness_failures=$((liveness_failures + 1))
     [[ "$liveness_failures" -lt 5 ]] || guest_test_fail "The released app exited before prerequisite installation completed."
   fi
-  if guest_prerequisites_ready && screen_has "Sign in to EAI"; then
-    # The long activity list can scroll its completion banner out of view. The
-    # visible sign-in panel is only selected after installPrerequisites returns
-    # true; pair it with the independent version checks above rather than
-    # relying on off-screen OCR text.
+  if guest_prerequisites_ready && screen_has "This Mac is ready"; then
+    # Pair the visible completion state with independent version checks rather
+    # than accepting an off-screen activity item as evidence.
     ready_reads=$((ready_reads + 1))
     [[ "$ready_reads" -ge 2 ]] && break
   else
@@ -630,6 +645,20 @@ for attempt in $(seq 1 600); do
   sleep 2
 done
 [[ "$ready_reads" -ge 2 ]] || guest_test_fail "The released app did not reach stable prerequisite readiness within 20 minutes."
+
+stage normal-welcome-continue
+input key tab
+input key enter
+signin_visible=0
+for _ in $(seq 1 30); do
+  if screen_has "Sign in with browser"; then
+    signin_visible=1
+    break
+  fi
+  sleep 1
+done
+[[ "$signin_visible" == 1 ]] \
+  || guest_test_fail "The released macOS app did not take Let’s go to the sign-in screen."
 
 after_git="$(guest_git_version)"
 after_node="$(guest_node_version)"

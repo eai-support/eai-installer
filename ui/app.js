@@ -1874,7 +1874,10 @@ async function runE2eFlow() {
     return;
   }
   try {
-    await invoke("start_ai_surface", { directory: facts.projectDirectory, surfaceId: surface.id });
+    const result = await invoke("start_ai_surface", { directory: facts.projectDirectory, surfaceId: surface.id });
+    if (!result?.launched) {
+      throw new Error(result?.message || `${surface.name} did not report a successful launch.`);
+    }
   } catch (error) {
     await writeE2eReceipt("aiHandoff", `The AI workspace could not be opened: ${String(error)}`);
     return;

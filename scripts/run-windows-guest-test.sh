@@ -39,6 +39,7 @@ ocr_source="$ROOT/scripts/macos-ocr-match.swift"
 ocr_binary="${TMPDIR:-/tmp}/eai-installer-macos-ocr-match"
 window_id_source="$ROOT/scripts/macos-parallels-window-id.swift"
 window_id_binary="${TMPDIR:-/tmp}/eai-installer-macos-parallels-window-id"
+input_helper="$ROOT/scripts/parallels-input.mjs"
 work_dir="$(mktemp -d)"
 host_receipt="$work_dir/desktop-receipt.json"
 phase="preflight"
@@ -68,6 +69,10 @@ uac_policy_run_binding=""
 stage() {
   phase="$1"
   printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$phase"
+}
+
+input() {
+  node "$input_helper" --vm "$vm_name" "$@"
 }
 
 capture_vm_window() {
@@ -5934,6 +5939,22 @@ while (( SECONDS < normal_start_deadline )); do
 done
 [[ "$normal_started" == 1 ]] || guest_test_fail "The normal released Windows app process did not start."
 
+stage normal-welcome-start
+welcome_started=0
+for _ in $(seq 1 30); do
+  if screen_has "Get started"; then
+    # screen_has proves the receipt-bound EAI Setup window is foregrounded
+    # immediately before sending the visible primary action.
+    input key tab
+    input key enter
+    welcome_started=1
+    break
+  fi
+  sleep 1
+done
+[[ "$welcome_started" == 1 ]] \
+  || guest_test_fail "The released Windows app did not show its Get started welcome action."
+
 stage prerequisite-install
 versions=""
 ready_reads=0
@@ -5955,8 +5976,7 @@ while (( SECONDS < prerequisite_deadline )); do
   versions="$(guest_versions_json || true)"
   if [[ -n "$versions" ]] \
     && versions_satisfy_contract "$versions" \
-    && screen_has "Sign in" \
-    && screen_has "Prerequisites installed successfully"; then
+    && screen_has "This Windows PC is ready"; then
     ready_reads=$((ready_reads + 1))
     [[ "$ready_reads" -ge 2 ]] && break
   else
@@ -5969,6 +5989,20 @@ while (( SECONDS < prerequisite_deadline )); do
   sleep 5
 done
 [[ "$ready_reads" -ge 2 ]] || guest_test_fail "The Windows installer did not reach stable prerequisite readiness within 20 minutes."
+
+stage normal-welcome-continue
+input key tab
+input key enter
+signin_visible=0
+for _ in $(seq 1 30); do
+  if screen_has "Sign in with browser"; then
+    signin_visible=1
+    break
+  fi
+  sleep 1
+done
+[[ "$signin_visible" == 1 ]] \
+  || guest_test_fail "The released Windows app did not take Let’s go to the sign-in screen."
 stop_prerequisite_uac_watcher \
   || guest_test_fail "The Windows unexpected-consent-UI watcher did not close cleanly."
 stage prerequisite-install-passed

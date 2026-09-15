@@ -155,6 +155,9 @@ if (!rust.includes("project_directory: Option<String>") || !rust.includes("resul
 }
 
 const appSource = await readFile(new URL("../ui/app.js", import.meta.url), "utf8");
+if (!appSource.includes("result?.launched") || !appSource.includes("did not report a successful launch")) {
+  throw new Error("The UI must reject an AI handoff that does not confirm a launched workspace.");
+}
 for (const value of ["let e2eAppCreated = false", "e2eAppCreated = Boolean(result?.app_created)", "appCreated: e2eAppCreated", 'e2eAppCreated ? "project" : "app"']) {
   if (!appSource.includes(value)) throw new Error(`Desktop release receipt does not preserve app creation evidence: ${value}`);
 }
