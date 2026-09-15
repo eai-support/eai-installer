@@ -2437,6 +2437,7 @@ assert.ok(
 );
 for (const job of [productionWindowsBuildJob, productionAppleJob, productionLinuxJob]) {
   assert.match(job, /uses: tauri-apps\/tauri-action@[a-f0-9]{40} # v1/);
+  assert.match(job, /name: Install JavaScript dependencies\n        run: npm ci\n      - run: npm test/);
 }
 assert.equal((releaseWorkflow.match(/uses: tauri-apps\/tauri-action@[a-f0-9]{40}/g) ?? []).length, 4);
 assert.doesNotMatch(productionAppleJob, /mapfile/);

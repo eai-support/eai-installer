@@ -12,6 +12,7 @@ for (const file of files) {
   if (/curl\s+[^\n|]*\|\s*(sh|bash)/i.test(text)) throw new Error(`${file}: unsafe curl pipe install found`);
 }
 const macDevSmoke = await readFile(new URL("../scripts/test-macos-dev.sh", import.meta.url), "utf8");
+const videoSource = await readFile(new URL("../ui/video.js", import.meta.url), "utf8");
 for (const value of ["codesign --force --deep --sign -", "codesign --verify --deep --strict", "xattr -dr com.apple.quarantine", "Contents/MacOS/eai-setup"]) {
   if (!macDevSmoke.includes(value)) throw new Error(`macOS development smoke test is missing: ${value}`);
 }
@@ -347,6 +348,17 @@ for (const value of ["Claude Code", "Grok Build"]) {
 }
 for (const value of ['id="handoffTitle"', 'id="handoffSub"', 'id="harnessEaiInstruction"', 'id="harnessEaiBody"', 'id="harnessVideo"', 'id="handoffGo"', 'id="handoffBack"']) {
   if (!wizard.includes(value)) throw new Error(`wizard: the hand-off instruction is missing ${value}`);
+}
+for (const value of [
+  'surface?.launchSupport === "project-and-prompt"',
+  'film.hidden = !canShowPromptAnimation',
+  'result?.launched',
+  'did not report a successful launch',
+]) {
+  if (!appSource.includes(value)) throw new Error(`wizard: hand-off launch handling is missing ${value}`);
+}
+for (const value of ['element.__eaiVideoReset?.();', 'if (!canShowPromptAnimation)']) {
+  if (!`${videoSource}\n${appSource}`.includes(value)) throw new Error(`wizard: hand-off animation safety is missing ${value}`);
 }
 if (!wizard.includes('id="builtFolder"') || !wizard.includes('id="handoffFolder"')) {
   throw new Error("wizard: the finished project cannot be opened from the screens that end the flow");

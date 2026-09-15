@@ -758,9 +758,19 @@ const PAINT = {
     el("handoffFolder").hidden = !facts.projectPath;
 
     const film = el("harnessVideo");
-    if (window.mountVideo && film.dataset.mountedFor !== (surface?.id || "none")) {
-      window.mountVideo(film, { app: surface?.name || "your AI tool", project: facts.projectName || "your app" });
-      film.dataset.mountedFor = surface?.id || "none";
+    // The animation demonstrates the one automated prompt hand-off. Do not
+    // show it for modes where the person must choose a folder or continue
+    // manually, because that would promise a command EAI cannot send.
+    const canShowPromptAnimation = surface?.launchSupport === "project-and-prompt";
+    film.hidden = !canShowPromptAnimation;
+    if (!canShowPromptAnimation) {
+      film.__eaiVideoReset?.();
+    } else {
+      const filmKey = `${surface.id}:${facts.projectName || "your app"}`;
+      if (window.mountVideo && film.dataset.mountedFor !== filmKey) {
+        window.mountVideo(film, { app: surface.name, project: facts.projectName || "your app" });
+        film.dataset.mountedFor = filmKey;
+      }
     }
 
     if (faults.length) {
@@ -1759,7 +1769,10 @@ async function openHarness() {
   if (!surface || !facts.projectDirectory) return;
   el("handoffGo").disabled = true;
   try {
-    await invoke("start_ai_surface", { directory: facts.projectDirectory, surfaceId: surface.id });
+    const result = await invoke("start_ai_surface", { directory: facts.projectDirectory, surfaceId: surface.id });
+    if (!result?.launched) {
+      throw new Error(result?.message || `${surface.name} did not report a successful launch.`);
+    }
     note(`${surface.name} opened on the project.`);
     goTo("built");
   } catch (error) {

@@ -104,6 +104,8 @@ jobs:
         with:
           node-version: 24
           package-manager-cache: false
+      - name: Install JavaScript dependencies
+        run: npm ci
       - run: npm test
       - name: Check Rust target
         run: cargo check --manifest-path src-tauri/Cargo.toml --target ${{ matrix.target }}
@@ -292,6 +294,8 @@ jobs:
         with:
           node-version: 24
           package-manager-cache: false
+      - name: Install JavaScript dependencies
+        run: npm ci
       - run: npm test
       - name: Detect Apple signing configuration
         id: apple_signing
@@ -482,6 +486,8 @@ jobs:
             patchelf \
             wget \
             gnupg
+      - name: Install JavaScript dependencies
+        run: npm ci
       - run: npm test
       - name: Check Rust target
         run: cargo check --manifest-path src-tauri/Cargo.toml --target ${{ matrix.target }}

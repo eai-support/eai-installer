@@ -50,6 +50,9 @@
    */
   function mountVideo(element, { app, project } = {}) {
     if (!element) return;
+    // A repaint can mount a new player while an old animation is running.
+    // Stop its timers before replacing its nodes.
+    element.__eaiVideoReset?.();
     element.classList.add("eai-vid");
     element.innerHTML = MARKUP;
 
