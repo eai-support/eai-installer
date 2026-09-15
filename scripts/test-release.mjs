@@ -3077,8 +3077,8 @@ assert.equal(
 );
 assert.equal(execFileSync("bash", ["-n", guestTestLibrary], { cwd: root, encoding: "utf8" }), "");
 assert.equal(execFileSync("bash", ["-n", vmAdapterPreflight], { cwd: root, encoding: "utf8" }), "");
-assert.match(vmAdapterPreflightSource, /\$prlctl_bin list "\$vm_name" --info/);
-assert.match(vmAdapterPreflightSource, /\$prlctl_bin snapshot-list "\$vm_name"/);
+assert.match(vmAdapterPreflightSource, /"\$prlctl_bin" list "\$vm_name" --info/);
+assert.match(vmAdapterPreflightSource, /"\$prlctl_bin" snapshot-list "\$vm_name"/);
 assert.match(vmAdapterPreflightSource, /"schemaVersion":"eai\.vm-adapter-preflight\.v1"/);
 assert.match(vmAdapterPreflightSource, /"mutationAttempted":false/);
 assert.doesNotMatch(vmAdapterPreflightSource, /\$prlctl_bin (?:start|stop|snapshot-switch|exec)/);
