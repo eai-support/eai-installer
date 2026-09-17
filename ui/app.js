@@ -262,10 +262,10 @@ function updateAiSurfaceControls(surface) {
   const copy = aiSurfaceCopy(surface);
   const isolation = localIsolationFor(surface.id);
   const isolationReady = isolation?.status === "ready";
-  if (startAiButton) startAiButton.textContent = !surface.installed ? `Get ${copy.label}` : isolationReady ? `Open ${copy.label}` : "Set up local isolation";
+  if (startAiButton) startAiButton.textContent = !surface.installed ? `Get ${copy.label}` : isolationReady ? `Open ${copy.label} (non-verified)` : "Set up local isolation";
   if (aiSurfaceNext) {
     aiSurfaceNext.hidden = false;
-    aiSurfaceNext.textContent = !surface.installed ? copy.notInstalled : isolationReady ? copy.ready : isolation?.reason || "Local isolation readiness must be checked before this workspace can start.";
+    aiSurfaceNext.textContent = !surface.installed ? copy.notInstalled : isolationReady ? `${copy.ready} This opens the normal workspace only; Gofer starts verified work in its own isolated task workspace.` : isolation?.reason || "Local isolation readiness must be checked before this workspace can start.";
   }
 }
 
@@ -1162,7 +1162,7 @@ async function startAiSurface() {
     startAiButton.disabled = false;
     return;
   }
-  setActivity(surface.installed ? `Opening ${copy.label}` : `Opening ${copy.label} download`, surface.installed ? copy.ready : copy.notInstalled, null, true, "", "Opening");
+    setActivity(surface.installed ? `Opening ${copy.label}` : `Opening ${copy.label} download`, surface.installed ? `${copy.ready} This is not a verified task run.` : copy.notInstalled, null, true, "", "Opening");
   try {
     if (!surface.installed) {
       await invoke("install_ai_surface", { surfaceId: surface.id });
@@ -1174,8 +1174,8 @@ async function startAiSurface() {
     const result = await invoke("start_ai_surface", { directory: createdProjectDirectory, surfaceId: surface.id });
     setActivity(`${copy.label} opened`, copy.ready, 100, false, "", "Ready");
     completeMessage.textContent = EAIWizard.aiSurfaceCompletionMessage(surface, copy.label);
-    startAiButton.textContent = `Open ${copy.label} again`;
-    showOutput(`${copy.label} opened.`, copy.ready);
+    startAiButton.textContent = `Open ${copy.label} again (non-verified)`;
+    showOutput(`${copy.label} opened.`, `${copy.ready} This normal workspace handoff is not a verified task run; Gofer creates the sandboxed task workspace when verification is required.`);
     const journeyDetail = surface.launchSupport === "launch-only"
       ? `${copy.label} opened without a local-project handoff.`
       : surface.launchSupport === "manual-project"
