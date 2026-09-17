@@ -1146,9 +1146,11 @@ async function refreshAiSurfaces() {
   try {
     const refreshed = await loadAiSurfaces();
     if (refreshed) {
-      const detail = localIsolationReport
-        ? "Choose Open or Get for the workspace you want to use."
-        : "Installed workspaces remain blocked until local isolation can be checked. Official downloads remain available.";
+      const canOpen = aiSurfaceInventory?.surfaces.some((surface) => surface.installed
+        && (surface.launchSupport === "launch-only" || localIsolationFor(surface.id)?.status === "ready"));
+      const detail = canOpen
+        ? "Choose Open for a ready workspace, or Get an official download."
+        : "Installed project workspaces remain blocked until local isolation is ready. Official downloads remain available.";
       showOutput("AI workspace check complete.", detail);
       setActivity("AI workspace check complete", detail, 100, false, "", "Ready");
     }
