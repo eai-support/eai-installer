@@ -262,10 +262,13 @@ function updateAiSurfaceControls(surface) {
   const copy = aiSurfaceCopy(surface);
   const isolation = localIsolationFor(surface.id);
   const isolationReady = isolation?.status === "ready";
-  if (startAiButton) startAiButton.textContent = !surface.installed ? `Get ${copy.label}` : isolationReady ? `Open ${copy.label} (non-verified)` : "Local isolation required";
+  if (startAiButton) startAiButton.textContent = !surface.installed ? `Get ${copy.label}` : surface.launchSupport === "launch-only" || isolationReady ? `Open ${copy.label} (non-verified)` : "Local isolation required";
   if (aiSurfaceNext) {
     aiSurfaceNext.hidden = false;
-    aiSurfaceNext.textContent = !surface.installed ? copy.notInstalled : isolationReady ? `${copy.ready} This opens the normal workspace only; Gofer starts verified work in its own isolated task workspace.` : isolation?.reason || "Local isolation readiness must be checked before this workspace can start.";
+    aiSurfaceNext.textContent = !surface.installed ? copy.notInstalled
+      : surface.launchSupport === "launch-only" ? `${copy.ready} This opens the app without a local-project handoff.`
+      : isolationReady ? `${copy.ready} This opens the normal workspace only; Gofer starts verified work in its own isolated task workspace.`
+      : isolation?.reason || "Local isolation readiness must be checked before this workspace can start.";
   }
 }
 
@@ -1063,16 +1066,16 @@ function renderAiSurfaces() {
     const detail = document.createElement("small");
     const isolation = localIsolationFor(surface.id);
     detail.textContent = surface.installed
-      ? `${surface.provider} · ${isolation?.status === "ready" ? "Local isolation ready" : isolation ? `Local isolation: ${isolation.status}` : "Local isolation needs checking"}`
+      ? `${surface.provider} · ${surface.launchSupport === "launch-only" ? "App-only opening" : isolation?.status === "ready" ? "Local isolation ready" : isolation ? `Local isolation: ${isolation.status}` : "Local isolation needs checking"}`
       : `${surface.provider} · Not installed`;
     copy.append(name, detail);
     const badge = document.createElement("span");
     badge.className = "surface-badge";
-    const { element: harveyBall, recommendation } = createHarveyBall(surface);
+    const { element: harveyBall } = createHarveyBall(surface);
     const badgeText = document.createElement("span");
-    badgeText.textContent = recommendation.score === recommendation.maximum
-      ? "Recommended"
-      : surface.installed ? "Ready" : "Official download";
+    badgeText.textContent = !surface.installed ? "Official download"
+      : surface.launchSupport === "launch-only" ? "App only"
+      : isolation?.status === "ready" ? "Ready" : "Setup needed";
     badge.append(harveyBall, badgeText);
     row.append(input, copy, badge);
     aiSurfaceOptions.append(row);
@@ -1163,7 +1166,7 @@ async function startAiSurface() {
   startAiButton.disabled = true;
   const copy = aiSurfaceCopy(surface);
   const isolation = localIsolationFor(surface.id);
-  if (surface.installed && isolation?.status !== "ready") {
+  if (surface.installed && surface.launchSupport !== "launch-only" && isolation?.status !== "ready") {
     const detail = isolation?.reason || "Local isolation readiness is unavailable.";
     showOutput("Local isolation needs attention.", detail);
     setJourneyStage("ai", "error", detail);

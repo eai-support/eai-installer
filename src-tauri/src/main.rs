@@ -2062,7 +2062,7 @@ fn detect_ai_surfaces(directory: String) -> Result<AiSurfaceInventory, String> {
 fn check_local_isolation(directory: String) -> Result<LocalIsolationReport, String> {
     let (stdout, stderr, exit_success) = run_program_in_directory_with_status(
         "eai",
-        &["start", &directory, "--isolation-check", "--format", "json"],
+        &["start", &directory, "--isolation-check", "--format", "json", "--contract-version", "v1"],
         None,
         &[],
         None,
@@ -2093,7 +2093,9 @@ fn validate_local_isolation_report(
     if requested != reported {
         return Err("EAI returned isolation readiness for a different project directory.".to_string());
     }
-    if report.assessments.is_empty() || report.assessments.iter().any(|assessment| {
+    if report.assessments.is_empty() || report.assessments.iter().enumerate().any(|(index, assessment)| {
+        assessment.surface_id.is_empty() ||
+        report.assessments[..index].iter().any(|earlier| earlier.surface_id == assessment.surface_id) ||
         !matches!(assessment.status.as_str(), "ready" | "missing-prerequisite" | "manual-host-setup" | "unsupported") ||
         (assessment.status == "ready" && (!report.git_repository || !assessment.local_only ||
             !assessment.requires_git_worktree || !assessment.requires_os_sandbox || !assessment.missing.is_empty()))
@@ -2107,8 +2109,23 @@ fn validate_local_isolation_report(
     Ok(())
 }
 
+fn local_isolation_ready_for_surface(report: &LocalIsolationReport, surface_id: &str) -> bool {
+    report.assessments.iter().any(|assessment| {
+        assessment.surface_id == surface_id && assessment.status == "ready"
+    })
+}
+
 #[tauri::command]
 fn start_ai_surface(directory: String, surface_id: String) -> Result<AiLaunchResult, String> {
+    let inventory = detect_ai_surfaces(directory.clone())?;
+    let surface = inventory.surfaces.iter().find(|surface| surface.id == surface_id)
+        .ok_or_else(|| "EAI could not verify the selected AI workspace.".to_string())?;
+    if surface.installed && surface.launch_support != "launch-only" {
+        let isolation = check_local_isolation(directory.clone())?;
+        if !local_isolation_ready_for_surface(&isolation, &surface_id) {
+            return Err("This AI workspace cannot open the project until local isolation is ready.".to_string());
+        }
+    }
     let (stdout, stderr) = run_program(
         "eai",
         &["start", &directory, "--surface", &surface_id, "--format", "json", "--contract-version", "v2"],
@@ -2218,6 +2235,33 @@ mod tests {
         report.assessments[0].status = "missing-prerequisite".to_string();
         report.assessments[0].missing = vec!["sandbox".to_string()];
         assert!(validate_local_isolation_report(&report, &requested_path, false).is_ok());
+        assert!(validate_local_isolation_report(&report, &requested_path, true).is_err());
+        assert!(!local_isolation_ready_for_surface(&report, "codex-cli"));
+        report.assessments[0].status = "ready".to_string();
+        report.assessments[0].missing.clear();
+        assert!(local_isolation_ready_for_surface(&report, "codex-cli"));
+        assert!(!local_isolation_ready_for_surface(&report, "grok-cli"));
+        report.contract_version = "eai.local-isolation/v2".to_string();
+        assert!(validate_local_isolation_report(&report, &requested_path, true).is_err());
+        report.contract_version = "eai.local-isolation/v1".to_string();
+        report.cloud_execution = "allowed".to_string();
+        assert!(validate_local_isolation_report(&report, &requested_path, true).is_err());
+        report.cloud_execution = "prohibited".to_string();
+        report.assessments[0].requires_os_sandbox = false;
+        assert!(validate_local_isolation_report(&report, &requested_path, true).is_err());
+        report.assessments[0].requires_os_sandbox = true;
+        report.assessments[0].status = "unknown".to_string();
+        assert!(validate_local_isolation_report(&report, &requested_path, true).is_err());
+        report.assessments[0].status = "ready".to_string();
+        report.assessments.push(LocalIsolationAssessment {
+            surface_id: "codex-cli".to_string(),
+            status: "ready".to_string(),
+            reason: "duplicate".to_string(),
+            local_only: true,
+            requires_git_worktree: true,
+            requires_os_sandbox: true,
+            missing: vec![],
+        });
         assert!(validate_local_isolation_report(&report, &requested_path, true).is_err());
         fs::remove_dir_all(root).expect("isolation test directories should be removed");
     }
