@@ -109,6 +109,25 @@ struct AiSurfaceInventory {
     surfaces: Vec<AiSurface>,
 }
 
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LocalIsolationAssessment {
+    surface_id: String,
+    status: String,
+    reason: String,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LocalIsolationReport {
+    contract_version: String,
+    project_directory: String,
+    platform: String,
+    git_repository: bool,
+    cloud_execution: String,
+    assessments: Vec<LocalIsolationAssessment>,
+}
+
 const EXPECTED_AI_SURFACES: [(&str, &str); 11] = [
     ("vscode-copilot", "editor"),
     ("copilot-desktop", "desktop"),
@@ -2023,6 +2042,25 @@ fn detect_ai_surfaces(directory: String) -> Result<AiSurfaceInventory, String> {
 }
 
 #[tauri::command]
+fn check_local_isolation(directory: String) -> Result<LocalIsolationReport, String> {
+    let (stdout, stderr) = run_program(
+        "eai",
+        &["start", &directory, "--isolation-check", "--format", "json"],
+    )?;
+    let report: LocalIsolationReport = serde_json::from_str(&stdout).map_err(|error| {
+        let detail = if stderr.is_empty() { stdout } else { stderr };
+        format!("EAI could not read local isolation readiness: {error}. {detail}")
+    })?;
+    if report.contract_version != "eai.local-isolation/v1" {
+        return Err(format!("EAI returned an unsupported local isolation contract: {}", report.contract_version));
+    }
+    if report.cloud_execution != "prohibited" {
+        return Err("EAI refused a local isolation report that permits cloud execution.".to_string());
+    }
+    Ok(report)
+}
+
+#[tauri::command]
 fn start_ai_surface(directory: String, surface_id: String) -> Result<AiLaunchResult, String> {
     let (stdout, stderr) = run_program(
         "eai",
@@ -2091,7 +2129,7 @@ fn local_device_id() -> Result<String, String> {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![detect_environment, run_bootstrap, get_company_tenants, get_company_apps, get_e2e_configuration, verify_e2e_auth, write_e2e_receipt, open_signup, detect_ai_surfaces, start_ai_surface, install_ai_surface, open_project, local_device_id])
+        .invoke_handler(tauri::generate_handler![detect_environment, run_bootstrap, get_company_tenants, get_company_apps, get_e2e_configuration, verify_e2e_auth, write_e2e_receipt, open_signup, detect_ai_surfaces, check_local_isolation, start_ai_surface, install_ai_surface, open_project, local_device_id])
         .run(tauri::generate_context!())
         .expect("error while running EAI Setup");
 }

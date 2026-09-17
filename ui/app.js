@@ -54,6 +54,7 @@ let selectedCompanyAppKey = null;
 let failedAppTenantId = null;
 let createdProjectDirectory = null;
 let aiSurfaceInventory = null;
+let localIsolationReport = null;
 let selectedAiSurfaceId = null;
 let projectPath = null;
 let initInProgress = false;
@@ -248,6 +249,10 @@ function aiSurfaceReadyDetail(surface) {
   return "; verify the project after opening";
 }
 
+function localIsolationFor(surfaceId) {
+  return localIsolationReport?.assessments?.find((assessment) => assessment.surfaceId === surfaceId) || null;
+}
+
 function updateAiSurfaceControls(surface) {
   if (!surface) {
     if (aiSurfaceNext) aiSurfaceNext.hidden = true;
@@ -255,10 +260,12 @@ function updateAiSurfaceControls(surface) {
     return;
   }
   const copy = aiSurfaceCopy(surface);
-  if (startAiButton) startAiButton.textContent = surface.installed ? `Open ${copy.label}` : `Get ${copy.label}`;
+  const isolation = localIsolationFor(surface.id);
+  const isolationReady = isolation?.status === "ready";
+  if (startAiButton) startAiButton.textContent = !surface.installed ? `Get ${copy.label}` : isolationReady ? `Open ${copy.label}` : "Set up local isolation";
   if (aiSurfaceNext) {
     aiSurfaceNext.hidden = false;
-    aiSurfaceNext.textContent = surface.installed ? copy.ready : copy.notInstalled;
+    aiSurfaceNext.textContent = !surface.installed ? copy.notInstalled : isolationReady ? copy.ready : isolation?.reason || "Local isolation readiness must be checked before this workspace can start.";
   }
 }
 
@@ -1054,8 +1061,9 @@ function renderAiSurfaces() {
     const name = document.createElement("strong");
     name.textContent = aiSurfaceCopy(surface).label;
     const detail = document.createElement("small");
+    const isolation = localIsolationFor(surface.id);
     detail.textContent = surface.installed
-      ? `${surface.provider} · Ready${aiSurfaceReadyDetail(surface)}`
+      ? `${surface.provider} · ${isolation?.status === "ready" ? "Local isolation ready" : isolation ? `Local isolation: ${isolation.status}` : "Local isolation needs checking"}`
       : `${surface.provider} · Not installed`;
     copy.append(name, detail);
     const badge = document.createElement("span");
@@ -1091,6 +1099,7 @@ async function loadAiSurfaces() {
   if (!createdProjectDirectory) return false;
   try {
     aiSurfaceInventory = await invoke("detect_ai_surfaces", { directory: createdProjectDirectory });
+    localIsolationReport = await invoke("check_local_isolation", { directory: createdProjectDirectory });
     if (aiSurfaceInventory.demo) {
       aiSurfaceInventory = {
         preferredSurface: null,
@@ -1145,6 +1154,14 @@ async function startAiSurface() {
   }
   startAiButton.disabled = true;
   const copy = aiSurfaceCopy(surface);
+  const isolation = localIsolationFor(surface.id);
+  if (surface.installed && isolation?.status !== "ready") {
+    const detail = isolation?.reason || "Local isolation readiness is unavailable.";
+    showOutput("Local isolation needs attention.", detail);
+    setJourneyStage("ai", "error", detail);
+    startAiButton.disabled = false;
+    return;
+  }
   setActivity(surface.installed ? `Opening ${copy.label}` : `Opening ${copy.label} download`, surface.installed ? copy.ready : copy.notInstalled, null, true, "", "Opening");
   try {
     if (!surface.installed) {
