@@ -118,6 +118,8 @@ struct LocalIsolationAssessment {
     local_only: bool,
     requires_git_worktree: bool,
     requires_os_sandbox: bool,
+    host_arguments: Vec<String>,
+    prerequisites: Vec<String>,
     missing: Vec<String>,
 }
 
@@ -2062,7 +2064,7 @@ fn detect_ai_surfaces(directory: String) -> Result<AiSurfaceInventory, String> {
 fn check_local_isolation(directory: String) -> Result<LocalIsolationReport, String> {
     let (stdout, stderr, exit_success) = run_program_in_directory_with_status(
         "eai",
-        &["start", &directory, "--isolation-check", "--format", "json", "--contract-version", "v1"],
+        &["start", &directory, "--isolation-check", "--format", "json", "--contract-version", "v2"],
         None,
         &[],
         None,
@@ -2080,7 +2082,7 @@ fn validate_local_isolation_report(
     directory: &str,
     exit_success: bool,
 ) -> Result<(), String> {
-    if report.contract_version != "eai.local-isolation/v1" {
+    if report.contract_version != "eai.local-isolation/v2" {
         return Err(format!("EAI returned an unsupported local isolation contract: {}", report.contract_version));
     }
     if report.cloud_execution != "prohibited" {
@@ -2098,7 +2100,8 @@ fn validate_local_isolation_report(
         report.assessments[..index].iter().any(|earlier| earlier.surface_id == assessment.surface_id) ||
         !matches!(assessment.status.as_str(), "ready" | "missing-prerequisite" | "manual-host-setup" | "unsupported") ||
         (assessment.status == "ready" && (!report.git_repository || !assessment.local_only ||
-            !assessment.requires_git_worktree || !assessment.requires_os_sandbox || !assessment.missing.is_empty()))
+            !assessment.requires_git_worktree || !assessment.requires_os_sandbox || !assessment.missing.is_empty() ||
+            assessment.host_arguments.is_empty() || assessment.prerequisites.is_empty()))
     }) {
         return Err("EAI returned invalid local isolation readiness.".to_string());
     }
@@ -2212,7 +2215,7 @@ mod tests {
         fs::create_dir_all(&requested).expect("requested directory should exist");
         fs::create_dir_all(&other).expect("other directory should exist");
         let mut report = LocalIsolationReport {
-            contract_version: "eai.local-isolation/v1".to_string(),
+            contract_version: "eai.local-isolation/v2".to_string(),
             project_directory: other.to_string_lossy().to_string(),
             platform: "darwin".to_string(),
             git_repository: true,
@@ -2224,6 +2227,8 @@ mod tests {
                 local_only: true,
                 requires_git_worktree: true,
                 requires_os_sandbox: true,
+                host_arguments: vec!["--ask-for-approval".to_string(), "never".to_string()],
+                prerequisites: vec!["Native sandbox enforcement".to_string()],
                 missing: vec![],
             }],
         };
@@ -2231,6 +2236,11 @@ mod tests {
         assert!(validate_local_isolation_report(&report, &requested_path, true).is_err());
         report.project_directory = requested_path.to_string();
         assert!(validate_local_isolation_report(&report, &requested_path, true).is_ok());
+        let encoded = serde_json::to_string(&report).expect("v2 isolation report should serialize");
+        assert!(encoded.contains("\"hostArguments\""));
+        assert!(encoded.contains("\"prerequisites\""));
+        let decoded: LocalIsolationReport = serde_json::from_str(&encoded).expect("v2 isolation report should parse");
+        assert!(validate_local_isolation_report(&decoded, &requested_path, true).is_ok());
         assert!(validate_local_isolation_report(&report, &requested_path, false).is_err());
         report.assessments[0].status = "missing-prerequisite".to_string();
         report.assessments[0].missing = vec!["sandbox".to_string()];
@@ -2241,9 +2251,12 @@ mod tests {
         report.assessments[0].missing.clear();
         assert!(local_isolation_ready_for_surface(&report, "codex-cli"));
         assert!(!local_isolation_ready_for_surface(&report, "grok-cli"));
-        report.contract_version = "eai.local-isolation/v2".to_string();
+        report.assessments[0].host_arguments.clear();
         assert!(validate_local_isolation_report(&report, &requested_path, true).is_err());
+        report.assessments[0].host_arguments = vec!["--ask-for-approval".to_string(), "never".to_string()];
         report.contract_version = "eai.local-isolation/v1".to_string();
+        assert!(validate_local_isolation_report(&report, &requested_path, true).is_err());
+        report.contract_version = "eai.local-isolation/v2".to_string();
         report.cloud_execution = "allowed".to_string();
         assert!(validate_local_isolation_report(&report, &requested_path, true).is_err());
         report.cloud_execution = "prohibited".to_string();
@@ -2260,6 +2273,8 @@ mod tests {
             local_only: true,
             requires_git_worktree: true,
             requires_os_sandbox: true,
+            host_arguments: vec!["--ask-for-approval".to_string(), "never".to_string()],
+            prerequisites: vec!["Native sandbox enforcement".to_string()],
             missing: vec![],
         });
         assert!(validate_local_isolation_report(&report, &requested_path, true).is_err());

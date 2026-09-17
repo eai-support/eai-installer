@@ -114,7 +114,7 @@ if (!windowsManifest.includes('name="Microsoft.Windows.Common-Controls"') || !wi
 for (const step of ["homebrew", "git", "node", "eai-cli", "login", "init", "start"]) {
   if (!rust.includes(`\"${step}\"`)) throw new Error(`Tauri adapter is missing ${step}`);
 }
-for (const value of ["detect_ai_surfaces", "check_local_isolation", "start_ai_surface", "install_ai_surface", "AiSurfaceInventory", "LocalIsolationReport", "eai", "start", "--check", "--isolation-check", "eai.local-isolation/v1", "cloud_execution"]) {
+for (const value of ["detect_ai_surfaces", "check_local_isolation", "start_ai_surface", "install_ai_surface", "AiSurfaceInventory", "LocalIsolationReport", "eai", "start", "--check", "--isolation-check", "eai.local-isolation/v2", "host_arguments", "prerequisites", "cloud_execution"]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing AI workspace handoff: ${value}`);
 }
 for (const value of ["validate_local_isolation_report", "fs::canonicalize(directory)", "exit_success != all_ready", "local_isolation_ready_for_surface(&isolation, &surface_id)", "surface.launch_support != \"launch-only\""]) {
@@ -196,8 +196,8 @@ if (initInvoke < 0 || appCreatedAssignment < initInvoke || creationCheckpoint < 
 if (!rust.includes('inventory.contract_version != "eai.ai-surfaces/v2"')) {
   throw new Error("Tauri adapter does not enforce the versioned AI surface contract");
 }
-if ((rust.match(/"--contract-version", "v2"/g) ?? []).length !== 3) {
-  throw new Error("Tauri adapter does not explicitly negotiate the EAI AI surface v2 contract for detect, launch, and install");
+if ((rust.match(/"--contract-version", "v2"/g) ?? []).length !== 4) {
+  throw new Error("Tauri adapter does not explicitly negotiate the EAI v2 contracts for detect, isolation, launch, and install");
 }
 if (!rust.includes("capabilities: Vec<String>")) {
   throw new Error("Tauri adapter drops AI workspace v2 capability metadata");
