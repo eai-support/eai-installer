@@ -115,6 +115,10 @@ struct LocalIsolationAssessment {
     surface_id: String,
     status: String,
     reason: String,
+    local_only: bool,
+    requires_git_worktree: bool,
+    requires_os_sandbox: bool,
+    missing: Vec<String>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -686,6 +690,28 @@ fn run_program_in_directory_with_env_and_progress(
     environment: &[(&str, &str)],
     progress: Option<(AppHandle, String)>,
 ) -> Result<(String, String), String> {
+    let (stdout, stderr, success) = run_program_in_directory_with_status(
+        program, args, directory, environment, progress,
+    )?;
+    if success {
+        Ok((stdout, stderr))
+    } else {
+        Err(match (stdout.is_empty(), stderr.is_empty()) {
+            (false, false) => format!("{stderr}\n{stdout}"),
+            (false, true) => stdout,
+            (true, false) => stderr,
+            (true, true) => format!("{program} exited unsuccessfully"),
+        })
+    }
+}
+
+fn run_program_in_directory_with_status(
+    program: &str,
+    args: &[&str],
+    directory: Option<&Path>,
+    environment: &[(&str, &str)],
+    progress: Option<(AppHandle, String)>,
+) -> Result<(String, String, bool), String> {
     // npm exposes `eai` as a shell wrapper. Running the package entry point
     // through Node avoids Windows batch quoting and stale-process PATH issues,
     // including user profiles whose paths contain spaces.
@@ -695,7 +721,7 @@ fn run_program_in_directory_with_env_and_progress(
             let mut node_args = Vec::with_capacity(args.len() + 1);
             node_args.push(script.as_str());
             node_args.extend(args.iter().copied());
-            return run_program_in_directory_with_env_and_progress(
+            return run_program_in_directory_with_status(
                 "node",
                 &node_args,
                 directory,
@@ -779,16 +805,7 @@ fn run_program_in_directory_with_env_and_progress(
     let status = child.wait().map_err(|error| format!("could not wait for {program}: {error}"))?;
     let stdout = stdout_handle.join().map_err(|_| format!("could not collect {program} output"))?;
     let stderr = stderr_handle.join().map_err(|_| format!("could not collect {program} errors"))?;
-    if status.success() {
-        Ok((stdout, stderr))
-    } else {
-        Err(match (stdout.is_empty(), stderr.is_empty()) {
-            (false, false) => format!("{stderr}\n{stdout}"),
-            (false, true) => stdout,
-            (true, false) => stderr,
-            (true, true) => format!("{program} exited unsuccessfully"),
-        })
-    }
+    Ok((stdout, stderr, status.success()))
 }
 
 fn run_program_in_directory(
@@ -2043,21 +2060,51 @@ fn detect_ai_surfaces(directory: String) -> Result<AiSurfaceInventory, String> {
 
 #[tauri::command]
 fn check_local_isolation(directory: String) -> Result<LocalIsolationReport, String> {
-    let (stdout, stderr) = run_program(
+    let (stdout, stderr, exit_success) = run_program_in_directory_with_status(
         "eai",
         &["start", &directory, "--isolation-check", "--format", "json"],
+        None,
+        &[],
+        None,
     )?;
     let report: LocalIsolationReport = serde_json::from_str(&stdout).map_err(|error| {
         let detail = if stderr.is_empty() { stdout } else { stderr };
         format!("EAI could not read local isolation readiness: {error}. {detail}")
     })?;
+    validate_local_isolation_report(&report, &directory, exit_success)?;
+    Ok(report)
+}
+
+fn validate_local_isolation_report(
+    report: &LocalIsolationReport,
+    directory: &str,
+    exit_success: bool,
+) -> Result<(), String> {
     if report.contract_version != "eai.local-isolation/v1" {
         return Err(format!("EAI returned an unsupported local isolation contract: {}", report.contract_version));
     }
     if report.cloud_execution != "prohibited" {
         return Err("EAI refused a local isolation report that permits cloud execution.".to_string());
     }
-    Ok(report)
+    let requested = fs::canonicalize(directory)
+        .map_err(|error| format!("EAI could not verify the requested project directory: {error}"))?;
+    let reported = fs::canonicalize(&report.project_directory)
+        .map_err(|error| format!("EAI could not verify the reported project directory: {error}"))?;
+    if requested != reported {
+        return Err("EAI returned isolation readiness for a different project directory.".to_string());
+    }
+    if report.assessments.is_empty() || report.assessments.iter().any(|assessment| {
+        !matches!(assessment.status.as_str(), "ready" | "missing-prerequisite" | "manual-host-setup" | "unsupported") ||
+        (assessment.status == "ready" && (!report.git_repository || !assessment.local_only ||
+            !assessment.requires_git_worktree || !assessment.requires_os_sandbox || !assessment.missing.is_empty()))
+    }) {
+        return Err("EAI returned invalid local isolation readiness.".to_string());
+    }
+    let all_ready = report.assessments.iter().all(|assessment| assessment.status == "ready");
+    if exit_success != all_ready {
+        return Err("EAI returned a local isolation result with an inconsistent exit status.".to_string());
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -2139,6 +2186,41 @@ mod tests {
     use super::*;
     use std::cell::Cell;
     use std::io::Cursor;
+
+    #[test]
+    fn local_isolation_report_is_bound_to_the_requested_project_and_exit_status() {
+        let root = env::temp_dir().join(format!("eai-isolation-test-{}", Uuid::new_v4()));
+        let requested = root.join("requested");
+        let other = root.join("other");
+        fs::create_dir_all(&requested).expect("requested directory should exist");
+        fs::create_dir_all(&other).expect("other directory should exist");
+        let mut report = LocalIsolationReport {
+            contract_version: "eai.local-isolation/v1".to_string(),
+            project_directory: other.to_string_lossy().to_string(),
+            platform: "darwin".to_string(),
+            git_repository: true,
+            cloud_execution: "prohibited".to_string(),
+            assessments: vec![LocalIsolationAssessment {
+                surface_id: "codex-cli".to_string(),
+                status: "ready".to_string(),
+                reason: "ready".to_string(),
+                local_only: true,
+                requires_git_worktree: true,
+                requires_os_sandbox: true,
+                missing: vec![],
+            }],
+        };
+        let requested_path = requested.to_string_lossy();
+        assert!(validate_local_isolation_report(&report, &requested_path, true).is_err());
+        report.project_directory = requested_path.to_string();
+        assert!(validate_local_isolation_report(&report, &requested_path, true).is_ok());
+        assert!(validate_local_isolation_report(&report, &requested_path, false).is_err());
+        report.assessments[0].status = "missing-prerequisite".to_string();
+        report.assessments[0].missing = vec!["sandbox".to_string()];
+        assert!(validate_local_isolation_report(&report, &requested_path, false).is_ok());
+        assert!(validate_local_isolation_report(&report, &requested_path, true).is_err());
+        fs::remove_dir_all(root).expect("isolation test directories should be removed");
+    }
 
     #[test]
     fn managed_files_never_use_root_or_relative_home_paths() {

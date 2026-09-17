@@ -117,6 +117,9 @@ for (const step of ["homebrew", "git", "node", "eai-cli", "login", "init", "star
 for (const value of ["detect_ai_surfaces", "check_local_isolation", "start_ai_surface", "install_ai_surface", "AiSurfaceInventory", "LocalIsolationReport", "eai", "start", "--check", "--isolation-check", "eai.local-isolation/v1", "cloud_execution"]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing AI workspace handoff: ${value}`);
 }
+for (const value of ["validate_local_isolation_report", "fs::canonicalize(directory)", "exit_success != all_ready"]) {
+  if (!rust.includes(value)) throw new Error(`Tauri adapter is missing local isolation validation: ${value}`);
+}
 if (!rust.includes("at position {}; expected '{}' ({})")) {
   throw new Error("Tauri adapter AI inventory mismatch does not report expected and observed surface details");
 }
@@ -321,6 +324,9 @@ if (!app.includes("setActivity") || !app.includes("Installation complete") || !a
 }
 for (const value of ["loadAiSurfaces", "renderAiSurfaces", "startAiSurface", "refreshAiSurfaces", "updateAiSurfaceControls", "localIsolationFor", "localIsolationReport", "createHarveyBall", "aiSurfaceRecommendation", "aiSurfaceCompletionMessage", "showModal", "aiSurfaceGuidance", "GitHub Copilot app", "GitHub Copilot CLI", "Google Antigravity 2.0", "Antigravity CLI (agy)", "Claude Desktop", "Claude Code", "ChatGPT desktop (Codex)", "Codex CLI", "Grok Bot", "Grok Build", "copilot-desktop", "copilot-cli", "antigravity-desktop", "antigravity-cli", "claude-desktop", "claude-cli", "codex-desktop", "codex-cli", "grok-bot", "grok-cli", "detect_ai_surfaces", "check_local_isolation", "start_ai_surface", "install_ai_surface"]) {
   if (!app.includes(value)) throw new Error(`wizard: AI workspace behavior is missing ${value}`);
+}
+for (const value of ["localIsolationReport = null", "Local isolation required", "normal, non-verified workspace handoff"]) {
+  if (!app.includes(value)) throw new Error(`wizard: isolation failure handling is missing ${value}`);
 }
 if (app.includes("agy -i") || app.includes("receives the EAI first request automatically")) {
   throw new Error("wizard: Antigravity CLI must use a bare interactive handoff without claiming automatic prompt delivery");
