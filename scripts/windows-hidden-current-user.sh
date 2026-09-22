@@ -35,6 +35,21 @@ windows_hidden_bounded_prlctl() {
   return "$status"
 }
 
+windows_hidden_is_transient_parallels_result_failure() {
+  local output="$1"
+  local normalized=""
+  normalized="$(printf '%s' "$output" | /usr/bin/tr -d '\r')"
+  case "$normalized" in
+    'PrlJob_GetRetCode: Invalid argument. An invalid argument was passed.'|\
+    'PrlJob_GetResult: Invalid argument. An invalid argument was passed.')
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 windows_hidden_current_user_ps() {
   local vm_name="$1"
   local stdin_payload="${2:-}"
@@ -127,6 +142,13 @@ windows_hidden_current_user_ps() {
     printf '%s\n' "Remove-Item -LiteralPath '$stage_base','$base' -Recurse -Force -ErrorAction SilentlyContinue" \
       | windows_hidden_bounded_prlctl 10 exec "$vm_name" powershell.exe -NoLogo -NoProfile -NonInteractive \
         -InputFormat Text -OutputFormat Text -Command - >/dev/null 2>&1 || true
+    # Parallels can briefly return this exact result error while the restored
+    # interactive session is still accepting guest-control jobs.  Preserve it
+    # as a transport status so the caller's bounded retry can retry; every
+    # other staging failure remains a hard failure with its original output.
+    if windows_hidden_is_transient_parallels_result_failure "$stage_output"; then
+      return 255
+    fi
     return 3
   fi
 
