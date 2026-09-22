@@ -37,6 +37,7 @@ const windowsDiagnosticCleanupPowerShell = path.join(root, "scripts", "windows-d
 const windowsDiagnosticCleanupTest = path.join(root, "scripts", "test-windows-diagnostic-cleanup.sh");
 const windowsDiagnosticCleanupGate = path.join(root, "scripts", "write-windows-diagnostic-cleanup-gate.mjs");
 const keychainE2eLauncher = path.join(root, "scripts", "run-release-e2e-from-keychain.sh");
+const keychainLoader = path.join(root, "scripts", "load-release-e2e-keychain.sh");
 const ubuntuGuestCore = path.join(root, "scripts", "ubuntu-guest-test-core.sh");
 const ubuntuGuestSession = path.join(root, "scripts", "ubuntu-guest-session.sh");
 const ubuntuGuestLogin = path.join(root, "scripts", "login-ubuntu-guest.sh");
@@ -70,6 +71,10 @@ const windowsDiagnosticCleanupSource = readSource(windowsDiagnosticCleanup);
 const windowsPortalEvidenceFinalizerSource = readSource(windowsPortalEvidenceFinalizer);
 const windowsDiagnosticCleanupPowerShellSource = readSource(windowsDiagnosticCleanupPowerShell);
 const keychainE2eLauncherSource = readSource(keychainE2eLauncher);
+const keychainLoaderSource = readSource(keychainLoader);
+assert.match(keychainLoaderSource, /EAI_HARNESS_TENANT_ID/);
+assert.match(keychainLoaderSource, /find-generic-password/);
+assert.match(releaseShell, /source "\$ROOT\/scripts\/load-release-e2e-keychain[.]sh"/);
 assert.match(keychainE2eLauncherSource, /\/usr\/sbin\/ioreg -n Root -d1/);
 assert.match(keychainE2eLauncherSource, /"IOConsoleLocked" = Yes/);
 assert.match(keychainE2eLauncherSource, /no VM was touched/);
@@ -109,7 +114,7 @@ const finalizerRun = spawnSync("bash", ["-c", `
   source "$1"
   guest_test_finalize macos "/fixture/project" "$2" "$3" "$3" "$4"
 `, "guest-finalizer-fixture", guestTestLibrary, finalizerReceipt, finalizerHash, JSON.stringify({
-  git: "fixture", node: "v24.0.0", npm: "11.0.0", eai: "3.15.10",
+  git: "fixture", node: "v24.0.0", npm: "11.0.0", eai: "3.17.0",
 })], {
   cwd: root,
   encoding: "utf8",
@@ -249,7 +254,7 @@ assert.doesNotMatch(macosGuestPreparerSource, /EAI_VM_GUEST_PASSWORD/);
 assert.match(macosGuestPreparerSource, /source "\$ROOT\/scripts\/parallels-macos-current-user[.]sh"/);
 assert.match(macosGuestPreparerSource, /macos_prl_current_user_configure "\$vm_name" "\$guest_user" "\$work_dir"/);
 assert.doesNotMatch(macosGuestPreparerSource, /prlctl exec[^\n]*--current-user/);
-assert.match(macosGuestPreparerSource, /guest_idempotent \/usr\/bin\/find "\$guest_mount" -mindepth 1 -maxdepth 1 -type d -name '[*][.]app'/);
+assert.match(macosGuestPreparerSource, /-name '[*][.]app'.*macos_prl_current_user_shell_idempotent/s);
 assert.match(macosGuestPreparerSource, /application must be at the top level/);
 assert.doesNotMatch(macosGuestPreparerSource, /guest_idempotent \/usr\/bin\/open/);
 assert.match(macosGuestPreparerSource, /The signed-in macOS user's home directory could not be resolved/);
@@ -480,7 +485,7 @@ for (const step of mandatoryFailFastMacosRootInstallSteps) {
 assert.match(macosGuestAdapterSource, /EAI_VM_AI_HANDOFF_PROCESS_VERIFIED=1/);
 assert.match(macosGuestAdapterSource, /EAI_VM_AI_HANDOFF_SCREENSHOT_VERIFIED=1/);
 assert.match(macosGuestAdapterSource, /EAI_VM_PROJECT_VERIFIED=1/);
-assert.match(macosGuestAdapterSource, /Visual Studio Code[.]app\/Contents\/MacOS\/Code/);
+assert.match(macosGuestAdapterSource, /Visual Studio Code[.]app\/Contents\/MacOS\/\(Code\|Electron\)/);
 assert.match(macosGuestAdapterSource, /macos-ai-handoff[.]png/);
 assert.match(macosGuestAdapterSource, /macos-project-verification[.]json/);
 assert.match(macosGuestAdapterSource, /macos-ai-handoff-evidence[.]json/);
@@ -617,10 +622,14 @@ assert.match(windowsStreamedPowerShellSource, /printf '%s\\n' "\$script" \| wind
 assert.doesNotMatch(windowsStreamedPowerShellSource, /EncodedCommand/);
 assert.match(windowsHiddenCurrentUserSource, /payload="\$\(printf '%s' "\$stdin_payload" \| \/usr\/bin\/base64 \| \/usr\/bin\/tr -d '\\n'\)"/);
 assert.match(windowsHiddenCurrentUserSource, /\[Console\]::SetIn\(\[IO[.]StringReader\]::new\(\$__eaiInput\)\)/);
-assert.match(windowsHiddenCurrentUserSource, /prlctl exec "\$vm_name" --current-user wscript[.]exe "\$vbs_path"/);
+assert.match(windowsHiddenCurrentUserSource, /windows_hidden_bounded_prlctl 600 exec "\$vm_name" --current-user wscript[.]exe "\$vbs_path"/);
+assert.match(windowsHiddenCurrentUserSource, /"\$prlctl_bin" "\$@" <&0 &/);
+assert.match(windowsHiddenCurrentUserSource, /\) <\/dev\/null >\/dev\/null 2>&1 &/);
 assert.match(windowsHiddenCurrentUserSource, /s[.]Run\(.*powershell[.]exe.*-File/);
 assert.match(windowsHiddenCurrentUserSource, /SetAccessRuleProtection\(\\\$true, \\\$false\)/);
-assert.match(windowsHiddenCurrentUserSource, /'S-1-5-18','S-1-5-32-544',\\\$interactiveSid[.]Value/);
+assert.match(windowsHiddenCurrentUserSource, /SecurityIdentifier\]::new\('S-1-5-18'\)/);
+assert.match(windowsHiddenCurrentUserSource, /SecurityIdentifier\]::new\('S-1-5-32-544'\)/);
+assert.match(windowsHiddenCurrentUserSource, /,\\\$interactiveSid\)/);
 assert.match(windowsHiddenCurrentUserSource, /'ContainerInherit,ObjectInherit'/);
 assert.match(windowsHiddenCurrentUserSource, /Remove-Item -LiteralPath '\$base' -Recurse/);
 assert.doesNotMatch(windowsHiddenCurrentUserSource, /base="C:\\\\Users\\\\Public\\\\eai-hidden-\$\{nonce\}"[\s\S]*ps_path="\$\{base\}[.]ps1"/);
@@ -1269,11 +1278,26 @@ assert.match(windowsGuestLoginSource, /printf '%s\\n' "\$script" \| windows_hidd
 assert.match(windowsGuestLoginSource, /for _ in \$\(seq 1 120\); do/);
 assert.match(windowsGuestLoginSource, /is_parallels_session_open_failure "\$output"/);
 assert.match(windowsGuestLoginSource, /is_parallels_exact_job_result_failure\(\) \{/);
+assert.match(windowsGuestLoginSource, /run_idempotent_ui_action\(\) \{/);
+assert.match(windowsGuestLoginSource, /if ! run_idempotent_ui_action edge-first-run 120[\s\S]*run_ui_action_once invoke-public-email 30/);
 assert.match(windowsGuestLoginSource, /'PrlVmGuest_RunProgram: Invalid argument'/);
 assert.match(windowsGuestLoginSource, /'PrlJob_GetResult: Invalid argument[.] An invalid argument was passed[.]'/);
 assert.doesNotMatch(windowsGuestLoginSource, /\[\[ "\$output" == \*"Invalid argument"\*/);
 assert.doesNotMatch(windowsGuestLoginSource, /--current-user cmd[.]exe/);
 assert.match(windowsHiddenCurrentUserSource, /-InputFormat Text -OutputFormat Text -Command -/);
+assert.match(windowsHiddenCurrentUserSource, /stage_base="\$\{base\}[.]tmp"/);
+assert.match(windowsHiddenCurrentUserSource, /Move-Item -LiteralPath '\$stage_base' -Destination '\$base' -ErrorAction Stop/);
+assert.match(windowsHiddenCurrentUserSource, /EAI_HIDDEN_WORKER_STAGED/);
+assert.match(windowsHiddenCurrentUserSource, /if ! windows_hidden_bounded_prlctl 600 exec "\$vm_name" --current-user wscript[.]exe/);
+assert.doesNotMatch(
+  windowsHiddenCurrentUserSource,
+  /windows_hidden_bounded_prlctl 600 exec "\$vm_name" --current-user wscript[.]exe[^\n]*\|\| true/,
+);
+assert.match(windowsDiagnosticCleanupPowerShellSource, /guest-cleanup-failed-line-\$line-stack-\$stackLine/);
+assert.match(windowsDiagnosticCleanupSource, /source "\$ROOT\/scripts\/windows-hidden-current-user[.]sh"/);
+assert.match(windowsDiagnosticCleanupSource, /\} \| run_hidden_cleanup_ps >"\$raw_stdout" 2>"\$raw_stderr"/);
+assert.match(windowsDiagnosticCleanupSource, /windows_hidden_current_user_ps "\$vm_name" ""/);
+assert.doesNotMatch(windowsDiagnosticCleanupSource, /\} \| "\$prlctl_bin" exec "\$vm_name" --current-user powershell[.]exe/);
 assert.doesNotMatch(windowsGuestLoginSource, /Shell[.]Application|ShellExecute/);
 assert.match(windowsGuestLoginSource, /\[wmiclass\]'\\\\[.]\\root\\cimv2:Win32_ProcessStartup'/);
 assert.match(windowsGuestLoginSource, /\$startup[.]WinstationDesktop = 'winsta0\\default'/);
@@ -1299,12 +1323,14 @@ assert.match(windowsGuestLoginSource, /EAI_EFFECTIVE_URL=%\{url_effective\}/);
 assert.match(windowsGuestLoginSource, /ENTERPRISE_PORTAL_HTTPS_READY/);
 const windowsLoginReadOnlyPowerShellStart = windowsGuestLoginSource.indexOf("run_guest_powershell_readonly() {");
 const windowsLoginUiActionOnceStart = windowsGuestLoginSource.indexOf("run_ui_action_once() {");
+const windowsLoginIdempotentUiStart = windowsGuestLoginSource.indexOf("run_idempotent_ui_action() {");
 const windowsLoginReadOnlyUiStart = windowsGuestLoginSource.indexOf("run_readonly_ui_action() {");
 const windowsLoginLaunchEdgeStart = windowsGuestLoginSource.indexOf("launch_edge() {");
 assert.ok(
   windowsLoginReadOnlyPowerShellStart >= 0
     && windowsLoginUiActionOnceStart > windowsLoginReadOnlyPowerShellStart
-    && windowsLoginReadOnlyUiStart > windowsLoginUiActionOnceStart
+    && windowsLoginIdempotentUiStart > windowsLoginUiActionOnceStart
+    && windowsLoginReadOnlyUiStart > windowsLoginIdempotentUiStart
     && windowsLoginLaunchEdgeStart > windowsLoginReadOnlyUiStart,
 );
 const windowsLoginReadOnlyPowerShellSource = windowsGuestLoginSource.slice(
@@ -1313,6 +1339,10 @@ const windowsLoginReadOnlyPowerShellSource = windowsGuestLoginSource.slice(
 );
 const windowsLoginUiActionOnceSource = windowsGuestLoginSource.slice(
   windowsLoginUiActionOnceStart,
+  windowsLoginIdempotentUiStart,
+);
+const windowsLoginIdempotentUiSource = windowsGuestLoginSource.slice(
+  windowsLoginIdempotentUiStart,
   windowsLoginReadOnlyUiStart,
 );
 const windowsLoginReadOnlyUiSource = windowsGuestLoginSource.slice(
@@ -1325,6 +1355,12 @@ assert.match(windowsLoginReadOnlyPowerShellSource, /is_parallels_exact_job_resul
 assert.match(windowsLoginReadOnlyPowerShellSource, /sleep 2/);
 assert.doesNotMatch(windowsLoginReadOnlyPowerShellSource, /input|Invoke-WindowsUiAction|Remove-Item|Start-Process/);
 assert.doesNotMatch(windowsLoginUiActionOnceSource, /for attempt|is_parallels_exact_job_result_failure/);
+assert.match(windowsLoginIdempotentUiSource, /edge-first-run\|focus-email\|focus-password/);
+assert.match(windowsLoginIdempotentUiSource, /for attempt in \$\(seq 1 3\); do/);
+assert.match(windowsLoginIdempotentUiSource, /is_parallels_exact_job_result_failure "\$output"/);
+assert.doesNotMatch(windowsLoginIdempotentUiSource, /invoke-next|invoke-sign-in|input type/);
+assert.match(windowsGuestLoginSource, /run_idempotent_ui_action focus-email 60/);
+assert.match(windowsGuestLoginSource, /run_idempotent_ui_action focus-password 60/);
 assert.match(windowsLoginReadOnlyUiSource, /"\$action" == probe-portal-ready \|\| "\$action" == wait-portal-ready/);
 assert.match(windowsLoginReadOnlyUiSource, /for attempt in \$\(seq 1 3\); do/);
 assert.match(windowsLoginReadOnlyUiSource, /"\$status" == 255/);
@@ -1349,10 +1385,10 @@ const mandatoryFreshLoginSteps = [
   "if portal_ready_state",
   "run_ui_action_once invoke-public-email",
   "run_ui_action_once invoke-portal-microsoft",
-  "run_ui_action_once focus-email",
+  "run_idempotent_ui_action focus-email",
   "input type --stdin",
   "run_ui_action_once invoke-next",
-  "run_ui_action_once focus-password",
+  "run_idempotent_ui_action focus-password",
   "find-generic-password -s \"$keychain_service\" -w",
   "run_ui_action_once invoke-sign-in",
   "wait_portal_ready 120",
@@ -1367,8 +1403,18 @@ for (const step of mandatoryFreshLoginSteps) {
 }
 assert.match(windowsBrowserLoginFlow, /replacement snapshot already has an authenticated portal session/);
 assert.match(windowsGuestLoginSource, /Join-Path \$env:APPDATA "npm\\eai[.]cmd"\) login/);
+assert.match(windowsGuestLoginSource, /if \[\[ "\$cli_finished" != 1 \|\| "\$cli_status" != 0 \]\]; then[\s\S]*cli_identity_is_active && cli_tenant_matches[\s\S]*AUTHENTICATED_PORTAL_AND_CLI_READY/);
 assert.match(windowsGuestLoginSource, /Join-Path \$env:APPDATA "npm\\eai[.]cmd"\) whoami/);
 assert.match(windowsGuestLoginSource, /tenant list --format json/);
+assert.match(
+  windowsGuestLoginSource,
+  /if cli_identity_is_active && cli_tenant_matches; then[\s\S]*AUTHENTICATED_PORTAL_AND_CLI_READY[\s\S]*exit 0/,
+);
+assert.ok(
+  windowsGuestLoginSource.indexOf("if cli_identity_is_active && cli_tenant_matches; then")
+    < windowsGuestLoginSource.indexOf("# The CLI opens its localhost callback"),
+  "verified CLI-session reuse must precede a fresh browser callback",
+);
 const windowsCliTenantStart = windowsGuestLoginSource.indexOf("cli_tenant_matches() {");
 const windowsCliTenantEnd = windowsGuestLoginSource.indexOf(
   '\n}\n\ncli_exists ||',
@@ -1452,7 +1498,8 @@ assert.match(windowsUiActionSource, /EAI_MANAGE_APP_SEARCH_ABSENT/);
 assert.match(windowsUiActionSource, /Delete \{0\}" -f \$Target[.]DisplayName/);
 assert.match(windowsUiActionSource, /ValuePattern\]\$pattern\)[.]Current[.]Value/);
 assert.match(windowsPortalCleanupUiSource, /state[.]cleanupRequired !== true/);
-assert.match(windowsPortalCleanupUiSource, /result[.]checks[?][.]app !== "passed"/);
+assert.match(windowsPortalCleanupUiSource, /result[.]exactLocalProjectCheckpoint === true/);
+assert.match(windowsPortalCleanupUiSource, /windows-remote-cleanup-arm[.]v1/);
 assert.match(windowsPortalCleanupUiSource, /PortalTargetOnly/);
 assert.match(windowsPortalCleanupUiSource, /servicesBeforeDeletion !== 0/);
 assert.match(windowsPortalCleanupUiSource, /workflowExactMatchesBeforeDeletion !== 0/);
@@ -2113,9 +2160,10 @@ const windowsConsoleTransitionSource = windowsGuestAdapterSource.slice(
   windowsConsoleTransitionEnd,
 );
 assert.ok(
-  windowsConsoleTransitionSource.indexOf("exit_vm_coherence_if_needed")
-    < windowsConsoleTransitionSource.indexOf("show_vm_console"),
+  windowsConsoleTransitionSource.indexOf("show_vm_console")
+    < windowsConsoleTransitionSource.indexOf("exit_vm_coherence_if_needed"),
 );
+assert.equal((windowsConsoleTransitionSource.match(/show_vm_console/g) ?? []).length, 2);
 assert.match(windowsConsoleTransitionSource, /one-shot Coherence exit/);
 const windowsUacStart = windowsGuestAdapterSource.indexOf("unexpected_prerequisite_uac_visible() {");
 const windowsUacEnd = windowsGuestAdapterSource.indexOf("\n}\n\nstart_prerequisite_uac_watcher()", windowsUacStart);
@@ -2266,12 +2314,17 @@ assert.match(windowsAiWorkspacePowerShellSource, /extensions\\copilot/);
 assert.match(windowsAiWorkspacePowerShellSource, /GitHub[.]copilot-chat/);
 assert.match(windowsAiWorkspacePreparerSource, /Windows AI-workspace evidence mismatch/);
 assert.match(windowsAiWorkspacePreparerSource, /windows-ai-workspace[.]json/);
+assert.match(windowsAiWorkspacePreparerSource, /source "\$ROOT\/scripts\/windows-readonly-powershell[.]sh"/);
 assert.match(windowsAiWorkspacePreparerSource, /prlctl exec "\$vm_name" cmd[.]exe \/D \/S \/C powershell[.]exe/);
-assert.match(windowsAiWorkspacePreparerSource, /printf '& \{\\n'/);
-assert.match(windowsAiWorkspacePreparerSource, /printf '\\n\}\\n\\n'/);
-assert.match(windowsAiWorkspacePreparerSource, /is_parallels_session_open_failure "\$evidence_output"/);
-assert.equal((windowsAiWorkspacePreparerSource.match(/for _ in \$\(seq 1 120\); do/g) ?? []).length, 2);
-assert.match(windowsAiWorkspacePreparerSource, /evidence_output="\$\(printf '%s\\n'[\s\S]*windows_hidden_current_user_ps "\$vm_name"/);
+assert.match(windowsAiWorkspacePreparerSource, /eai-ai-workspace-\$\{nonce\}/);
+assert.match(windowsAiWorkspacePreparerSource, /FromBase64String\('\$payload'\)/);
+assert.match(windowsAiWorkspacePreparerSource, /SetAccessRuleProtection\(\\\$true,\\\$false\)/);
+assert.match(windowsAiWorkspacePreparerSource, /-ExecutionPolicy Bypass -File \\\$script/);
+assert.match(windowsAiWorkspacePreparerSource, /if \[\[ -n "\$guest_json" \]\]; then/);
+assert.match(windowsAiWorkspacePreparerSource, /Get-Content -Raw[\s\S]*\| guest_ps_readonly/);
+assert.equal((windowsAiWorkspacePreparerSource.match(/for _ in \$\(seq 1 120\); do/g) ?? []).length, 1);
+assert.match(windowsAiWorkspacePreparerSource, /for _ in \$\(seq 1 5\); do/);
+assert.match(windowsAiWorkspacePreparerSource, /evidence_output="\$\(printf '%s\\n'[\s\S]*guest_ps_readonly\)/);
 assert.match(windowsAiWorkspacePreparerSource, /Get-Content -Raw -LiteralPath/);
 assert.doesNotMatch(windowsAiWorkspacePreparerSource, /type "\$guest_evidence" 2>\/dev\/null/);
 assert.doesNotMatch(windowsAiWorkspacePreparerSource, /\[\[ "\$output" == \*"Invalid argument"\*/);
@@ -2292,6 +2345,15 @@ assert.match(windowsGuestAdapterSource, /The generated project has no usable scr
 assert.match(windowsGuestAdapterSource, /handoff_candidate="\$work_dir\/windows-ai-handoff[.]png"/);
 assert.match(windowsGuestAdapterSource, /Edge still owned the callback window/);
 assert.match(windowsGuestAdapterSource, /The Windows handoff screenshot contains protected or callback data/);
+const windowsReceiptProbeStart = windowsGuestAdapterSource.indexOf("receipt_ready=0");
+const windowsReceiptValidationStart = windowsGuestAdapterSource.indexOf("stage receipt-validation");
+assert.ok(windowsReceiptProbeStart >= 0 && windowsReceiptValidationStart > windowsReceiptProbeStart);
+const windowsReceiptProbeSource = windowsGuestAdapterSource.slice(
+  windowsReceiptProbeStart,
+  windowsReceiptValidationStart,
+);
+assert.match(windowsReceiptProbeSource, /EAI_E2E_RECEIPT_NOT_READY'; return/);
+assert.doesNotMatch(windowsReceiptProbeSource, /Write-NotReady|exit 0/);
 assert.match(guestTestLibrarySource, /&& aiHandoffScreenshotVerified === "1" \? "passed" : "failed"/);
 assert.match(windowsGuestAdapterSource, /for \(const key of \["EAI_HARNESS_TENANT_ID", "EAI_HARNESS_TENANT_NAME", "EAI_HARNESS_USER_EMAIL"\]\)/);
 assert.doesNotMatch(windowsGuestAdapterSource, /Set-Clipboard|Get-Clipboard|clip[.]exe|pbcopy/);
@@ -2328,7 +2390,8 @@ assert.match(releaseWorkflow, /^permissions:\n  contents: read$/m);
 assert.match(productionWindowsJob, /permissions:\n      contents: read\n      id-token: write/);
 assert.doesNotMatch(productionWindowsBuildJob, /id-token: write|environment: release|Azure\/login|artifact-signing-action/);
 assert.doesNotMatch(productionAppleJob, /id-token: write|Azure\/login|artifact-signing-action/);
-assert.doesNotMatch(productionLinuxJob, /id-token: write|environment: release|APPLE_CERTIFICATE|Azure\/login|artifact-signing-action/);
+assert.match(productionLinuxJob, /environment: release/);
+assert.doesNotMatch(productionLinuxJob, /id-token: write|APPLE_CERTIFICATE|Azure\/login|artifact-signing-action/);
 assert.equal((releaseWorkflow.match(/contents: write/g) ?? []).length, 1);
 assert.match(releaseWorkflow, /publish-draft:[\s\S]*needs: \[release-windows, release-apple, release-linux\][\s\S]*permissions:\n      contents: write/);
 assert.match(releaseWorkflow, /name: Sign Windows installer with Azure Artifact Signing[\s\S]*uses: Azure\/login@[a-f0-9]{40} # v3/);
@@ -2338,7 +2401,7 @@ assert.match(releaseWorkflow, /signing-account-name: eai-installer-signing/);
 assert.match(releaseWorkflow, /certificate-profile-name: eai-installer-windows/);
 assert.match(releaseWorkflow, /timestamp-rfc3161: http:\/\/timestamp\.acs\.microsoft\.com/);
 assert.doesNotMatch(releaseWorkflow, /WINDOWS_CERTIFICATE(?:_PASSWORD)?/);
-assert.match(releaseWorkflow, /Missing release secret APPLE_CERTIFICATE/);
+assert.match(releaseWorkflow, /Apple signing credentials are not configured/);
 assert.match(releaseWorkflow, /name: Verify exact version, PE architecture, Authenticode signer, and RFC3161 timestamp/);
 assert.match(releaseWorkflow, /Get-Item -LiteralPath "staged-release\/\$\{\{ matrix\.asset \}\}"/);
 assert.match(productionWindowsJob, /SignerCertificate[.]Subject -cne \$env:AZURE_SIGNING_SUBJECT/);
@@ -2351,10 +2414,19 @@ assert.match(productionAppleJob, /CFBundleShortVersionString/);
 assert.match(productionAppleJob, /lipo -archs/);
 assert.match(productionLinuxJob, /dpkg-deb --field "\$package" Version/);
 assert.match(productionLinuxJob, /dpkg-deb --field "\$package" Architecture/);
+assert.match(productionLinuxJob, /name: Build, sign, and verify Linux \(\$\{\{ matrix\.target \}\}\)/);
+assert.doesNotMatch(productionLinuxJob, /Azure\/login|artifact-signing-action|APPLE_CERTIFICATE|dpkg-sig|debsign/);
+assert.match(releaseWorkflow, /name: Sign Windows installer with Azure Artifact Signing/);
+assert.match(releaseWorkflow, /name: Build, sign, and verify macOS \(\$\{\{ matrix\.target \}\}\)/);
+assert.match(releaseWorkflow, /codesign --verify --deep --strict/);
+assert.match(releaseWorkflow, /xcrun stapler validate/);
 assert.match(releaseWorkflow, /uses: actions\/upload-artifact@[a-f0-9]{40} # v6/);
 assert.match(releaseWorkflow, /uses: actions\/download-artifact@[a-f0-9]{40} # v5/);
-assert.match(releaseWorkflow, /name: Publish verified six-asset draft/);
-assert.match(releaseWorkflow, /test "\$\{#actual\[@\]\}" -eq 6/);
+assert.match(releaseWorkflow, /name: Publish verified cross-platform draft/);
+assert.match(releaseWorkflow, /LINUX_SIGNING_PRIVATE_KEY/);
+assert.match(releaseWorkflow, /gpg --batch --verify/);
+assert.match(releaseWorkflow, /eai-linux-signing-key[.]asc/);
+assert.match(releaseWorkflow, /test "\$\{#actual\[@\]\}" -eq 9/);
 assert.match(releaseWorkflow, /gh release create "\$tag"[\s\S]*--draft/);
 assert.match(releaseWorkflow, /gh release upload "\$tag" release-assets\/\* --clobber/);
 assert.match(releaseWorkflow, /sha256sum --check/);
@@ -2366,7 +2438,7 @@ assert.ok(
 for (const job of [productionWindowsBuildJob, productionAppleJob, productionLinuxJob]) {
   assert.match(job, /uses: tauri-apps\/tauri-action@[a-f0-9]{40} # v1/);
 }
-assert.equal((releaseWorkflow.match(/uses: tauri-apps\/tauri-action@[a-f0-9]{40}/g) ?? []).length, 3);
+assert.equal((releaseWorkflow.match(/uses: tauri-apps\/tauri-action@[a-f0-9]{40}/g) ?? []).length, 4);
 assert.doesNotMatch(productionAppleJob, /mapfile/);
 assert.doesNotMatch(releaseWorkflow, /releaseDraft:/);
 assert.match(releaseWorkflow, /echo "APPLE_API_KEY_PATH=\$RUNNER_TEMP\/AuthKey_\$\{APPLE_API_KEY\}[.]p8" >> "\$GITHUB_ENV"/);
@@ -2643,7 +2715,7 @@ const receipt = {
   tenantMatch: "verified",
   tenantIdSha256: digest(process.env.EAI_DEPROVISION_TENANT_ID),
   apiOriginSha256: digest(process.env.EAI_DEPROVISION_API_ORIGIN),
-  eaiVersion: "3.15.10",
+  eaiVersion: "3.17.0",
   planHash: "a".repeat(64),
   ownershipManifestHash: "a".repeat(64),
   deletedRecords: {exactAppEnrollmentMatchesAfter: 0, exactFilteredTotalAfter: 0},
@@ -2717,7 +2789,7 @@ for (const [name, field, invalid, expectedError] of [
   ["wrong-schema", "schemaVersion", "wrong", /wrong schema version/],
   ["wrong-tenant-fingerprint", "tenantIdSha256", "0".repeat(64), /exact protected tenant/],
   ["wrong-api-fingerprint", "apiOriginSha256", "0".repeat(64), /exact PublicAPI origin/],
-  ["old-cli-receipt", "eaiVersion", "3.15.9", /unsupported EAI CLI version/],
+  ["old-cli-receipt", "eaiVersion", "3.16.99", /unsupported EAI CLI version/],
   ["wrong-plan", "planHash", "not-a-plan", /ownership-plan hash/],
   ["wrong-manifest", "ownershipManifestHash", "b".repeat(64), /ownership manifest/],
   ["missing-absence", "absenceCheck", {}, /independent absence evidence/],
@@ -3017,7 +3089,7 @@ for (const [index, adapter] of guestAdapters.entries()) {
 }
 assert.match(fs.readFileSync(guestAdapters[0], "utf8"), /prepare-macos-guest-dmg\.sh/);
 assert.match(macosGuestAdapterSource, /vm_name="\$\{EAI_MACOS_VM_NAME:-macOS\}"/);
-assert.match(macosGuestAdapterSource, /snapshot_id="\$\{EAI_MACOS_SNAPSHOT_ID:-d67a4cdf-bd15-46aa-963b-19a6ab49ebce\}"/);
+assert.match(macosGuestAdapterSource, /snapshot_id="\$\{EAI_MACOS_SNAPSHOT_ID:-462d2ce7-701e-4257-a95d-545590e86784\}"/);
 assert.match(macosGuestAdapterSource, /mac_admin_service="eai-installer-parallels-macos-admin"/);
 assert.match(macosGuestAdapterSource, /mac_admin_account="testmac"/);
 assert.match(macosGuestAdapterSource, /The controlled macOS release guest must use the testmac account/);
@@ -3036,7 +3108,7 @@ assert.match(windowsGuestAdapterSource, /eai-douglasross/);
 assert.match(ubuntuGuestAdapterSource, /exec \/bin\/bash "\$hardened_core" "\$@"/);
 assert.doesNotMatch(ubuntuGuestAdapterSource, /EAI_SETUP_E2E_COMPANY_TENANT/);
 assert.match(ubuntuGuestCoreSource, /Ubuntu 24[.]04[.]3 ARM64/);
-assert.match(ubuntuGuestCoreSource, /00f4cb1b-09ea-4f06-b41b-3d1d2085e8c7/);
+assert.match(ubuntuGuestCoreSource, /2119c623-791d-411a-b599-087dfc5eb9fb/);
 for (const effectiveAutologinCheck of [
   /gdm_autologin_parser_source\(\)/,
   /configparser[.]ConfigParser\(/,
@@ -3067,7 +3139,7 @@ assert.match(ubuntuGuestCoreSource, /Released-product prerequisite defect/);
 assert.match(ubuntuGuestCoreSource, /noHarnessPrerequisiteRepair: true/);
 assert.match(ubuntuGuestCoreSource, /prerequisite-contract-validation/);
 assert.match(ubuntuGuestCoreSource, /minimumNodeMajor: 24/);
-assert.match(ubuntuGuestCoreSource, /pinned to EAI CLI 3[.]15[.]10/);
+assert.match(ubuntuGuestCoreSource, /pinned to EAI CLI 3[.]17[.]0/);
 for (const npmProviderCheck of [
   /validate_npm_provider_values\(\)/,
   /installed_node_package_status=/,

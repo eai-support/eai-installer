@@ -46,14 +46,17 @@ version:
 ```
 
 It creates and pushes the matching tag. The release workflow validates that
-the tag and all source versions match, then requires the configured signing and
-notarization credentials. It builds the customer assets into a draft release;
+the tag and all source versions match, signs Windows with Microsoft Artifact
+Signing and Linux packages with the protected release GPG key, and builds the
+customer assets into a draft release. If Apple credentials are unavailable,
+the macOS assets are explicitly labelled unsigned;
 `release.sh` publishes that draft only after the exact assets pass the real
 guest E2E and cleanup gate.
 
 Complete [Signing and distribution setup](signing-and-distribution.md) before
-attempting a production release. Missing credentials are a deliberate release
-blocker, not a reason to bypass signing.
+attempting a production release. Missing Windows or Linux signing credentials
+remain deliberate release blockers; missing Apple credentials currently leave
+only the macOS assets unsigned and clearly labelled.
 
 ## End-to-end release gate
 

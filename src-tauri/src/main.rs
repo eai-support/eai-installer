@@ -197,7 +197,7 @@ const EAI_SIGNUP_URL: &str = "https://www.enterpriseaigroup.com/signup/developer
 // release. The installer updates an older CLI during bootstrap, but local
 // readiness must not depend on a live npm metadata request: an offline check
 // must distinguish "not compatible yet" from "not installed" deterministically.
-const MIN_EAI_CLI_VERSION: (u64, u64, u64) = (3, 15, 10);
+const MIN_EAI_CLI_VERSION: (u64, u64, u64) = (3, 17, 0);
 const MIN_NODE_MAJOR_VERSION: u64 = 24;
 
 fn usable_home_path(path: PathBuf) -> Option<PathBuf> {
@@ -2028,10 +2028,23 @@ fn start_ai_surface(directory: String, surface_id: String) -> Result<AiLaunchRes
         "eai",
         &["start", &directory, "--surface", &surface_id, "--format", "json", "--contract-version", "v2"],
     )?;
-    serde_json::from_str(&stdout).map_err(|error| {
+    let result: AiLaunchResult = serde_json::from_str(&stdout).map_err(|error| {
         let detail = if stderr.is_empty() { stdout } else { stderr };
         format!("EAI could not confirm the AI workspace handoff: {error}. {detail}")
-    })
+    })?;
+
+    // The CLI reports the macOS VS Code handoff as dispatched, but its
+    // authenticated application path is an .app bundle. Spawning that
+    // bundle directly can succeed without creating a GUI process. Use the
+    // native LaunchServices entry point as a guarded compatibility fallback;
+    // the CLI receipt and surface authentication remain required above.
+    #[cfg(target_os = "macos")]
+    if surface_id == "vscode-copilot" && result.launched {
+        run_program("open", &["-a", "Visual Studio Code", &directory])
+            .map_err(|error| format!("VS Code could not be opened for AI handoff: {error}"))?;
+    }
+
+    Ok(result)
 }
 
 #[tauri::command]

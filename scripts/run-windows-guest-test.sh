@@ -19,7 +19,7 @@ if [[ "${1:-}" == "--preflight" ]]; then
   exec "$ROOT/scripts/vm-adapter-preflight.sh" windows "$vm_name" "$snapshot_id"
 fi
 guest_user="${EAI_WINDOWS_GUEST_USER:-eai-douglasross}"
-expected_cli_version="${EAI_EXPECTED_CLI_VERSION:-3.15.10}"
+expected_cli_version="${EAI_EXPECTED_CLI_VERSION:-3.17.0}"
 guest_normal_pid='C:\Users\Public\eai-setup-normal.pid'
 guest_e2e_pid='C:\Users\Public\eai-setup-e2e.pid'
 guest_normal_launch_receipt='C:\Users\Public\eai-setup-normal-launch.json'
@@ -5515,10 +5515,12 @@ done
   || guest_test_fail "Windows current-user cmd and PowerShell channels did not stabilize as $guest_user."
 stage guest-session-stable
 
-exit_vm_coherence_if_needed \
-  || guest_test_fail "The exact Windows VM could not be proven windowed after a one-shot Coherence exit."
-show_vm_console \
-  || guest_test_fail "The exact Windows Parallels console window could not be opened after the snapshot boot."
+if ! show_vm_console; then
+  exit_vm_coherence_if_needed \
+    || guest_test_fail "The exact Windows VM could not be proven windowed after a one-shot Coherence exit."
+  show_vm_console \
+    || guest_test_fail "The exact Windows Parallels console window could not be opened after leaving Coherence."
+fi
 capture_vm_window "$work_dir/windows-console-preflight.png" \
   || guest_test_fail "The exact Windows Parallels console window is not visible for prerequisite consent-UI monitoring."
 rm -f "$work_dir/windows-console-preflight.png"
@@ -6037,48 +6039,53 @@ done
 
 receipt_ready=0
 liveness_failures=0
-for attempt in $(seq 1 240); do
-  receipt_probe=""
-  receipt_probe_status=0
-  if receipt_probe="$(guest_ps_readonly_run "$EAI_VM_PROJECT_NAME"$'\n' 2 2>/dev/null <<'POWERSHELL'
+receipt_probe_script=$(cat <<'POWERSHELL'
 $expectedAppName = [Console]::In.ReadLine()
 $receiptPath = 'C:\Users\Public\eai-setup-e2e-receipt.json'
-function Write-NotReady {
-  Write-Output 'EAI_E2E_RECEIPT_NOT_READY'
-  exit 0
-}
-if (-not (Test-Path -LiteralPath $receiptPath -PathType Leaf)) { Write-NotReady }
-try { $receipt = Get-Content -Raw -LiteralPath $receiptPath | ConvertFrom-Json } catch { Write-NotReady }
-if ($receipt.status -notin @('passed', 'failed')) { Write-NotReady }
-if ($receipt.message -isnot [string]) { Write-NotReady }
-if ($receipt.appCreated -isnot [bool]) { Write-NotReady }
-if (-not $receipt.checks) { Write-NotReady }
+if (-not (Test-Path -LiteralPath $receiptPath -PathType Leaf)) { Write-Output 'EAI_E2E_RECEIPT_NOT_READY'; return }
+try { $receipt = Get-Content -Raw -LiteralPath $receiptPath | ConvertFrom-Json } catch { Write-Output 'EAI_E2E_RECEIPT_NOT_READY'; return }
+if ($receipt.status -notin @('passed', 'failed')) { Write-Output 'EAI_E2E_RECEIPT_NOT_READY'; return }
+if ($receipt.message -isnot [string]) { Write-Output 'EAI_E2E_RECEIPT_NOT_READY'; return }
+if ($receipt.appCreated -isnot [bool]) { Write-Output 'EAI_E2E_RECEIPT_NOT_READY'; return }
+if (-not $receipt.checks) { Write-Output 'EAI_E2E_RECEIPT_NOT_READY'; return }
 $requiredChecks = @('prerequisites', 'authentication', 'tenant', 'app', 'project', 'aiHandoff')
 foreach ($check in $requiredChecks) {
-  if ($receipt.checks.PSObject.Properties.Name -notcontains $check) { Write-NotReady }
-  if ($receipt.checks.$check -notin @('passed', 'failed', 'not-run')) { Write-NotReady }
+  if ($receipt.checks.PSObject.Properties.Name -notcontains $check) { Write-Output 'EAI_E2E_RECEIPT_NOT_READY'; return }
+  if ($receipt.checks.$check -notin @('passed', 'failed', 'not-run')) { Write-Output 'EAI_E2E_RECEIPT_NOT_READY'; return }
 }
-# The released receipt schema does not duplicate the project name. Bind the
-# parsed passed receipt to the exact requested app through its generated
-# package, then repeat that proof independently on the host below.
 if ($receipt.status -eq 'passed') {
-  if ($receipt.appCreated -ne $true) { Write-NotReady }
+  if ($receipt.appCreated -ne $true) { Write-Output 'EAI_E2E_RECEIPT_NOT_READY'; return }
   foreach ($check in $requiredChecks) {
-    if ($receipt.checks.$check -ne 'passed') { Write-NotReady }
+    if ($receipt.checks.$check -ne 'passed') { Write-Output 'EAI_E2E_RECEIPT_NOT_READY'; return }
   }
   $projectPath = Join-Path 'C:\Users\Public\EAIReleaseTests' $expectedAppName
   $packagePath = Join-Path $projectPath 'package.json'
-  if (-not (Test-Path -LiteralPath $projectPath -PathType Container)) { Write-NotReady }
-  if (-not (Test-Path -LiteralPath $packagePath -PathType Leaf)) { Write-NotReady }
-  try { $package = Get-Content -Raw -LiteralPath $packagePath | ConvertFrom-Json } catch { Write-NotReady }
-  if ($package.name -cne "@eai-tools/$expectedAppName") { Write-NotReady }
+  if (-not (Test-Path -LiteralPath $projectPath -PathType Container)) { Write-Output 'EAI_E2E_RECEIPT_NOT_READY'; return }
+  if (-not (Test-Path -LiteralPath $packagePath -PathType Leaf)) { Write-Output 'EAI_E2E_RECEIPT_NOT_READY'; return }
+  try { $package = Get-Content -Raw -LiteralPath $packagePath | ConvertFrom-Json } catch { Write-Output 'EAI_E2E_RECEIPT_NOT_READY'; return }
+  if ($package.name -cne "@eai-tools/$expectedAppName") { Write-Output 'EAI_E2E_RECEIPT_NOT_READY'; return }
 }
 Write-Output 'EAI_E2E_RECEIPT_READY'
 POWERSHELL
-  )"; then
+)
+for attempt in $(seq 1 240); do
+  receipt_probe=""
+  receipt_probe_status=0
+  if receipt_probe="$(printf '%s\n' "$receipt_probe_script" | guest_ps_readonly_run "$EAI_VM_PROJECT_NAME"$'\n' 2>/dev/null)"; then
     receipt_probe_status=0
   else
     receipt_probe_status=$?
+  fi
+  if [[ "$receipt_probe_status" != 0 ]]; then
+    # During the desktop app's transition into the authenticated workspace,
+    # Parallels can transiently reject a current-user read-only session. The
+    # receipt and project are public, so retry the same non-mutating probe via
+    # LocalSystem before declaring the E2E launch failed.
+    if receipt_probe="$(printf '%s\n' "$receipt_probe_script" | guest_system_ps_readonly_run "$EAI_VM_PROJECT_NAME"$'\n' 2>/dev/null)"; then
+      receipt_probe_status=0
+    else
+      receipt_probe_status=$?
+    fi
   fi
   [[ "$receipt_probe_status" == 0 ]] \
     || guest_test_fail "The read-only Windows E2E receipt probe transport failed."

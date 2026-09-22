@@ -3,11 +3,6 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-account_service="${EAI_LOGIN_KEYCHAIN_SERVICE:-eai-installer-release-test-account}"
-tenant_id_service="${EAI_TENANT_ID_KEYCHAIN_SERVICE:-eai-installer-release-test-tenant-id}"
-tenant_name_service="${EAI_TENANT_NAME_KEYCHAIN_SERVICE:-eai-installer-release-test-tenant-name}"
-keychain_account="${EAI_TENANT_KEYCHAIN_ACCOUNT:-release-e2e}"
-
 fail() {
   printf 'Release E2E Keychain launcher failed: %s\n' "$*" >&2
   exit 1
@@ -30,18 +25,7 @@ unset console_state
 
 # The account is stored as Keychain metadata; the password is never read here.
 # It is streamed into the macOS VM only by login-macos-guest.sh.
-test_email="$(/usr/bin/security find-generic-password -s "$account_service" 2>&1 \
-  | /usr/bin/awk -F '"' '$2 == "acct" { print $4; exit }')"
-tenant_id="$(/usr/bin/security find-generic-password -s "$tenant_id_service" -a "$keychain_account" -w 2>/dev/null || true)"
-tenant_name="$(/usr/bin/security find-generic-password -s "$tenant_name_service" -a "$keychain_account" -w 2>/dev/null || true)"
-
-[[ -n "$test_email" && "$test_email" != *[[:space:]]* ]] || fail "The release-test account is missing from the host Keychain."
-[[ "$tenant_id" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F-]{27,}$ ]] || fail "The harness tenant ID is missing from the host Keychain."
-[[ -n "$tenant_name" ]] || fail "The harness tenant name is missing from the host Keychain."
-
-export EAI_HARNESS_USER_EMAIL="$test_email"
-export EAI_HARNESS_TENANT_ID="$tenant_id"
-export EAI_HARNESS_TENANT_NAME="$tenant_name"
+source "$ROOT/scripts/load-release-e2e-keychain.sh" || fail "Protected release-test values could not be loaded from the host Keychain."
 export EAI_VM_DRIVER=command
 export EAI_VM_MACOS_COMMAND="$ROOT/scripts/run-macos-guest-test.sh"
 export EAI_VM_WINDOWS_COMMAND="$ROOT/scripts/run-windows-guest-test.sh"

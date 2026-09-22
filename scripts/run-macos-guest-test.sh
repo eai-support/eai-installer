@@ -9,8 +9,8 @@ source "$ROOT/scripts/guest-test-lib.sh"
 source "$ROOT/scripts/parallels-macos-current-user.sh"
 
 vm_name="${EAI_MACOS_VM_NAME:-macOS}"
-snapshot_id="${EAI_MACOS_SNAPSHOT_ID:-d67a4cdf-bd15-46aa-963b-19a6ab49ebce}"
-expected_cli_version="${EAI_EXPECTED_CLI_VERSION:-3.15.10}"
+snapshot_id="${EAI_MACOS_SNAPSHOT_ID:-462d2ce7-701e-4257-a95d-545590e86784}"
+expected_cli_version="${EAI_EXPECTED_CLI_VERSION:-3.17.0}"
 if [[ "${1:-}" == "--preflight" ]]; then
   [[ "$#" -eq 1 ]] || guest_test_fail "The macOS adapter preflight accepts no additional arguments."
   exec "$ROOT/scripts/vm-adapter-preflight.sh" macos "$vm_name" "$snapshot_id"
@@ -497,8 +497,8 @@ guest_test_require prlctl
 guest_test_require node
 guest_test_require security
 guest_test_require_environment
-[[ "$expected_cli_version" == 3.15.10 ]] \
-  || guest_test_fail "The macOS release harness is pinned to EAI CLI 3.15.10."
+[[ "$expected_cli_version" == 3.17.0 ]] \
+  || guest_test_fail "The macOS release harness is pinned to EAI CLI 3.17.0."
 [[ -f "$input_helper" ]] || guest_test_fail "The Parallels input helper is missing."
 [[ "$guest_user" == "$mac_admin_account" ]] \
   || guest_test_fail "The controlled macOS release guest must use the testmac account."
@@ -770,7 +770,10 @@ stage ai-handoff-process-validation
 ai_workspace_running=0
 ai_workspace_pid=""
 for _ in $(seq 1 30); do
-  ai_workspace_pid="$(printf '%s\n' "/usr/bin/pgrep -f '/Applications/Visual Studio Code.app/Contents/MacOS/Code' | /usr/bin/head -1" \
+  # VS Code has used both `Code` and `Electron` as the macOS launcher
+  # executable across official builds. Keep the process proof exact to the
+  # installed app bundle while accepting either documented launcher name.
+  ai_workspace_pid="$(printf '%s\n' "/usr/bin/pgrep -f '/Applications/Visual Studio Code.app/Contents/MacOS/(Code|Electron)' | /usr/bin/head -1" \
     | macos_prl_current_user_shell_idempotent 2>/dev/null | tr -d '\r\n' || true)"
   if [[ "$ai_workspace_pid" =~ ^[1-9][0-9]*$ ]]; then
     ai_workspace_running=1
@@ -842,7 +845,7 @@ const evidence = {
   processVerified: true,
   processOwner: "testmac",
   processId: Number(process.env.EAI_HANDOFF_PROCESS_ID),
-  processMatch: "/Applications/Visual Studio Code.app/Contents/MacOS/Code",
+  processMatch: "/Applications/Visual Studio Code.app/Contents/MacOS/(Code|Electron)",
   screenshot: {
     path: "macos-ai-handoff.png",
     sha256: process.env.EAI_HANDOFF_SCREENSHOT_HASH,

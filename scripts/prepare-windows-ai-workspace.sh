@@ -6,6 +6,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/scripts/guest-test-lib.sh"
 # shellcheck source=scripts/windows-hidden-current-user.sh
 source "$ROOT/scripts/windows-hidden-current-user.sh"
+# shellcheck source=scripts/windows-readonly-powershell.sh
+source "$ROOT/scripts/windows-readonly-powershell.sh"
 
 vm_name="${EAI_WINDOWS_VM_NAME:-Windows 11}"
 guest_user="${EAI_WINDOWS_GUEST_USER:-eai-douglasross}"
@@ -39,16 +41,50 @@ extract_marker() {
 }
 
 run_guest_powershell() {
+  local nonce=""
+  local guest_stage_dir=""
+  local guest_stage_script=""
+  local payload=""
+  local launcher=""
   local output=""
   local status=1
 
+  nonce="$(/usr/bin/uuidgen | /usr/bin/tr -d '-' | /usr/bin/tr '[:upper:]' '[:lower:]')"
+  guest_stage_dir="C:\\Users\\Public\\eai-ai-workspace-${nonce}"
+  guest_stage_script="${guest_stage_dir}\\prepare.ps1"
+  payload="$({
+    printf '%s\n' "\$env:EAI_WINDOWS_AI_EXPECTED_USER = '$guest_user'"
+    /bin/cat "$guest_script"
+  } | /usr/bin/base64 | /usr/bin/tr -d '\n')"
+  launcher="$(printf '%s' \
+    "\$ErrorActionPreference='Stop';" \
+    "\$stage='$guest_stage_dir';" \
+    "\$script='$guest_stage_script';" \
+    "\$status=1;" \
+    "try {" \
+    "Remove-Item -LiteralPath \$stage -Recurse -Force -ErrorAction SilentlyContinue;" \
+    "New-Item -ItemType Directory -Path \$stage -ErrorAction Stop | Out-Null;" \
+    "\$acl=[Security.AccessControl.DirectorySecurity]::new();" \
+    "\$acl.SetAccessRuleProtection(\$true,\$false);" \
+    "foreach (\$sidText in @('S-1-5-18','S-1-5-32-544')) {" \
+    "\$sid=[Security.Principal.SecurityIdentifier]::new(\$sidText);" \
+    "\$rule=[Security.AccessControl.FileSystemAccessRule]::new(\$sid,'FullControl','ContainerInherit,ObjectInherit','None','Allow');" \
+    "[void]\$acl.AddAccessRule(\$rule)" \
+    "};" \
+    "Set-Acl -LiteralPath \$stage -AclObject \$acl -ErrorAction Stop;" \
+    "[IO.File]::WriteAllBytes(\$script,[Convert]::FromBase64String('$payload'));" \
+    "& powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File \$script;" \
+    "\$status=\$LASTEXITCODE" \
+    "} catch {" \
+    "[Console]::Error.WriteLine((\$_ | Out-String));" \
+    "\$status=1" \
+    "} finally {" \
+    "Remove-Item -LiteralPath \$stage -Recurse -Force -ErrorAction SilentlyContinue" \
+    "};" \
+    "exit \$status")"
+
   for _ in $(seq 1 120); do
-    if output="$({
-      printf '& {\n'
-      printf '%s\n' "\$env:EAI_WINDOWS_AI_EXPECTED_USER = '$guest_user'"
-      /bin/cat "$guest_script"
-      printf '\n}\n\n'
-    } | prlctl exec "$vm_name" cmd.exe /D /S /C powershell.exe \
+    if output="$(printf '%s\n' "$launcher" | prlctl exec "$vm_name" cmd.exe /D /S /C powershell.exe \
       -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass \
       -InputFormat Text -OutputFormat Text -Command - 2>&1)"; then
       printf '%s\n' "$output"
@@ -109,20 +145,20 @@ fi
 guest_json=""
 evidence_output=""
 evidence_status=1
-for _ in $(seq 1 120); do
+for _ in $(seq 1 5); do
   set +e
-  evidence_output="$(printf '%s\n' "Get-Content -Raw -LiteralPath '$guest_evidence'" | windows_hidden_current_user_ps "$vm_name" 2>&1)"
+  evidence_output="$(printf '%s\n' "Get-Content -Raw -LiteralPath '$guest_evidence'" | guest_ps_readonly)"
   evidence_status=$?
   set -e
   if [[ "$evidence_status" == 0 ]]; then
     guest_json="$(printf '%s' "$evidence_output" | tr -d '\r')"
-    break
-  fi
-  if is_parallels_session_open_failure "$evidence_output"; then
-    sleep 2
+    if [[ -n "$guest_json" ]]; then
+      break
+    fi
+    sleep 1
     continue
   fi
-  fail "The Windows AI-workspace evidence read failed with a non-transport error."
+  fail "The Windows AI-workspace evidence read transport failed after bounded retries."
 done
 [[ "$evidence_status" == 0 ]] \
   || fail "The Windows AI-workspace evidence file could not be read from the guest after bounded transport retries."

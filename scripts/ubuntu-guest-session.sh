@@ -66,6 +66,32 @@ ubuntu_prl_user_exec() {
       "$@"
 }
 
+# Read one allow-listed display variable from the verified graphical session.
+# Feed the probe over stdin because prlctl appends post-`-c` arguments to the
+# command text instead of treating them as conventional $0/$1 arguments.
+ubuntu_prl_session_env_value() {
+  local vm_name="$1" sid="$2" uid="$3" leader="$4" key="$5"
+  cat <<'PROBE' | prlctl exec "$vm_name" /usr/bin/env \
+    EAI_SESSION_ID="$sid" EAI_SESSION_UID="$uid" EAI_SESSION_LEADER="$leader" \
+    EAI_SESSION_ENV_KEY="$key" /bin/bash -s 2>/dev/null | /usr/bin/tr -d '\r\n' || true
+sid="$EAI_SESSION_ID"; uid="$EAI_SESSION_UID"; leader="$EAI_SESSION_LEADER"; key="$EAI_SESSION_ENV_KEY"
+for process in "/proc/$leader" /proc/[0-9]*; do
+  [ -r "$process/environ" ] || continue
+  [ "$(stat -c %u "$process" 2>/dev/null)" = "$uid" ] || continue
+  environment=$(tr "\0" "\n" < "$process/environ")
+  if [ "${process##*/}" != "$leader" ]; then
+    session_marker=$(printf "%s\n" "$environment" | sed -n 's/^XDG_SESSION_ID=//p' | head -n 1)
+    [ -z "$session_marker" ] || [ "$session_marker" = "$sid" ] || continue
+  fi
+  value=$(printf "%s\n" "$environment" | sed -n "s/^$key=//p" | head -n 1)
+  [ -n "$value" ] || continue
+  printf "%s\n" "$value"
+  exit 0
+done
+exit 1
+PROBE
+}
+
 # Stop and remove only the release harness's exact Snap-visible Firefox
 # profile. Callers must first prove that this profile did not predate the run.
 ubuntu_disposable_browser_cleanup() {
@@ -152,8 +178,13 @@ ubuntu_prl_session_configure() {
 
   # Select only the expected user's active, local, seat0 graphical login.
   # The expected username is validated above and is not protected data.
-  session_record="$(prlctl exec "$vm_name" /bin/bash -c '
-    expected=$1
+  # Feed the probe over stdin.  prlctl concatenates arguments after `bash -c`
+  # into the command text, which would append `$0 $1` after the script and
+  # break process-substitution parsing.  The username is regex-validated above
+  # and is passed as an environment value instead.
+  session_record="$(cat <<'PROBE' | prlctl exec "$vm_name" /usr/bin/env \
+    EAI_EXPECTED_USER="$expected_user" /bin/bash -s 2>/dev/null
+    expected="$EAI_EXPECTED_USER"
     while read -r sid _; do
       [ -n "$sid" ] || continue
       name=$(loginctl show-session "$sid" -p Name --value 2>/dev/null) || continue
@@ -174,7 +205,8 @@ ubuntu_prl_session_configure() {
       fi
     done < <(loginctl list-sessions --no-legend 2>/dev/null)
     exit 1
-  ' _ "$expected_user" 2>/dev/null || true)"
+PROBE
+  )"
 
   IFS=$'\t' read -r session_id session_name session_uid session_type \
     session_class session_state session_remote session_leader <<<"$session_record"
@@ -187,8 +219,13 @@ ubuntu_prl_session_configure() {
   [[ "$session_class" == user && "$session_state" == active && "$session_remote" == no ]] \
     || ubuntu_session_fail "the selected graphical session is not a local active user session" || return
 
-  guest_home="$(prlctl exec "$vm_name" /usr/bin/getent passwd "$expected_user" 2>/dev/null \
-    | /usr/bin/awk -F: 'NR == 1 { print $6 }' | /usr/bin/tr -d '\r\n')"
+  guest_home=""
+  for _ in $(seq 1 5); do
+    guest_home="$(prlctl exec "$vm_name" /usr/bin/getent passwd "$expected_user" 2>/dev/null \
+      | /usr/bin/awk -F: 'NR == 1 { print $6 }' | /usr/bin/tr -d '\r\n')"
+    [[ -n "$guest_home" ]] && break
+    sleep 1
+  done
   [[ "$guest_home" == "/home/$expected_user" ]] \
     || ubuntu_session_fail "the expected user's home directory is not /home/$expected_user" || return
   [[ "$(prlctl exec "$vm_name" /usr/bin/id -u "$expected_user" 2>/dev/null | /usr/bin/tr -d '\r\n')" == "$session_uid" ]] \
@@ -204,54 +241,9 @@ ubuntu_prl_session_configure() {
   # helper without the desktop environment, so scan only processes owned by
   # the verified UID and explicitly bound to the selected XDG session. Never
   # copy or print a process's complete environment.
-  display="$(prlctl exec "$vm_name" /bin/bash -c '
-    sid=$1; uid=$2; leader=$3; key=$4
-    for process in "/proc/$leader" /proc/[0-9]*; do
-      [ -r "$process/environ" ] || continue
-      [ "$(stat -c %u "$process" 2>/dev/null)" = "$uid" ] || continue
-      environment=$(tr "\0" "\n" < "$process/environ")
-      if [ "${process##*/}" != "$leader" ]; then
-        printf "%s\n" "$environment" | grep -Fxq "XDG_SESSION_ID=$sid" || continue
-      fi
-      value=$(printf "%s\n" "$environment" | sed -n "s/^$key=//p" | head -n 1)
-      [ -n "$value" ] || continue
-      printf "%s\n" "$value"
-      exit 0
-    done
-    exit 1
-  ' _ "$session_id" "$session_uid" "$session_leader" DISPLAY 2>/dev/null | /usr/bin/tr -d '\r\n' || true)"
-  wayland_display="$(prlctl exec "$vm_name" /bin/bash -c '
-    sid=$1; uid=$2; leader=$3; key=$4
-    for process in "/proc/$leader" /proc/[0-9]*; do
-      [ -r "$process/environ" ] || continue
-      [ "$(stat -c %u "$process" 2>/dev/null)" = "$uid" ] || continue
-      environment=$(tr "\0" "\n" < "$process/environ")
-      if [ "${process##*/}" != "$leader" ]; then
-        printf "%s\n" "$environment" | grep -Fxq "XDG_SESSION_ID=$sid" || continue
-      fi
-      value=$(printf "%s\n" "$environment" | sed -n "s/^$key=//p" | head -n 1)
-      [ -n "$value" ] || continue
-      printf "%s\n" "$value"
-      exit 0
-    done
-    exit 1
-  ' _ "$session_id" "$session_uid" "$session_leader" WAYLAND_DISPLAY 2>/dev/null | /usr/bin/tr -d '\r\n' || true)"
-  xauthority="$(prlctl exec "$vm_name" /bin/bash -c '
-    sid=$1; uid=$2; leader=$3; key=$4
-    for process in "/proc/$leader" /proc/[0-9]*; do
-      [ -r "$process/environ" ] || continue
-      [ "$(stat -c %u "$process" 2>/dev/null)" = "$uid" ] || continue
-      environment=$(tr "\0" "\n" < "$process/environ")
-      if [ "${process##*/}" != "$leader" ]; then
-        printf "%s\n" "$environment" | grep -Fxq "XDG_SESSION_ID=$sid" || continue
-      fi
-      value=$(printf "%s\n" "$environment" | sed -n "s/^$key=//p" | head -n 1)
-      [ -n "$value" ] || continue
-      printf "%s\n" "$value"
-      exit 0
-    done
-    exit 1
-  ' _ "$session_id" "$session_uid" "$session_leader" XAUTHORITY 2>/dev/null | /usr/bin/tr -d '\r\n' || true)"
+  display="$(ubuntu_prl_session_env_value "$vm_name" "$session_id" "$session_uid" "$session_leader" DISPLAY)"
+  wayland_display="$(ubuntu_prl_session_env_value "$vm_name" "$session_id" "$session_uid" "$session_leader" WAYLAND_DISPLAY)"
+  xauthority="$(ubuntu_prl_session_env_value "$vm_name" "$session_id" "$session_uid" "$session_leader" XAUTHORITY)"
 
   if [[ "$session_type" == x11 ]]; then
     [[ "$display" =~ ^:[0-9]+([.][0-9]+)?$ ]] \

@@ -147,6 +147,11 @@ publish_release() {
   export EAI_VM_MACOS_COMMAND="$canonical_macos"
   export EAI_VM_WINDOWS_COMMAND="$canonical_windows"
   export EAI_VM_UBUNTU_COMMAND="$canonical_ubuntu"
+  if [[ "$(uname -s)" == Darwin ]]; then
+    # Keep tenant identity in the protected host Keychain while making the
+    # normal production command use the same source as the diagnostic wrapper.
+    source "$ROOT/scripts/load-release-e2e-keychain.sh"
+  fi
   unset EAI_RELEASE_MACOS_ASSET EAI_RELEASE_WINDOWS_ASSET EAI_RELEASE_UBUNTU_ASSET
   node scripts/release-e2e.mjs --version "$version" --repo "$REPO" --tag "$tag" --driver command --vms macos,windows,ubuntu --deprovision api --preflight
 

@@ -4,9 +4,12 @@ set -euo pipefail
 umask 077
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=scripts/windows-hidden-current-user.sh
+source "$ROOT/scripts/windows-hidden-current-user.sh"
 vm_name="${EAI_WINDOWS_VM_NAME:-Windows 11}"
 guest_user="${EAI_WINDOWS_GUEST_USER:-eai-douglasross}"
 prlctl_bin="${EAI_WINDOWS_CLEANUP_PRLCTL_BIN:-$(command -v prlctl 2>/dev/null || true)}"
+hidden_ps_command="${EAI_WINDOWS_CLEANUP_HIDDEN_PS_COMMAND:-}"
 login_command="${EAI_WINDOWS_CLEANUP_LOGIN_COMMAND:-$ROOT/scripts/login-windows-guest.sh}"
 ps_helper="$ROOT/scripts/windows-diagnostic-cleanup.ps1"
 ocr_source="$ROOT/scripts/macos-ocr-match.swift"
@@ -31,6 +34,15 @@ trap 'exit 143' TERM
 fail() {
   printf 'Windows diagnostic cleanup failed: %s\n' "$*" >&2
   exit 1
+}
+
+run_hidden_cleanup_ps() {
+  if [[ -n "$hidden_ps_command" ]]; then
+    [[ -x "$hidden_ps_command" && -f "$hidden_ps_command" && ! -L "$hidden_ps_command" ]] || return 126
+    "$hidden_ps_command" "$vm_name"
+  else
+    windows_hidden_current_user_ps "$vm_name" ""
+  fi
 }
 
 usage() {
@@ -775,7 +787,7 @@ fi
 [[ -n "$prlctl_bin" && -x "$prlctl_bin" ]] || fail "prlctl is unavailable."
 [[ -x "$login_command" ]] || fail "The Windows protected-login command is unavailable."
 [[ -f "$ps_helper" && ! -L "$ps_helper" ]] || fail "The Windows cleanup PowerShell helper is missing or unsafe."
-status_output="$($prlctl_bin status "$vm_name" 2>/dev/null || true)"
+status_output="$("$prlctl_bin" status "$vm_name" 2>/dev/null || true)"
 [[ "$status_output" == *running* ]] || fail "The exact Windows VM must still be running; do not restore it before cleanup."
 
 fresh_auth_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -874,10 +886,7 @@ set +e
   /bin/cat "$ps_helper"
   printf '\n} -CleanupInputBase64 @("%s", "%s", "%s", "%s", "%s", "%s")\n\n' \
     "$mode_base64" "$app_base64" "$tenant_base64" "$run_base64" "$gate_payload_base64" "$guest_user_base64"
-} | "$prlctl_bin" exec "$vm_name" --current-user powershell.exe \
-      -NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -ExecutionPolicy Bypass \
-      -InputFormat Text -OutputFormat Text -Command - \
-      >"$raw_stdout" 2>"$raw_stderr"
+} | run_hidden_cleanup_ps >"$raw_stdout" 2>"$raw_stderr"
 transport_status=$?
 set -e
 tenant_id=""

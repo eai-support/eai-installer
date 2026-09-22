@@ -93,7 +93,12 @@ guest_asuser /bin/rm -rf "$guest_mount"
 guest_asuser /bin/mkdir -p "$guest_mount"
 guest_asuser /usr/bin/hdiutil attach "$guest_dmg" -nobrowse -readonly -mountpoint "$guest_mount" >/dev/null
 
-mounted_apps="$(guest_idempotent /usr/bin/find "$guest_mount" -mindepth 1 -maxdepth 1 -type d -name '*.app')"
+# Pass the glob expression through stdin to /bin/sh. `prlctl exec` otherwise
+# reparses the literal argument through the guest login shell, where zsh's
+# `nomatch` option rejects `*.app` before find can evaluate it.
+mounted_apps="$(printf '%s\n' \
+  "/usr/bin/find '$guest_mount' -mindepth 1 -maxdepth 1 -type d -name '*.app'" \
+  | macos_prl_current_user_shell_idempotent)"
 app_count="$(printf '%s\n' "$mounted_apps" | /usr/bin/awk 'NF { count += 1 } END { print count + 0 }')"
 [[ "$app_count" == "1" ]] || fail "The mounted DMG must contain exactly one application."
 [[ "$(/usr/bin/dirname "$mounted_apps")" == "$guest_mount" ]] || fail "The application must be at the top level of the mounted DMG."
