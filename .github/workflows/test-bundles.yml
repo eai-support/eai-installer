@@ -101,7 +101,8 @@ jobs:
             (Join-Path $env:ProgramFiles 'EAI Setup')
           ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -Unique
           $installed = @()
-          for ($attempt = 0; $attempt -lt 10 -and $installed.Count -eq 0; $attempt++) {
+          # Native ARM64 runners need more time to extract the larger ARM64 app payload.
+          for ($attempt = 0; $attempt -lt 60 -and $installed.Count -eq 0; $attempt++) {
             $roots = @(
               $installDir,
               (Join-Path $env:LOCALAPPDATA 'EAI Setup'),
@@ -112,7 +113,10 @@ jobs:
             if ($installed.Count -eq 0) { Start-Sleep -Seconds 1 }
           }
           $installed | Select-Object FullName, Length
-          if ($installed.Count -eq 0) { throw "Windows installer did not create an executable in the expected install roots" }
+          if ($installed.Count -eq 0) {
+            Write-Host "Install roots searched: $($roots -join ', ')"
+            throw "Windows installer did not create an executable in the expected install roots within 60 seconds"
+          }
           $appExecutable = $installed | Where-Object { $_.Name -ieq 'eai-setup.exe' } | Select-Object -First 1
           if (-not $appExecutable) { throw "Windows installer did not install eai-setup.exe" }
           $binary = $null

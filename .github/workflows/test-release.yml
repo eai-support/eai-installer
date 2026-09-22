@@ -101,11 +101,15 @@ jobs:
           if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) { throw "Windows installer exited with code $LASTEXITCODE" }
           $roots = @($installDir, (Join-Path $env:LOCALAPPDATA 'EAI Setup'), (Join-Path $env:LOCALAPPDATA 'Programs\EAI Setup'), (Join-Path $env:ProgramFiles 'EAI Setup')) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -Unique
           $installed = @()
-          for ($attempt = 0; $attempt -lt 10 -and $installed.Count -eq 0; $attempt++) {
+          # Native ARM64 runners need more time to extract the larger ARM64 app payload.
+          for ($attempt = 0; $attempt -lt 60 -and $installed.Count -eq 0; $attempt++) {
             $installed = @($roots | ForEach-Object { Get-ChildItem -LiteralPath $_ -Recurse -File | Where-Object { $_.Extension -ieq '.exe' } })
             if ($installed.Count -eq 0) { Start-Sleep -Seconds 1 }
           }
-          if ($installed.Count -eq 0) { throw "Windows installer did not create an executable" }
+          if ($installed.Count -eq 0) {
+            Write-Host "Install roots searched: $($roots -join ', ')"
+            throw "Windows installer did not create an executable within 60 seconds"
+          }
 
       - name: Smoke-test macOS disk image
         if: runner.os == 'macOS'
