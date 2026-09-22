@@ -88,7 +88,7 @@ assert.match(linuxJob, /dpkg-deb --field "\$package" Architecture/);
 
 const publisher = workflow.slice(publisherIndex);
 assert.match(publisher, /needs: \[release-windows, release-apple, release-linux\]/);
-assert.match(publisher, /actions\/download-artifact@[a-f0-9]{40} # v5/);
+assert.match(publisher, /actions\/download-artifact@[a-f0-9]{40} # v8/);
 assert.match(publisher, /test "\$\{#actual\[@\]\}" -eq 9/);
 assert.match(publisher, /gh release upload "\$tag" release-assets\/[*] --clobber/);
 assert.match(publisher, /gh release create "\$tag"[\s\S]*--draft/);
