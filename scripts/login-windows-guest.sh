@@ -406,11 +406,32 @@ portal_ready_state() {
   local output=""
   local ready_count=0
   local not_ready_count=0
+  # Edge is launched through WMI so it survives the Parallels guest-control
+  # request.  On a snapshot restore its accessibility tree can take several
+  # seconds to become queryable, even though the browser process exists.  A
+  # transient UIA transport/readiness failure is neither proof of an existing
+  # portal session nor proof that the sign-in page is ready; retry it below.
   output="$(run_readonly_ui_action probe-portal-ready 5)" || return 2
   ready_count="$(printf '%s\n' "$output" | /usr/bin/tr -d '\r' | /usr/bin/grep -Fxc 'EAI_PORTAL_READY' || true)"
   not_ready_count="$(printf '%s\n' "$output" | /usr/bin/tr -d '\r' | /usr/bin/grep -Fxc 'EAI_PORTAL_NOT_READY' || true)"
   if [[ "$ready_count" == 1 && "$not_ready_count" == 0 ]]; then return 0; fi
   if [[ "$ready_count" == 0 && "$not_ready_count" == 1 ]]; then return 1; fi
+  return 2
+}
+
+wait_for_unauthenticated_portal_state() {
+  local state=2
+  local attempt
+  for attempt in $(seq 1 30); do
+    if portal_ready_state; then
+      return 0
+    fi
+    state=$?
+    if [[ "$state" == 1 ]]; then
+      return 1
+    fi
+    sleep 1
+  done
   return 2
 }
 
@@ -444,7 +465,7 @@ if [[ "$mode" != cli ]]; then
   fi
 
   portal_state_status=2
-  if portal_ready_state; then
+  if wait_for_unauthenticated_portal_state; then
     fail "The replacement snapshot already has an authenticated portal session; a fresh protected login cannot be proven."
   else
     portal_state_status=$?
