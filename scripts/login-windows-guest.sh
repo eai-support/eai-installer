@@ -177,7 +177,7 @@ run_ui_action_once() {
   local output=""
   local status=1
   case "$action" in
-    edge-first-run|invoke-public-email|invoke-portal-microsoft|focus-email|invoke-next|focus-password|invoke-sign-in|invoke-edge-not-now|invoke-ms-yes|probe-portal-ready|wait-portal-ready)
+    edge-first-run|dismiss-windows-activation|invoke-public-email|invoke-portal-microsoft|focus-email|invoke-next|focus-password|invoke-sign-in|invoke-edge-not-now|invoke-ms-yes|probe-portal-ready|wait-portal-ready)
       ;;
     *)
       fail "Unsupported Windows UI action."
@@ -209,7 +209,7 @@ run_idempotent_ui_action() {
   local status=1
   local attempt
   case "$action" in
-    edge-first-run|focus-email|focus-password)
+    edge-first-run|dismiss-windows-activation|focus-email|focus-password)
       ;;
     *)
       fail "Unsupported idempotent Windows UI action."
@@ -459,6 +459,11 @@ if [[ "$mode" != cli ]]; then
     || fail "The Enterprise AI Group sign-in endpoint was not reachable from the Windows guest."
   launch_edge \
     || fail "Microsoft Edge could not open the Enterprise AI Group sign-in page."
+  # The clean Windows image can display this non-actionable activation notice
+  # over Edge after networking returns.  Close only the exact documented
+  # notice; never change activation, licensing, or any Windows setting.
+  run_idempotent_ui_action dismiss-windows-activation 15 >/dev/null \
+    || fail "The Windows activation notice could not be dismissed safely."
   if ! run_idempotent_ui_action edge-first-run 120 >/dev/null 2>&1; then
     run_ui_action_once invoke-public-email 30 >/dev/null \
       || fail "Microsoft Edge first-run setup could not be handled safely."
