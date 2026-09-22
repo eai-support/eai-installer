@@ -114,7 +114,7 @@ const finalizerRun = spawnSync("bash", ["-c", `
   source "$1"
   guest_test_finalize macos "/fixture/project" "$2" "$3" "$3" "$4"
 `, "guest-finalizer-fixture", guestTestLibrary, finalizerReceipt, finalizerHash, JSON.stringify({
-  git: "fixture", node: "v24.0.0", npm: "11.0.0", eai: "3.15.10",
+  git: "fixture", node: "v24.0.0", npm: "11.0.0", eai: "3.17.0",
 })], {
   cwd: root,
   encoding: "utf8",
@@ -2715,7 +2715,7 @@ const receipt = {
   tenantMatch: "verified",
   tenantIdSha256: digest(process.env.EAI_DEPROVISION_TENANT_ID),
   apiOriginSha256: digest(process.env.EAI_DEPROVISION_API_ORIGIN),
-  eaiVersion: "3.15.10",
+  eaiVersion: "3.17.0",
   planHash: "a".repeat(64),
   ownershipManifestHash: "a".repeat(64),
   deletedRecords: {exactAppEnrollmentMatchesAfter: 0, exactFilteredTotalAfter: 0},
@@ -2789,7 +2789,7 @@ for (const [name, field, invalid, expectedError] of [
   ["wrong-schema", "schemaVersion", "wrong", /wrong schema version/],
   ["wrong-tenant-fingerprint", "tenantIdSha256", "0".repeat(64), /exact protected tenant/],
   ["wrong-api-fingerprint", "apiOriginSha256", "0".repeat(64), /exact PublicAPI origin/],
-  ["old-cli-receipt", "eaiVersion", "3.15.9", /unsupported EAI CLI version/],
+  ["old-cli-receipt", "eaiVersion", "3.16.99", /unsupported EAI CLI version/],
   ["wrong-plan", "planHash", "not-a-plan", /ownership-plan hash/],
   ["wrong-manifest", "ownershipManifestHash", "b".repeat(64), /ownership manifest/],
   ["missing-absence", "absenceCheck", {}, /independent absence evidence/],
@@ -3139,7 +3139,7 @@ assert.match(ubuntuGuestCoreSource, /Released-product prerequisite defect/);
 assert.match(ubuntuGuestCoreSource, /noHarnessPrerequisiteRepair: true/);
 assert.match(ubuntuGuestCoreSource, /prerequisite-contract-validation/);
 assert.match(ubuntuGuestCoreSource, /minimumNodeMajor: 24/);
-assert.match(ubuntuGuestCoreSource, /pinned to EAI CLI 3[.]15[.]10/);
+assert.match(ubuntuGuestCoreSource, /pinned to EAI CLI 3[.]17[.]0/);
 for (const npmProviderCheck of [
   /validate_npm_provider_values\(\)/,
   /installed_node_package_status=/,
