@@ -42,6 +42,13 @@ if (!git?.installers?.macos?.includes("Command Line Tools") || git.installers.ma
   throw new Error("manifest: macOS Git path must use Command Line Tools without requiring full Xcode");
 }
 const node = manifest.prerequisites.find((item) => item.id === "node");
+if (node?.minimumVersion !== "24") {
+  throw new Error("manifest: Node.js 24 must be the minimum supported runtime");
+}
+const eaiCli = manifest.prerequisites.find((item) => item.id === "eai-cli");
+if (eaiCli?.minimumVersion !== "3.17.0") {
+  throw new Error("manifest: EAI CLI minimum must include the Configurator Plus handoff in 3.17.0");
+}
 const nodeMacInstaller = node?.installers?.macos ?? "";
 const nodeMacUrls = nodeMacInstaller.match(/https:\/\/[^\s]+/g) ?? [];
 const hasOfficialNodeUrl = nodeMacUrls.some((value) => {
@@ -71,7 +78,7 @@ if ((rust.match(/env::var_os\("HOME"\)/g) ?? []).length !== 1 || rust.includes('
 for (const value of ['command.env("HOME", &home)', 'command.env("npm_config_cache", home.join(".eai-setup/npm-cache"))', 'command.env_remove("HOME")', 'command.env_remove("npm_config_cache")']) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter lets a GUI child process inherit an invalid home: ${value}`);
 }
-for (const value of ["MIN_EAI_CLI_VERSION", "@enterpriseai/cli", "eai_cli_version()", "user_npm_global_exec_dirs", "current_version >= MIN_EAI_CLI_VERSION", "fn eai_cli_script", "APPDATA", "run_program_in_directory_with_env(\"node\", &node_args, directory, environment)"] ) {
+for (const value of ["const MIN_EAI_CLI_VERSION: (u64, u64, u64) = (3, 17, 0)", "MIN_NODE_MAJOR_VERSION: u64 = 24", "fn node_version()", "@enterpriseai/cli", "eai_cli_version()", "user_npm_global_exec_dirs", "current_version >= MIN_EAI_CLI_VERSION", "fn eai_cli_script", "APPDATA", "run_program_in_directory_with_env(\"node\", &node_args, directory, environment)"] ) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter does not verify the canonical EAI CLI release: ${value}`);
 }
 if (rust.includes("latest_eai_cli_requirement") || rust.includes('version("npm", &["view", "@enterpriseai/cli"')) {
@@ -503,7 +510,7 @@ if (!styles.includes("prefers-reduced-motion")) {
 console.log("wizard structure checks ok");
 
 const bundles = await readFile(new URL("../.github/workflows/test-bundles.yml", import.meta.url), "utf8");
-for (const value of ["Windows", "macOS", "Ubuntu", "bundle: nsis", "bundle: dmg", "bundle: deb", "actions/upload-artifact@v6", "actions/download-artifact@v5", "tauri-apps/tauri-action@v1", "Smoke-test Windows installer", "Smoke-test macOS disk image", "Smoke-test Ubuntu package"]) {
+for (const value of ["Windows", "macOS", "Ubuntu", "bundle: nsis", "bundle: dmg", "bundle: deb", "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7", "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8", "tauri-apps/tauri-action@944946e3e4cac6603d1fe8f514171e9ecd3c78aa # v1", "Smoke-test Windows installer", "Smoke-test macOS disk image", "Smoke-test Ubuntu package"]) {
   if (!bundles.includes(value)) throw new Error(`test-bundles workflow is missing: ${value}`);
 }
 if (!bundles.includes("$null -ne $LASTEXITCODE")) {
@@ -546,7 +553,7 @@ if (dmgBackground.length < 64 || dmgBackground.readUInt32BE(0) !== 0x89504e47) {
   throw new Error("Tauri DMG background image is missing or invalid");
 }
 const testRelease = await readFile(new URL("../.github/workflows/test-release.yml", import.meta.url), "utf8");
-for (const value of ["workflow_dispatch", "gh release create", "gh release upload", "actions/download-artifact@v5", "tauri-apps/tauri-action@v1", "eai-setup-macos-arm64.dmg", "eai-setup-macos-x64.dmg", "eai-setup-windows-x64.exe", "eai-setup-windows-arm64.exe", "eai-setup-ubuntu-amd64.deb", "eai-setup-ubuntu-arm64.deb", "x86_64-apple-darwin", "aarch64-pc-windows-msvc", "ubuntu-24.04-arm"]) {
+for (const value of ["workflow_dispatch", "gh release create", "gh release upload", "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8", "tauri-apps/tauri-action@944946e3e4cac6603d1fe8f514171e9ecd3c78aa # v1", "eai-setup-macos-arm64.dmg", "eai-setup-macos-x64.dmg", "eai-setup-windows-x64.exe", "eai-setup-windows-arm64.exe", "eai-setup-ubuntu-amd64.deb", "eai-setup-ubuntu-arm64.deb", "x86_64-apple-darwin", "aarch64-pc-windows-msvc", "ubuntu-24.04-arm"]) {
   if (!testRelease.includes(value)) throw new Error(`test-release workflow is missing: ${value}`);
 }
 const release = await readFile(new URL("../.github/workflows/release.yml", import.meta.url), "utf8");
