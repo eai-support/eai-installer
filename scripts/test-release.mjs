@@ -114,7 +114,7 @@ const finalizerRun = spawnSync("bash", ["-c", `
   source "$1"
   guest_test_finalize macos "/fixture/project" "$2" "$3" "$3" "$4"
 `, "guest-finalizer-fixture", guestTestLibrary, finalizerReceipt, finalizerHash, JSON.stringify({
-  git: "fixture", node: "v24.0.0", npm: "11.0.0", eai: "3.17.0",
+  git: "fixture", node: "v24.0.0", npm: "11.0.0", eai: "3.18.0",
 })], {
   cwd: root,
   encoding: "utf8",
@@ -2715,7 +2715,7 @@ const receipt = {
   tenantMatch: "verified",
   tenantIdSha256: digest(process.env.EAI_DEPROVISION_TENANT_ID),
   apiOriginSha256: digest(process.env.EAI_DEPROVISION_API_ORIGIN),
-  eaiVersion: "3.17.0",
+  eaiVersion: "3.18.0",
   planHash: "a".repeat(64),
   ownershipManifestHash: "a".repeat(64),
   deletedRecords: {exactAppEnrollmentMatchesAfter: 0, exactFilteredTotalAfter: 0},
@@ -3139,7 +3139,7 @@ assert.match(ubuntuGuestCoreSource, /Released-product prerequisite defect/);
 assert.match(ubuntuGuestCoreSource, /noHarnessPrerequisiteRepair: true/);
 assert.match(ubuntuGuestCoreSource, /prerequisite-contract-validation/);
 assert.match(ubuntuGuestCoreSource, /minimumNodeMajor: 24/);
-assert.match(ubuntuGuestCoreSource, /pinned to EAI CLI 3[.]17[.]0/);
+assert.match(ubuntuGuestCoreSource, /pinned to EAI CLI 3[.]18[.]0/);
 for (const npmProviderCheck of [
   /validate_npm_provider_values\(\)/,
   /installed_node_package_status=/,

@@ -62,7 +62,7 @@
     {
       "id": "eai-cli",
       "command": "eai",
-      "minimumVersion": "3.17.0",
+      "minimumVersion": "3.18.0",
       "required": true,
       "installers": {
         "all": "npm install --global @enterpriseai/cli"
@@ -86,7 +86,9 @@
       "eai whoami",
       "eai tenant list",
       "eai tenant select <tenant>",
-      "eai init <project-name>"
+      "eai init <project-name>",
+      "eai deploy app <app-key> --target eai --tenant-id <tenant-id> --repo <owner/name> --installation-id <id>",
+      "eai deploy app <app-key> --target eai --tenant-id <tenant-id> --resume <operation-id>"
     ],
     "secrets": "No token, password, client secret, or tenant secret is bundled in the installer.",
     "deviceIdentity": "A random local device identifier may be stored for future activation; it is not hardware fingerprinting and is not transmitted by this repository.",

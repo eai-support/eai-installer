@@ -193,7 +193,7 @@ const fs = require("node:fs");
 const args = process.argv.slice(2);
 const mode = process.env.EAI_V4_FIXTURE_MODE || "success";
 if (args[0] === "--cli-version") {
-  process.stdout.write(mode === "old-cli" ? "3.16.99\\n" : "3.17.0\\n");
+  process.stdout.write(mode === "old-cli" ? "3.17.99\\n" : "3.18.0\\n");
   process.exit(0);
 }
 if (args.includes("--help")) {
@@ -348,7 +348,7 @@ try {
     tenantMatch: "verified",
     tenantIdSha256: crypto.createHash("sha256").update(tenantId).digest("hex"),
     apiOriginSha256: crypto.createHash("sha256").update("https://api.au.myenterprise.ai/public").digest("hex"),
-    eaiVersion: "3.17.0",
+    eaiVersion: "3.18.0",
     planHash: "a".repeat(64),
     ownershipManifestHash: "a".repeat(64),
     deletedRecords: {

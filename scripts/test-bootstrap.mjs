@@ -6,6 +6,8 @@ for (const file of files) {
   if (!text.includes("@enterpriseai/cli")) throw new Error(`${file}: canonical CLI install is missing`);
   if (!text.includes("eai login")) throw new Error(`${file}: login handoff is missing`);
   if (!text.includes("eai init")) throw new Error(`${file}: init handoff is missing`);
+  if (!text.includes("eai deploy app --help")) throw new Error(`${file}: managed deploy capability check is missing`);
+  if (!text.includes("3.18.0") && !text.includes("3, 18, 0")) throw new Error(`${file}: managed deploy minimum version check is missing`);
   if (!text.includes("EAI_SETUP_AUTO_INSTALL") && !text.includes("AutoInstall")) {
     throw new Error(`${file}: explicit install opt-in is missing`);
   }
@@ -22,6 +24,13 @@ for (const value of ["--install-homebrew", "EAI_SETUP_INSTALL_HOMEBREW", "raw.gi
 }
 if (!shell.includes('INSTALL_HOMEBREW="${EAI_SETUP_INSTALL_HOMEBREW:-0}"')) {
   throw new Error("bootstrap.sh: Homebrew installation is not opt-in");
+}
+for (const value of ["eai_version_supported", "eai_managed_deploy_ready", "major == 3 && minor == 18", "eai deploy app --help"]) {
+  if (!shell.includes(value)) throw new Error(`bootstrap.sh: combined EAI CLI readiness is missing: ${value}`);
+}
+const powershell = await readFile(new URL("../scripts/bootstrap.ps1", import.meta.url), "utf8");
+for (const value of ["Has-EaiManagedDeploy", "[version]::new(3, 18, 0)", "eai deploy app --help"]) {
+  if (!powershell.includes(value)) throw new Error(`bootstrap.ps1: combined EAI CLI readiness is missing: ${value}`);
 }
 
 const manifest = JSON.parse(await readFile(new URL("../installer-manifest.json", import.meta.url), "utf8"));
@@ -45,8 +54,16 @@ if (node?.minimumVersion !== "24") {
   throw new Error("manifest: Node.js 24 must be the minimum supported runtime");
 }
 const eaiCli = manifest.prerequisites.find((item) => item.id === "eai-cli");
-if (eaiCli?.minimumVersion !== "3.17.0") {
-  throw new Error("manifest: EAI CLI minimum must include the Configurator Plus handoff in 3.17.0");
+if (eaiCli?.minimumVersion !== "3.18.0") {
+  throw new Error("manifest: EAI CLI minimum must include managed deployment in 3.18.0");
+}
+for (const command of [
+  "eai deploy app <app-key> --target eai --tenant-id <tenant-id> --repo <owner/name> --installation-id <id>",
+  "eai deploy app <app-key> --target eai --tenant-id <tenant-id> --resume <operation-id>",
+]) {
+  if (!manifest.runtime?.userCommands?.includes(command)) {
+    throw new Error(`manifest: missing managed deployment onboarding command: ${command}`);
+  }
 }
 const nodeMacInstaller = node?.installers?.macos ?? "";
 const nodeMacUrls = nodeMacInstaller.match(/https:\/\/[^\s]+/g) ?? [];
@@ -80,7 +97,7 @@ if ((rust.match(/env::var_os\("HOME"\)/g) ?? []).length !== 1 || rust.includes('
 for (const value of ['command.env("HOME", &home)', 'command.env("npm_config_cache", home.join(".eai-setup/npm-cache"))', 'command.env_remove("HOME")', 'command.env_remove("npm_config_cache")']) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter lets a GUI child process inherit an invalid home: ${value}`);
 }
-for (const value of ["const MIN_EAI_CLI_VERSION: (u64, u64, u64) = (3, 17, 0)", "MIN_NODE_MAJOR_VERSION: u64 = 24", "fn node_version()", "@enterpriseai/cli", "eai_cli_version()", "user_npm_global_exec_dirs", "current_version >= MIN_EAI_CLI_VERSION", "fn eai_cli_script", "APPDATA", "run_program_in_directory_with_env(\"node\", &node_args, directory, environment)"] ) {
+for (const value of ["const MIN_EAI_CLI_VERSION: (u64, u64, u64) = (3, 18, 0)", "MIN_NODE_MAJOR_VERSION: u64 = 24", "fn node_version()", "@enterpriseai/cli", "eai_cli_version()", "fn eai_cli_is_compatible", "current_version >= MIN_EAI_CLI_VERSION && has_deploy_app", "run_program(\"eai\", &[\"deploy\", \"app\", \"--help\"])", "user_npm_global_exec_dirs", "fn eai_cli_script", "APPDATA", "run_program_in_directory_with_env(\"node\", &node_args, directory, environment)"] ) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter does not verify the canonical EAI CLI release: ${value}`);
 }
 if (!rust.includes('ToolState { command: "node".to_string(), version: node_version() }')) {
@@ -205,7 +222,7 @@ for (const value of ["EXPECTED_AI_SURFACES", "validate_ai_surface_inventory", '(
 for (const value of ["Homebrew.pkg", "/usr/sbin/pkgutil", "--check-signature", "with administrator privileges", "--stdinpass", "No Terminal window will open"]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing native macOS installation control: ${value}`);
 }
-for (const value of ["windows_package_bin_dirs", "windows_resolved_path", "windows_best_candidate", "windows_node_candidate_is_supported", "env::split_paths", "ProgramW6432", "ProgramFiles(Arm)", "ProgramFiles(x86)", "CREATE_NO_WINDOW", "creation_flags", "APPDATA", "windows_shell_arg", "ComSpec", "ends_with(\".cmd\")", "command_line.push_str", "call {}", "windows_package_install_result", "windows_vc_runtime_version", "Microsoft.VCRedist.2015+", "npm_version", "run_npm_in_directory(&[\"--version\"], None)", "winget_node_action", "\"upgrade\"", "Node.js and npm are already installed and ready.", "installed EAI CLI could not be started."]) {
+for (const value of ["windows_package_bin_dirs", "windows_resolved_path", "windows_best_candidate", "windows_node_candidate_is_supported", "env::split_paths", "ProgramW6432", "ProgramFiles(Arm)", "ProgramFiles(x86)", "CREATE_NO_WINDOW", "creation_flags", "APPDATA", "windows_shell_arg", "ComSpec", "ends_with(\".cmd\")", "command_line.push_str", "call {}", "windows_package_install_result", "windows_vc_runtime_version", "Microsoft.VCRedist.2015+", "npm_version", "run_npm_in_directory(&[\"--version\"], None)", "winget_node_action", "\"upgrade\"", "Node.js and npm are already installed and ready.", "installed EAI CLI is missing the compatible Deploy to EAI command."]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing Windows prerequisite safety support: ${value}`);
 }
 for (const value of ["xcode-select", "full Xcode is not required", "softwareupdate", "latest_command_line_tools_label", "refresh_macos_command_line_tools_catalog", "Refreshing Apple Software Update", "with administrator privileges", "secure administrator dialog", "native administrator install", "latest_node_artifact", "nodejs.org/dist/index.json", "brew_action", "brew install/upgrade", "osx-arm64-pkg", "osx-x64-pkg", "osx-arm64-tar", "osx-x64-tar", "SHASUMS256.txt", "shasum", "uname", "--prefix", "expose_user_npm_bin", "NVM_DIR", "versions/node", "NVM_BIN", "nvm_node_bin_dirs", "macos_package_bin_dirs"]) {

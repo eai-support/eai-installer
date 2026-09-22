@@ -18,6 +18,18 @@ function Require-AutoInstall([string]$Name) {
   }
 }
 
+function Has-EaiManagedDeploy {
+  if (-not (Has-Command "eai")) { return $false }
+  $rawVersion = & eai --version 2>$null | Select-Object -First 1
+  if (-not $rawVersion) { return $false }
+  $versionOutput = ([string]$rawVersion).Trim()
+  if ($versionOutput -notmatch '^v?(\d+)\.(\d+)\.(\d+)') { return $false }
+  $currentVersion = [version]::new([int]$Matches[1], [int]$Matches[2], [int]$Matches[3])
+  if ($currentVersion -lt [version]::new(3, 18, 0)) { return $false }
+  & eai deploy app --help *> $null
+  return $LASTEXITCODE -eq 0
+}
+
 if (-not (Has-Command "git")) {
   Require-AutoInstall "Git"
   if (-not (Has-Command "winget")) { throw "WinGet is unavailable. Install or enable Microsoft's App Installer, then rerun EAI Setup." }
@@ -37,9 +49,13 @@ if (-not (Has-Command "node") -or -not (Has-Command "npm")) {
 $nodeMajor = [int]((node -p "process.versions.node.split('.')[0]").Trim())
 if ($nodeMajor -lt 24) { throw "Node.js 24 or newer is required." }
 
-if (-not (Has-Command "eai")) {
+if (-not (Has-EaiManagedDeploy)) {
   Require-AutoInstall "EAI CLI"
   npm install --global @enterpriseai/cli
+}
+
+if (-not (Has-EaiManagedDeploy)) {
+  throw "EAI CLI 3.18.0 or newer with 'eai deploy app' is required."
 }
 
 Write-Host (git --version)
@@ -58,5 +74,5 @@ if ($ProjectName) {
     try { eai init $ProjectName --current-dir } finally { Pop-Location }
   }
 } else {
-  Write-Host "Next: eai login, eai whoami, then eai init <project-name>."
+  Write-Host "Next: eai login, eai whoami, then eai init <project-name>. Use 'eai deploy app --help' when you are ready to choose hosting."
 }
