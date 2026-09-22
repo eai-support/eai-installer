@@ -1,0 +1,54 @@
+{
+  "schema": "eai.test_coverage_map.v1",
+  "repositories": {
+    "eai-installer": {
+      "intentional_skipped_tests": [],
+      "features": [
+        {
+          "id": "managed-deployment-cli-bootstrap",
+          "description": "Every setup path installs and accepts only an EAI CLI release that exposes the managed app deployment command, then preserves the canonical hosting and exact-operation recovery commands in the installer manifest.",
+          "owned_paths": [
+            ".eai/test-coverage.json",
+            "docs/release-e2e.md",
+            "docs/testing.md",
+            "installer-manifest.json",
+            "package.json",
+            "scripts/bootstrap.sh",
+            "scripts/bootstrap.ps1",
+            "scripts/run-macos-guest-test.sh",
+            "scripts/run-windows-guest-test.sh",
+            "scripts/test-bootstrap.mjs",
+            "scripts/test-release.mjs",
+            "scripts/test-production-release-safeguards.mjs",
+            "scripts/test-ubuntu-guest-test.sh",
+            "scripts/ubuntu-guest-test-core.sh",
+            "src-tauri/src/main.rs",
+            "src-tauri/Cargo.toml",
+            "src-tauri/tauri.conf.json"
+          ],
+          "required_repo_tests": [
+            "scripts/verify-version.mjs",
+            "scripts/verify-manifest.mjs",
+            "scripts/test-bootstrap.mjs",
+            "scripts/test-release.mjs",
+            "scripts/test-production-release-safeguards.mjs"
+          ],
+          "required_ci_checks": [
+            "public-hygiene",
+            "tauri-check"
+          ],
+          "required_cross_service_surfaces": [
+            "eai-cli"
+          ],
+          "required_deployed_contracts": [
+            {
+              "repository": "eai-testing-dev",
+              "path": "tests/cross-service/contracts/eai-cli/eai-managed-deploy.spec.ts"
+            }
+          ],
+          "required_config_checks": []
+        }
+      ]
+    }
+  }
+}

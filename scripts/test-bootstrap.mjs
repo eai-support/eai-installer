@@ -34,6 +34,32 @@ for (const value of ["Has-EaiManagedDeploy", "[version]::new(3, 18, 0)", "eai de
 }
 
 const manifest = JSON.parse(await readFile(new URL("../installer-manifest.json", import.meta.url), "utf8"));
+const coverageMap = JSON.parse(
+  await readFile(new URL("../.eai/test-coverage.json", import.meta.url), "utf8"),
+);
+const managedDeployCoverage = coverageMap.repositories?.["eai-installer"]?.features?.find(
+  (feature) => feature.id === "managed-deployment-cli-bootstrap",
+);
+if (!managedDeployCoverage) {
+  throw new Error("coverage: managed deployment installer ownership is missing");
+}
+for (const ownedPath of [
+  "installer-manifest.json",
+  "scripts/bootstrap.sh",
+  "scripts/bootstrap.ps1",
+  "src-tauri/src/main.rs",
+]) {
+  if (!managedDeployCoverage.owned_paths?.includes(ownedPath)) {
+    throw new Error(`coverage: managed deployment owner is missing ${ownedPath}`);
+  }
+}
+if (!managedDeployCoverage.required_deployed_contracts?.some(
+  (contract) =>
+    contract.repository === "eai-testing-dev" &&
+    contract.path === "tests/cross-service/contracts/eai-cli/eai-managed-deploy.spec.ts",
+)) {
+  throw new Error("coverage: managed deployment deployed contract is missing");
+}
 if (manifest.sources.cliRepository !== "https://github.com/eai-support/eai.git" || manifest.sources.goferRepository !== "https://github.com/eai-support/eai-gofer.git") {
   throw new Error("manifest: CLI and Gofer repositories must use the current public repositories");
 }
@@ -58,8 +84,8 @@ if (eaiCli?.minimumVersion !== "3.18.0") {
   throw new Error("manifest: EAI CLI minimum must include managed deployment in 3.18.0");
 }
 for (const command of [
-  "eai deploy app <app-key> --target eai --tenant-id <tenant-id> --repo <owner/name> --installation-id <id>",
-  "eai deploy app <app-key> --target eai --tenant-id <tenant-id> --resume <operation-id>",
+  "eai deploy app <app-key> --target eai --tenant-id <tenant-id> --target-tenant-id <target-tenant-id> --repo <owner/name> --installation-id <id>",
+  "eai deploy app <app-key> --target eai --tenant-id <tenant-id> --target-tenant-id <target-tenant-id> --resume <operation-id>",
 ]) {
   if (!manifest.runtime?.userCommands?.includes(command)) {
     throw new Error(`manifest: missing managed deployment onboarding command: ${command}`);
