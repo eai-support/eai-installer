@@ -2421,7 +2421,7 @@ assert.match(releaseWorkflow, /name: Build, sign, and verify macOS \(\$\{\{ matr
 assert.match(releaseWorkflow, /codesign --verify --deep --strict/);
 assert.match(releaseWorkflow, /xcrun stapler validate/);
 assert.match(releaseWorkflow, /uses: actions\/upload-artifact@[a-f0-9]{40} # v6/);
-assert.match(releaseWorkflow, /uses: actions\/download-artifact@[a-f0-9]{40} # v5/);
+assert.match(releaseWorkflow, /uses: actions\/download-artifact@[a-f0-9]{40} # v8/);
 assert.match(releaseWorkflow, /name: Publish verified cross-platform draft/);
 assert.match(releaseWorkflow, /LINUX_SIGNING_PRIVATE_KEY/);
 assert.match(releaseWorkflow, /gpg --batch --verify/);
