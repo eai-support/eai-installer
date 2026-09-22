@@ -54,6 +54,7 @@ let selectedCompanyAppKey = null;
 let failedAppTenantId = null;
 let createdProjectDirectory = null;
 let aiSurfaceInventory = null;
+let localIsolationReport = null;
 let selectedAiSurfaceId = null;
 let projectPath = null;
 let initInProgress = false;
@@ -248,6 +249,10 @@ function aiSurfaceReadyDetail(surface) {
   return "; verify the project after opening";
 }
 
+function localIsolationFor(surfaceId) {
+  return localIsolationReport?.assessments?.find((assessment) => assessment.surfaceId === surfaceId) || null;
+}
+
 function updateAiSurfaceControls(surface) {
   if (!surface) {
     if (aiSurfaceNext) aiSurfaceNext.hidden = true;
@@ -255,10 +260,15 @@ function updateAiSurfaceControls(surface) {
     return;
   }
   const copy = aiSurfaceCopy(surface);
-  if (startAiButton) startAiButton.textContent = surface.installed ? `Open ${copy.label}` : `Get ${copy.label}`;
+  const isolation = localIsolationFor(surface.id);
+  const isolationReady = isolation?.status === "ready";
+  if (startAiButton) startAiButton.textContent = !surface.installed ? `Get ${copy.label}` : surface.launchSupport === "launch-only" || isolationReady ? `Open ${copy.label} (non-verified)` : "Local isolation required";
   if (aiSurfaceNext) {
     aiSurfaceNext.hidden = false;
-    aiSurfaceNext.textContent = surface.installed ? copy.ready : copy.notInstalled;
+    aiSurfaceNext.textContent = !surface.installed ? copy.notInstalled
+      : surface.launchSupport === "launch-only" ? `${copy.ready} This opens the app without a local-project handoff.`
+      : isolationReady ? `${copy.ready} This opens the normal workspace only; Gofer starts verified work in its own isolated task workspace.`
+      : isolation?.reason || "Local isolation readiness must be checked before this workspace can start.";
   }
 }
 
@@ -1054,17 +1064,18 @@ function renderAiSurfaces() {
     const name = document.createElement("strong");
     name.textContent = aiSurfaceCopy(surface).label;
     const detail = document.createElement("small");
+    const isolation = localIsolationFor(surface.id);
     detail.textContent = surface.installed
-      ? `${surface.provider} · Ready${aiSurfaceReadyDetail(surface)}`
+      ? `${surface.provider} · ${surface.launchSupport === "launch-only" ? "App-only opening" : isolation?.status === "ready" ? "Local isolation ready" : isolation ? `Local isolation: ${isolation.status}` : "Local isolation needs checking"}`
       : `${surface.provider} · Not installed`;
     copy.append(name, detail);
     const badge = document.createElement("span");
     badge.className = "surface-badge";
-    const { element: harveyBall, recommendation } = createHarveyBall(surface);
+    const { element: harveyBall } = createHarveyBall(surface);
     const badgeText = document.createElement("span");
-    badgeText.textContent = recommendation.score === recommendation.maximum
-      ? "Recommended"
-      : surface.installed ? "Ready" : "Official download";
+    badgeText.textContent = !surface.installed ? "Official download"
+      : surface.launchSupport === "launch-only" ? "App only"
+      : isolation?.status === "ready" ? "Ready" : "Setup needed";
     badge.append(harveyBall, badgeText);
     row.append(input, copy, badge);
     aiSurfaceOptions.append(row);
@@ -1077,7 +1088,7 @@ function renderAiSurfaces() {
   updateAiSurfaceControls(selected);
   const readyCount = aiSurfaceInventory.surfaces.filter((surface) => surface.installed).length;
   aiSurfaceStatus.innerHTML = readyCount
-    ? `<strong>${readyCount} AI workspace${readyCount === 1 ? " is" : "s are"} ready</strong><p>Choose one below. EAI will open it and explain its project support.</p>`
+    ? `<strong>${readyCount} AI workspace${readyCount === 1 ? " is" : "s are"} installed</strong><p>Choose one below. EAI will show whether local isolation allows it to open.</p>`
     : "<strong>Choose an AI workspace</strong><p>Google Antigravity 2.0, GitHub Copilot, Claude, Codex, and Grok Build can work with your EAI project. Install one only if you need it.</p>";
 }
 
@@ -1089,6 +1100,7 @@ recommendationDialog?.addEventListener("click", (event) => {
 
 async function loadAiSurfaces() {
   if (!createdProjectDirectory) return false;
+  localIsolationReport = null;
   try {
     aiSurfaceInventory = await invoke("detect_ai_surfaces", { directory: createdProjectDirectory });
     if (aiSurfaceInventory.demo) {
@@ -1110,9 +1122,14 @@ async function loadAiSurfaces() {
         ],
       };
     }
+    try {
+      localIsolationReport = await invoke("check_local_isolation", { directory: createdProjectDirectory });
+    } catch (error) {
+      showOutput("Local isolation check needs attention.", String(error));
+    }
     renderAiSurfaces();
     const readyCount = aiSurfaceInventory.surfaces.filter((surface) => surface.installed).length;
-    setJourneyStage("ai", "active", readyCount ? `${readyCount} AI workspace${readyCount === 1 ? " is" : "s are"} ready to open.` : "Choose an AI workspace to install.");
+    setJourneyStage("ai", "active", readyCount ? `${readyCount} AI workspace${readyCount === 1 ? " is" : "s are"} installed. Local isolation controls which can open.` : "Choose an AI workspace to install.");
     return true;
   } catch (error) {
     aiSurfaceStatus.innerHTML = "<strong>AI workspace check needs attention</strong><p>You can close setup and run <code>eai start</code> from the project folder.</p>";
@@ -1129,8 +1146,13 @@ async function refreshAiSurfaces() {
   try {
     const refreshed = await loadAiSurfaces();
     if (refreshed) {
-      showOutput("AI workspace check complete.", "Choose Open or Get for the workspace you want to use.");
-      setActivity("AI workspace check complete", "The list above reflects the apps and commands currently available on this computer.", 100, false, "", "Ready");
+      const canOpen = aiSurfaceInventory?.surfaces.some((surface) => surface.installed
+        && (surface.launchSupport === "launch-only" || localIsolationFor(surface.id)?.status === "ready"));
+      const detail = canOpen
+        ? "Choose Open for a ready workspace, or Get an official download."
+        : "Installed project workspaces remain blocked until local isolation is ready. Official downloads remain available.";
+      showOutput("AI workspace check complete.", detail);
+      setActivity("AI workspace check complete", detail, 100, false, "", "Ready");
     }
   } finally {
     refreshAiButton.disabled = false;
@@ -1145,7 +1167,15 @@ async function startAiSurface() {
   }
   startAiButton.disabled = true;
   const copy = aiSurfaceCopy(surface);
-  setActivity(surface.installed ? `Opening ${copy.label}` : `Opening ${copy.label} download`, surface.installed ? copy.ready : copy.notInstalled, null, true, "", "Opening");
+  const isolation = localIsolationFor(surface.id);
+  if (surface.installed && surface.launchSupport !== "launch-only" && isolation?.status !== "ready") {
+    const detail = isolation?.reason || "Local isolation readiness is unavailable.";
+    showOutput("Local isolation needs attention.", detail);
+    setJourneyStage("ai", "error", detail);
+    startAiButton.disabled = false;
+    return;
+  }
+  setActivity(surface.installed ? `Opening ${copy.label}` : `Opening ${copy.label} download`, surface.installed ? `${copy.ready} This is not a verified task run.` : copy.notInstalled, null, true, "", "Opening");
   try {
     if (!surface.installed) {
       await invoke("install_ai_surface", { surfaceId: surface.id });
@@ -1156,9 +1186,9 @@ async function startAiSurface() {
     }
     const result = await invoke("start_ai_surface", { directory: createdProjectDirectory, surfaceId: surface.id });
     setActivity(`${copy.label} opened`, copy.ready, 100, false, "", "Ready");
-    completeMessage.textContent = EAIWizard.aiSurfaceCompletionMessage(surface, copy.label);
-    startAiButton.textContent = `Open ${copy.label} again`;
-    showOutput(`${copy.label} opened.`, copy.ready);
+    completeMessage.textContent = `${EAIWizard.aiSurfaceCompletionMessage(surface, copy.label)} This is a normal, non-verified workspace handoff.`;
+    startAiButton.textContent = `Open ${copy.label} again (non-verified)`;
+    showOutput(`${copy.label} opened.`, `${copy.ready} This normal workspace handoff is not a verified task run; Gofer creates the sandboxed task workspace when verification is required.`);
     const journeyDetail = surface.launchSupport === "launch-only"
       ? `${copy.label} opened without a local-project handoff.`
       : surface.launchSupport === "manual-project"

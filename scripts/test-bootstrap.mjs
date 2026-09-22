@@ -114,8 +114,11 @@ if (!windowsManifest.includes('name="Microsoft.Windows.Common-Controls"') || !wi
 for (const step of ["homebrew", "git", "node", "eai-cli", "login", "init", "start"]) {
   if (!rust.includes(`\"${step}\"`)) throw new Error(`Tauri adapter is missing ${step}`);
 }
-for (const value of ["detect_ai_surfaces", "start_ai_surface", "install_ai_surface", "AiSurfaceInventory", "eai", "start", "--check"]) {
+for (const value of ["detect_ai_surfaces", "check_local_isolation", "start_ai_surface", "install_ai_surface", "AiSurfaceInventory", "LocalIsolationReport", "eai", "start", "--check", "--isolation-check", "eai.local-isolation/v2", "host_arguments", "prerequisites", "cloud_execution"]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing AI workspace handoff: ${value}`);
+}
+for (const value of ["validate_local_isolation_report", "fs::canonicalize(directory)", "exit_success != all_ready", "local_isolation_ready_for_surface(&isolation, &surface_id)", "surface.launch_support != \"launch-only\""]) {
+  if (!rust.includes(value)) throw new Error(`Tauri adapter is missing local isolation validation: ${value}`);
 }
 if (!rust.includes("at position {}; expected '{}' ({})")) {
   throw new Error("Tauri adapter AI inventory mismatch does not report expected and observed surface details");
@@ -193,8 +196,8 @@ if (initInvoke < 0 || appCreatedAssignment < initInvoke || creationCheckpoint < 
 if (!rust.includes('inventory.contract_version != "eai.ai-surfaces/v2"')) {
   throw new Error("Tauri adapter does not enforce the versioned AI surface contract");
 }
-if ((rust.match(/"--contract-version", "v2"/g) ?? []).length !== 3) {
-  throw new Error("Tauri adapter does not explicitly negotiate the EAI AI surface v2 contract for detect, launch, and install");
+if ((rust.match(/"--contract-version", "v2"/g) ?? []).length !== 4) {
+  throw new Error("Tauri adapter does not explicitly negotiate the EAI v2 contracts for detect, isolation, launch, and install");
 }
 if (!rust.includes("capabilities: Vec<String>")) {
   throw new Error("Tauri adapter drops AI workspace v2 capability metadata");
@@ -319,8 +322,11 @@ if (app.includes("initialComputerCheck")) throw new Error("wizard: repeat comput
 if (!app.includes("setActivity") || !app.includes("Installation complete") || !app.includes("listenForBootstrapProgress") || !app.includes("eventApi.listen") || !app.includes("setDetectionState") || !app.includes("phaseForTitle") || !app.includes("async function startSetup") || !app.includes("window.setTimeout(() => startSetup(), 250)") || !app.includes("setStep(4)") || !app.includes("async function runSignup") || !app.includes("open_signup") || !app.includes("dialog.open") || !app.includes("choose-folder") || !app.includes("get_company_tenants") || !app.includes("get_company_apps") || !app.includes("loadCompanyApps") || !app.includes("describeWorkspaceFailure") || !app.includes("companyTenantId") || !app.includes("appKey") || !app.includes("renderCompanyApps") || !app.includes("open_project") || !app.includes("projectPath") || !app.includes("initInProgress") || !app.includes("setInitButtonBusy") || !app.includes("aria-busy") || !app.includes("describeInitFailure") || !app.includes('showOutput(failure.title, `${failure.detail} Next: ${failure.next}`)')) {
   throw new Error("wizard: live activity status updates are missing");
 }
-for (const value of ["loadAiSurfaces", "renderAiSurfaces", "startAiSurface", "refreshAiSurfaces", "updateAiSurfaceControls", "createHarveyBall", "aiSurfaceRecommendation", "aiSurfaceCompletionMessage", "showModal", "aiSurfaceGuidance", "GitHub Copilot app", "GitHub Copilot CLI", "Google Antigravity 2.0", "Antigravity CLI (agy)", "Claude Desktop", "Claude Code", "ChatGPT desktop (Codex)", "Codex CLI", "Grok Bot", "Grok Build", "copilot-desktop", "copilot-cli", "antigravity-desktop", "antigravity-cli", "claude-desktop", "claude-cli", "codex-desktop", "codex-cli", "grok-bot", "grok-cli", "detect_ai_surfaces", "start_ai_surface", "install_ai_surface"]) {
+for (const value of ["loadAiSurfaces", "renderAiSurfaces", "startAiSurface", "refreshAiSurfaces", "updateAiSurfaceControls", "localIsolationFor", "localIsolationReport", "createHarveyBall", "aiSurfaceRecommendation", "aiSurfaceCompletionMessage", "showModal", "aiSurfaceGuidance", "GitHub Copilot app", "GitHub Copilot CLI", "Google Antigravity 2.0", "Antigravity CLI (agy)", "Claude Desktop", "Claude Code", "ChatGPT desktop (Codex)", "Codex CLI", "Grok Bot", "Grok Build", "copilot-desktop", "copilot-cli", "antigravity-desktop", "antigravity-cli", "claude-desktop", "claude-cli", "codex-desktop", "codex-cli", "grok-bot", "grok-cli", "detect_ai_surfaces", "check_local_isolation", "start_ai_surface", "install_ai_surface"]) {
   if (!app.includes(value)) throw new Error(`wizard: AI workspace behavior is missing ${value}`);
+}
+for (const value of ["localIsolationReport = null", "Local isolation required", "normal, non-verified workspace handoff", "surface.launchSupport !== \"launch-only\"", "Setup needed"]) {
+  if (!app.includes(value)) throw new Error(`wizard: isolation failure handling is missing ${value}`);
 }
 if (app.includes("agy -i") || app.includes("receives the EAI first request automatically")) {
   throw new Error("wizard: Antigravity CLI must use a bare interactive handoff without claiming automatic prompt delivery");
