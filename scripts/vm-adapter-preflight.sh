@@ -34,8 +34,12 @@ vm_info="$("$prlctl_bin" list "$vm_name" --info 2>/dev/null)" \
   || fail "the configured VM is not available."
 grep -Fqx "Name: $vm_name" <<<"$vm_info" \
   || fail "Parallels returned information for a different VM."
-grep -Fqx "GuestTools: state=installed version=$(sed -n 's/^GuestTools: state=installed version=//p' <<<"$vm_info" | head -n 1)" <<<"$vm_info" \
-  || fail "Parallels Tools are not reported as installed."
+guest_tools_state="$(sed -n 's/^GuestTools: state=\([^ ]*\) version=.*/\1/p' <<<"$vm_info" | head -n 1)"
+case "$platform:$guest_tools_state" in
+  macos:installed|windows:installed|ubuntu:installed|windows:outdated|ubuntu:outdated) ;;
+  macos:*) fail "The macOS guest requires current Parallels Tools for UI control." ;;
+  *) fail "Parallels Tools are unavailable in this guest." ;;
+esac
 grep -Fq "BIOS type: efi-arm64" <<<"$vm_info" \
   || fail "the configured VM is not ARM64."
 
@@ -50,4 +54,4 @@ snapshot_list="$("$prlctl_bin" snapshot-list "$vm_name" 2>/dev/null)" \
 grep -Fq "{$snapshot_id}" <<<"$snapshot_list" \
   || fail "the configured reset snapshot is not available for this VM."
 
-printf '{"schemaVersion":"eai.vm-adapter-preflight.v1","status":"ready","platform":"%s","architecture":"arm64","vm":"verified","snapshot":"verified","parallelsTools":"installed","mutationAttempted":false}\n' "$platform"
+printf '{"schemaVersion":"eai.vm-adapter-preflight.v1","status":"ready","platform":"%s","architecture":"arm64","vm":"verified","snapshot":"verified","parallelsTools":"%s","mutationAttempted":false}\n' "$platform" "$guest_tools_state"

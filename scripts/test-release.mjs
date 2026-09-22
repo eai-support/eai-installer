@@ -3081,6 +3081,8 @@ assert.match(vmAdapterPreflightSource, /"\$prlctl_bin" list "\$vm_name" --info/)
 assert.match(vmAdapterPreflightSource, /"\$prlctl_bin" snapshot-list "\$vm_name"/);
 assert.match(vmAdapterPreflightSource, /"schemaVersion":"eai\.vm-adapter-preflight\.v1"/);
 assert.match(vmAdapterPreflightSource, /"mutationAttempted":false/);
+assert.match(vmAdapterPreflightSource, /windows:outdated\|ubuntu:outdated/);
+assert.match(vmAdapterPreflightSource, /macos:\*\) fail "The macOS guest requires current Parallels Tools for UI control/);
 assert.doesNotMatch(vmAdapterPreflightSource, /\$prlctl_bin (?:start|stop|snapshot-switch|exec)/);
 for (const [index, adapter] of guestAdapters.entries()) {
   const source = fs.readFileSync(adapter, "utf8");
