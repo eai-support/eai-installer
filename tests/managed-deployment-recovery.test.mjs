@@ -3,7 +3,8 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
 
-const source = await readFile(new URL("../ui/app.js", import.meta.url), "utf8");
+const source = (await readFile(new URL("../ui/app.js", import.meta.url), "utf8"))
+  .replace(/\r\n/g, "\n");
 const readinessStart = source.indexOf("async function runReadiness() {");
 const readinessEnd = source.indexOf("\n}\n\n/**\n * One prerequisite.", readinessStart) + 2;
 assert(
