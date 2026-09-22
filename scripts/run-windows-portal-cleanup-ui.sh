@@ -220,7 +220,7 @@ else
   [[ -f "$input_helper" && ! -L "$input_helper" ]] || fail "The Parallels input helper is missing or unsafe."
 fi
 
-status_output="$($prlctl_bin status "$vm_name" 2>/dev/null || true)"
+status_output="$("$prlctl_bin" status "$vm_name" 2>/dev/null || true)"
 [[ "$status_output" == *running* ]] || fail "The exact Windows VM must already be running."
 unset status_output
 
