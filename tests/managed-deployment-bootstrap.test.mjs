@@ -33,23 +33,26 @@ async function createBootstrapHarness({ version, deployReady }) {
   );
   await writeExecutable(
     join(bin, "eai"),
-    `if [ "\${1:-}" = "--version" ]; then echo "${version}"; exit 0; fi
+    `printf "%s\\n" "$*" >> "$EAI_TEST_EAI_LOG"
+if [ "\${1:-}" = "--version" ]; then echo "${version}"; exit 0; fi
 if [ "\${1:-}" = "deploy" ] && [ "\${2:-}" = "app" ] && [ "\${3:-}" = "--help" ]; then exit ${deployReady ? 0 : 7}; fi
 exit 1`,
   );
 
   const npmLog = join(root, "npm.log");
+  const eaiLog = join(root, "eai.log");
   const run = spawnSync("/bin/bash", [bootstrapPath], {
     cwd: repositoryRoot,
     encoding: "utf8",
     env: {
       ...process.env,
       EAI_SETUP_AUTO_INSTALL: "0",
+      EAI_TEST_EAI_LOG: eaiLog,
       EAI_TEST_NPM_LOG: npmLog,
       PATH: `${bin}:/usr/bin:/bin`,
     },
   });
-  return { root, npmLog, run };
+  return { root, eaiLog, npmLog, run };
 }
 
 test("accepts the minimum CLI only when managed deployment is executable", async () => {
@@ -59,6 +62,10 @@ test("accepts the minimum CLI only when managed deployment is executable", async
     assert.match(harness.run.stdout, /EAI CLI: 3\.18\.0/);
     assert.match(harness.run.stdout, /Use 'eai deploy app --help' when you are ready to choose hosting/);
     await assert.rejects(readFile(harness.npmLog, "utf8"), { code: "ENOENT" });
+    assert.deepEqual((await readFile(harness.eaiLog, "utf8")).trim().split("\n"), [
+      "--version",
+      "deploy app --help",
+    ]);
   } finally {
     await rm(harness.root, { recursive: true, force: true });
   }

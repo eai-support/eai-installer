@@ -39,9 +39,11 @@ case "$(uname -s)" in
 esac
 
 has() { command -v "$1" >/dev/null 2>&1; }
+EAI_CLI_VERSION=""
 eai_version_supported() {
   local current=""
   current="$(eai --version 2>/dev/null)" || return 1
+  EAI_CLI_VERSION="$current"
   [[ "$current" =~ ^v?([0-9]+)[.]([0-9]+)[.]([0-9]+) ]] || return 1
   local major="${BASH_REMATCH[1]}"
   local minor="${BASH_REMATCH[2]}"
@@ -119,20 +121,24 @@ if ! has node || ! has npm; then echo "Node.js and npm are required after instal
 NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]')"
 if [ "$NODE_MAJOR" -lt 24 ]; then echo "Node.js 24 or newer is required; found $(node --version)." >&2; exit 1; fi
 
-if ! eai_managed_deploy_ready || [ "$AUTO_INSTALL" = "1" ]; then
+EAI_MANAGED_DEPLOY_READY=0
+if eai_managed_deploy_ready; then EAI_MANAGED_DEPLOY_READY=1; fi
+if [ "$EAI_MANAGED_DEPLOY_READY" != "1" ] || [ "$AUTO_INSTALL" = "1" ]; then
   require_auto_install eai
   npm install --global @enterpriseai/cli
+  EAI_MANAGED_DEPLOY_READY=0
+  if eai_managed_deploy_ready; then EAI_MANAGED_DEPLOY_READY=1; fi
 fi
 
-eai_managed_deploy_ready || {
+if [ "$EAI_MANAGED_DEPLOY_READY" != "1" ]; then
   echo "EAI CLI 3.18.0 or newer with 'eai deploy app' is required." >&2
   exit 1
-}
+fi
 
 echo "Git: $(git --version)"
 echo "Node: $(node --version)"
 echo "npm: $(npm --version)"
-echo "EAI CLI: $(eai --version)"
+echo "EAI CLI: $EAI_CLI_VERSION"
 
 if [ -n "$PROJECT_NAME" ]; then
   case "$PROJECT_NAME" in

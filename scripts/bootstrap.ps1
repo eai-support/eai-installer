@@ -7,6 +7,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$script:EaiCliVersion = $null
 
 function Has-Command([string]$Name) {
   return $null -ne (Get-Command $Name -ErrorAction SilentlyContinue)
@@ -23,6 +24,7 @@ function Has-EaiManagedDeploy {
   $rawVersion = & eai --version 2>$null | Select-Object -First 1
   if (-not $rawVersion) { return $false }
   $versionOutput = ([string]$rawVersion).Trim()
+  $script:EaiCliVersion = $versionOutput
   if ($versionOutput -notmatch '^v?(\d+)\.(\d+)\.(\d+)') { return $false }
   $currentVersion = [version]::new([int]$Matches[1], [int]$Matches[2], [int]$Matches[3])
   if ($currentVersion -lt [version]::new(3, 18, 0)) { return $false }
@@ -49,19 +51,21 @@ if (-not (Has-Command "node") -or -not (Has-Command "npm")) {
 $nodeMajor = [int]((node -p "process.versions.node.split('.')[0]").Trim())
 if ($nodeMajor -lt 24) { throw "Node.js 24 or newer is required." }
 
-if (-not (Has-EaiManagedDeploy)) {
+$eaiManagedDeployReady = Has-EaiManagedDeploy
+if (-not $eaiManagedDeployReady) {
   Require-AutoInstall "EAI CLI"
   npm install --global @enterpriseai/cli
+  $eaiManagedDeployReady = Has-EaiManagedDeploy
 }
 
-if (-not (Has-EaiManagedDeploy)) {
+if (-not $eaiManagedDeployReady) {
   throw "EAI CLI 3.18.0 or newer with 'eai deploy app' is required."
 }
 
 Write-Host (git --version)
 Write-Host (node --version)
 Write-Host (npm --version)
-Write-Host (eai --version)
+Write-Host $script:EaiCliVersion
 
 if ($ProjectName) {
   if ($ProjectName -notmatch '^[a-z0-9]+(?:-[a-z0-9]+)*$') { throw "Project name must be kebab-case." }
