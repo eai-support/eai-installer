@@ -454,7 +454,7 @@ if (!styles.includes(".setup-stage summary::marker") || !styles.includes(".activ
 console.log("wizard structure checks ok");
 
 const bundles = await readFile(new URL("../.github/workflows/test-bundles.yml", import.meta.url), "utf8");
-for (const value of ["Windows", "macOS", "Ubuntu", "bundle: nsis", "bundle: dmg", "bundle: deb", "actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6", "actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5", "tauri-apps/tauri-action@944946e3e4cac6603d1fe8f514171e9ecd3c78aa # v1", "Smoke-test Windows installer", "Smoke-test macOS disk image", "Smoke-test Ubuntu package"]) {
+for (const value of ["Windows", "macOS", "Ubuntu", "bundle: nsis", "bundle: dmg", "bundle: deb", "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7", "actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5", "tauri-apps/tauri-action@944946e3e4cac6603d1fe8f514171e9ecd3c78aa # v1", "Smoke-test Windows installer", "Smoke-test macOS disk image", "Smoke-test Ubuntu package"]) {
   if (!bundles.includes(value)) throw new Error(`test-bundles workflow is missing: ${value}`);
 }
 if (!bundles.includes("$null -ne $LASTEXITCODE")) {
