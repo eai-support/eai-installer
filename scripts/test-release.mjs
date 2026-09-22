@@ -3139,7 +3139,7 @@ assert.match(ubuntuGuestCoreSource, /Released-product prerequisite defect/);
 assert.match(ubuntuGuestCoreSource, /noHarnessPrerequisiteRepair: true/);
 assert.match(ubuntuGuestCoreSource, /prerequisite-contract-validation/);
 assert.match(ubuntuGuestCoreSource, /minimumNodeMajor: 24/);
-assert.match(ubuntuGuestCoreSource, /pinned to EAI CLI 3[.]15[.]10/);
+assert.match(ubuntuGuestCoreSource, /pinned to EAI CLI 3[.]17[.]0/);
 for (const npmProviderCheck of [
   /validate_npm_provider_values\(\)/,
   /installed_node_package_status=/,
