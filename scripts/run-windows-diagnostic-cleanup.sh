@@ -787,7 +787,7 @@ fi
 [[ -n "$prlctl_bin" && -x "$prlctl_bin" ]] || fail "prlctl is unavailable."
 [[ -x "$login_command" ]] || fail "The Windows protected-login command is unavailable."
 [[ -f "$ps_helper" && ! -L "$ps_helper" ]] || fail "The Windows cleanup PowerShell helper is missing or unsafe."
-status_output="$($prlctl_bin status "$vm_name" 2>/dev/null || true)"
+status_output="$("$prlctl_bin" status "$vm_name" 2>/dev/null || true)"
 [[ "$status_output" == *running* ]] || fail "The exact Windows VM must still be running; do not restore it before cleanup."
 
 fresh_auth_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
