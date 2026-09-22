@@ -411,7 +411,7 @@ if (!styles.includes(".setup-stage summary::marker") || !styles.includes(".activ
 console.log("wizard structure checks ok");
 
 const bundles = await readFile(new URL("../.github/workflows/test-bundles.yml", import.meta.url), "utf8");
-for (const value of ["Windows", "macOS", "Ubuntu", "bundle: nsis", "bundle: dmg", "bundle: deb", "actions/upload-artifact@v6", "actions/download-artifact@v5", "tauri-apps/tauri-action@v1", "Smoke-test Windows installer", "Smoke-test macOS disk image", "Smoke-test Ubuntu package"]) {
+for (const value of ["Windows", "macOS", "Ubuntu", "bundle: nsis", "bundle: dmg", "bundle: deb", "actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6", "actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5", "tauri-apps/tauri-action@944946e3e4cac6603d1fe8f514171e9ecd3c78aa # v1", "Smoke-test Windows installer", "Smoke-test macOS disk image", "Smoke-test Ubuntu package"]) {
   if (!bundles.includes(value)) throw new Error(`test-bundles workflow is missing: ${value}`);
 }
 if (!bundles.includes("$null -ne $LASTEXITCODE")) {
@@ -457,7 +457,7 @@ if (dmgBackground.length < 64 || dmgBackground.readUInt32BE(0) !== 0x89504e47) {
   throw new Error("Tauri DMG background image is missing or invalid");
 }
 const testRelease = await readFile(new URL("../.github/workflows/test-release.yml", import.meta.url), "utf8");
-for (const value of ["workflow_dispatch", "gh release create", "gh release upload", "actions/download-artifact@v5", "tauri-apps/tauri-action@v1", "eai-setup-macos-arm64.dmg", "eai-setup-macos-x64.dmg", "eai-setup-windows-x64.exe", "eai-setup-windows-arm64.exe", "eai-setup-ubuntu-amd64.deb", "eai-setup-ubuntu-arm64.deb", "x86_64-apple-darwin", "aarch64-pc-windows-msvc", "ubuntu-24.04-arm"]) {
+for (const value of ["workflow_dispatch", "gh release create", "gh release upload", "actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5", "tauri-apps/tauri-action@944946e3e4cac6603d1fe8f514171e9ecd3c78aa # v1", "eai-setup-macos-arm64.dmg", "eai-setup-macos-x64.dmg", "eai-setup-windows-x64.exe", "eai-setup-windows-arm64.exe", "eai-setup-ubuntu-amd64.deb", "eai-setup-ubuntu-arm64.deb", "x86_64-apple-darwin", "aarch64-pc-windows-msvc", "ubuntu-24.04-arm"]) {
   if (!testRelease.includes(value)) throw new Error(`test-release workflow is missing: ${value}`);
 }
 const release = await readFile(new URL("../.github/workflows/release.yml", import.meta.url), "utf8");
