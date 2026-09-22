@@ -23,6 +23,10 @@
             "scripts/test-ubuntu-guest-test.sh",
             "scripts/ubuntu-guest-test-core.sh",
             "tests/managed-deployment-bootstrap.test.mjs",
+            "tests/managed-deployment-recovery.test.mjs",
+            "scripts/preview-managed-deploy.mjs",
+            "ui/app.js",
+            ".specify-pro/specs/3503-eai-managed-deploy/**",
             "src-tauri/src/main.rs",
             "src-tauri/Cargo.toml",
             "src-tauri/tauri.conf.json"
@@ -32,6 +36,7 @@
             "scripts/verify-manifest.mjs",
             "scripts/test-bootstrap.mjs",
             "tests/managed-deployment-bootstrap.test.mjs",
+            "tests/managed-deployment-recovery.test.mjs",
             "scripts/test-release.mjs",
             "scripts/test-production-release-safeguards.mjs"
           ],

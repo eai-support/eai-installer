@@ -609,9 +609,9 @@ async function installPrerequisites() {
       if (retryInstall) retryInstall.hidden = false;
       return false;
     }
-    setJourneyStage(step, "done", `${name} is ready.`);
     await detect();
     setActivity(`${name} installed`, "Continuing setup.", Math.round(((index + 1) / steps.length) * 100), true, formatEta(Math.max(0, steps.slice(index + 1).reduce((total, item) => total + stepEstimates[item], 0))));
+    setJourneyStage(step, "done", `${name} is ready.`);
   }
   if (environmentReport) setToolState(environmentReport);
   if (wizard.prerequisitesReady) {
@@ -1179,7 +1179,14 @@ async function startAiSurface() {
 async function runAction(action) {
   if (action === "start") return startSetup();
   if (action === "detect") return detect();
-  if (action === "install-all") return installPrerequisites();
+  if (action === "install-all") {
+    const ready = await installPrerequisites();
+    if (ready) {
+      setStep(3);
+      if (e2eConfig) await runE2eFlow();
+    }
+    return ready;
+  }
   if (action === "login") return runLogin();
   if (action === "retry-workspaces") {
     const retryingApps = Boolean(failedAppTenantId);
