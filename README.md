@@ -10,7 +10,7 @@ hands control to the normal EAI CLI flow.
 2. Installs only the minimal missing developer tools. On macOS, Git uses
    Apple's Command Line Tools (not full Xcode), and Node.js uses an existing
    NVM/Homebrew installation when available or the official checksum-verified
-   Node.js LTS archive in a user-local directory. Homebrew is optional rather than an EAI
+   Node.js 24 LTS archive in a user-local directory. Homebrew is optional rather than an EAI
    prerequisite, so an old Homebrew installation cannot block setup.
 3. Uses native permission prompts where required. Windows, macOS, and Linux
    keep the progress status in the EAI Setup window rather than exposing a
@@ -32,12 +32,14 @@ hands control to the normal EAI CLI flow.
    files. It remembers the last successfully opened workspace and recommends
    GitHub Copilot in VS Code when the user needs to choose one. The GitHub
    Copilot app, Copilot CLI, and Copilot in VS Code are shown as separate
-   choices.
+   choices. Google's current Antigravity 2.0 desktop app and `agy` CLI are also
+   checked separately; Gemini desktop/CLI is not offered as the Google default.
 9. After one clear provider-access confirmation, opens the project in GitHub
-   Copilot, Claude, Codex, or Grok with an EAI first request prepared where the
-   provider supports it. The desktop Copilot app explains that the user must
-   sign in and connect the local folder. Copilot CLI is the headless/terminal
-   option, but its first use still requires GitHub sign-in. If a workspace is
+   Copilot, Google Antigravity 2.0, Claude, Codex, or Grok Build with an EAI first
+   request prepared where the provider supports it. Desktop apps explain when
+   the user must sign in or connect the local folder. The official cross-platform
+   Grok Bot desktop client is included as a launch-only cloud Bot surface and is
+   not presented as a local-project replacement for Grok Build. If a workspace is
    missing, the installer opens only that provider's fixed official page and
    provides a **Check again** action after installation.
 10. Shows a four-quarter Harvey ball beside every AI workspace. The score

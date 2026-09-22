@@ -6,6 +6,10 @@ use std::env;
 use std::fs;
 use std::fs::OpenOptions;
 use std::io::{BufRead, BufReader, Read, Write};
+#[cfg(unix)]
+use std::os::unix::fs::OpenOptionsExt;
+#[cfg(target_os = "windows")]
+use std::os::windows::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 #[cfg(target_os = "windows")]
@@ -86,6 +90,7 @@ struct AiSurface {
     kind: String,
     install_url: String,
     launch_support: String,
+    capabilities: Vec<String>,
     installed: bool,
     recommended: bool,
     previously_used: bool,
@@ -102,6 +107,65 @@ struct AiSurfaceInventory {
     preferred_surface: Option<String>,
     recommended_surface: Option<String>,
     surfaces: Vec<AiSurface>,
+}
+
+const EXPECTED_AI_SURFACES: [(&str, &str); 11] = [
+    ("vscode-copilot", "editor"),
+    ("copilot-desktop", "desktop"),
+    ("antigravity-desktop", "desktop"),
+    ("claude-desktop", "desktop"),
+    ("codex-desktop", "desktop"),
+    ("grok-bot", "desktop"),
+    ("copilot-cli", "cli"),
+    ("antigravity-cli", "cli"),
+    ("claude-cli", "cli"),
+    ("codex-cli", "cli"),
+    ("grok-cli", "cli"),
+];
+
+fn validate_ai_surface_inventory(inventory: &AiSurfaceInventory) -> Result<(), String> {
+    if inventory.surfaces.len() != EXPECTED_AI_SURFACES.len() {
+        return Err(format!(
+            "EAI returned {} AI workspaces; this setup release requires exactly {}.",
+            inventory.surfaces.len(),
+            EXPECTED_AI_SURFACES.len()
+        ));
+    }
+
+    for (index, (surface, (expected_id, expected_kind))) in inventory
+        .surfaces
+        .iter()
+        .zip(EXPECTED_AI_SURFACES.iter())
+        .enumerate()
+    {
+        if surface.id != *expected_id || surface.kind != *expected_kind {
+            return Err(format!(
+                "EAI returned AI workspace '{}' ({}) at position {}; expected '{}' ({}).",
+                surface.id,
+                surface.kind,
+                index + 1,
+                expected_id,
+                expected_kind
+            ));
+        }
+    }
+
+    for selected_id in [
+        inventory.preferred_surface.as_deref(),
+        inventory.recommended_surface.as_deref(),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        if !EXPECTED_AI_SURFACES
+            .iter()
+            .any(|(expected_id, _)| *expected_id == selected_id)
+        {
+            return Err("EAI returned an unknown selected AI workspace.".to_string());
+        }
+    }
+
+    Ok(())
 }
 
 #[derive(Deserialize, Serialize)]
@@ -133,7 +197,8 @@ const EAI_SIGNUP_URL: &str = "https://www.enterpriseaigroup.com/signup/developer
 // release. The installer updates an older CLI during bootstrap, but local
 // readiness must not depend on a live npm metadata request: an offline check
 // must distinguish "not compatible yet" from "not installed" deterministically.
-const MIN_EAI_CLI_VERSION: (u64, u64, u64) = (3, 15, 2);
+const MIN_EAI_CLI_VERSION: (u64, u64, u64) = (3, 17, 0);
+const MIN_NODE_MAJOR_VERSION: u64 = 24;
 
 fn usable_home_path(path: PathBuf) -> Option<PathBuf> {
     if path.is_absolute() && path.parent().is_some() && path != Path::new("/") {
@@ -287,14 +352,49 @@ fn windows_resolved_path(program: &str) -> Option<PathBuf> {
     } else {
         format!("{program}.exe")
     };
-    let mut directories = windows_package_bin_dirs();
     if let Some(existing) = env::var_os("PATH") {
-        directories.extend(env::split_paths(&existing));
+        let mut directories = env::split_paths(&existing).collect::<Vec<_>>();
+        directories.extend(windows_package_bin_dirs());
+        return windows_best_candidate(program, directories, &filename);
     }
-    directories
+    windows_best_candidate(program, windows_package_bin_dirs(), &filename)
+}
+
+#[cfg(target_os = "windows")]
+fn windows_best_candidate(program: &str, directories: Vec<PathBuf>, filename: &str) -> Option<PathBuf> {
+    let candidates = directories
         .into_iter()
-        .map(|directory| directory.join(&filename))
-        .find(|path| path.is_file())
+        .map(|directory| directory.join(filename))
+        .filter(|path| path.is_file())
+        .collect::<Vec<_>>();
+    if program == "node" {
+        return candidates
+            .iter()
+            .find(|path| windows_node_candidate_is_supported(path))
+            .cloned()
+            .or_else(|| candidates.into_iter().next());
+    }
+    candidates.into_iter().next()
+}
+
+#[cfg(target_os = "windows")]
+fn windows_node_candidate_is_supported(path: &Path) -> bool {
+    let mut command = Command::new(path);
+    command.arg("--version");
+    command.stdin(Stdio::null());
+    command.stdout(Stdio::piped());
+    command.stderr(Stdio::piped());
+    command.creation_flags(0x08000000);
+    let Ok(output) = command.output() else { return false; };
+    if !output.status.success() {
+        return false;
+    }
+    let stdout = clean_process_output(&String::from_utf8_lossy(&output.stdout));
+    let stderr = clean_process_output(&String::from_utf8_lossy(&output.stderr));
+    let current = if stdout.is_empty() { stderr } else { stdout };
+    semantic_version(&current)
+        .map(|version| version.0 >= MIN_NODE_MAJOR_VERSION)
+        .unwrap_or(false)
 }
 
 fn user_npm_global_exec_dirs() -> Vec<PathBuf> {
@@ -766,6 +866,12 @@ fn semantic_version(value: &str) -> Option<(u64, u64, u64)> {
     ))
 }
 
+fn node_version() -> Option<String> {
+    let current = version("node", &["--version"])?;
+    let current_version = semantic_version(&current)?;
+    (current_version.0 >= MIN_NODE_MAJOR_VERSION).then_some(current)
+}
+
 fn eai_cli_version() -> Option<String> {
     let current = version("eai", &["--version"])?;
     let current_version = semantic_version(&current)?;
@@ -788,6 +894,42 @@ fn git_version() -> Option<String> {
         return None;
     }
     version("git", &["--version"])
+}
+
+fn parse_windows_runtime_version(output: &str) -> Option<String> {
+    output.lines().find_map(|line| {
+        let fields: Vec<&str> = line.split_whitespace().collect();
+        (fields.len() >= 3 && fields[0] == "Version" && fields[1] == "REG_SZ")
+            .then(|| fields[2].to_string())
+    })
+}
+
+fn windows_runtime_registry_key() -> &'static str {
+    if env::consts::ARCH == "aarch64" {
+        r"HKLM\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\arm64"
+    } else {
+        r"HKLM\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64"
+    }
+}
+
+fn windows_runtime_package_id() -> &'static str {
+    if env::consts::ARCH == "aarch64" {
+        "Microsoft.VCRedist.2015+.arm64"
+    } else {
+        "Microsoft.VCRedist.2015+.x64"
+    }
+}
+
+fn windows_vc_runtime_version() -> Option<String> {
+    if !cfg!(target_os = "windows") {
+        return None;
+    }
+    let (stdout, _) = run_program(
+        "reg",
+        &["query", windows_runtime_registry_key(), "/v", "Version"],
+    )
+    .ok()?;
+    parse_windows_runtime_version(&stdout)
 }
 
 fn latest_command_line_tools_label() -> Result<String, String> {
@@ -1003,6 +1145,102 @@ fn verify_e2e_auth() -> Result<(), String> {
         .map_err(|error| format!("The saved EAI sign-in could not be verified: {error}"))
 }
 
+#[cfg(target_os = "windows")]
+fn replace_file_atomically(source: &Path, destination: &Path) -> Result<(), String> {
+    const MOVEFILE_REPLACE_EXISTING: u32 = 0x1;
+    const MOVEFILE_WRITE_THROUGH: u32 = 0x8;
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn MoveFileExW(
+            existing_file_name: *const u16,
+            new_file_name: *const u16,
+            flags: u32,
+        ) -> i32;
+    }
+
+    let source = source
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect::<Vec<_>>();
+    let destination = destination
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect::<Vec<_>>();
+    let replaced = unsafe {
+        MoveFileExW(
+            source.as_ptr(),
+            destination.as_ptr(),
+            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+        )
+    };
+    if replaced == 0 {
+        return Err(std::io::Error::last_os_error().to_string());
+    }
+    Ok(())
+}
+
+#[cfg(not(target_os = "windows"))]
+fn replace_file_atomically(source: &Path, destination: &Path) -> Result<(), String> {
+    fs::rename(source, destination).map_err(|error| error.to_string())
+}
+
+fn write_e2e_receipt_atomically(path: &Path, content: &[u8]) -> Result<(), String> {
+    if !path.is_absolute() {
+        return Err("The E2E receipt path must be absolute.".to_string());
+    }
+    let file_name = path
+        .file_name()
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| "The E2E receipt path has no file name.".to_string())?;
+    let parent = path
+        .parent()
+        .filter(|value| !value.as_os_str().is_empty())
+        .ok_or_else(|| "The E2E receipt path has no parent directory.".to_string())?;
+    fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    let canonical_parent = fs::canonicalize(parent).map_err(|error| error.to_string())?;
+    if !canonical_parent.is_dir() {
+        return Err("The E2E receipt parent is not a directory.".to_string());
+    }
+    let destination = canonical_parent.join(file_name);
+    if let Ok(metadata) = fs::symlink_metadata(&destination) {
+        if metadata.file_type().is_symlink() || !metadata.is_file() {
+            return Err("The E2E receipt destination is not a regular file.".to_string());
+        }
+    }
+
+    let temporary = canonical_parent.join(format!(
+        ".{}.{}.tmp",
+        file_name.to_string_lossy(),
+        Uuid::new_v4()
+    ));
+    let result = (|| {
+        let mut options = OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        options.mode(0o600);
+        let mut file = options.open(&temporary).map_err(|error| error.to_string())?;
+        file.write_all(content).map_err(|error| error.to_string())?;
+        file.flush().map_err(|error| error.to_string())?;
+        file.sync_all().map_err(|error| error.to_string())?;
+        drop(file);
+        replace_file_atomically(&temporary, &destination)?;
+        #[cfg(unix)]
+        if let Ok(directory) = fs::File::open(&canonical_parent) {
+            // The receipt file itself is already synchronized. Some supported
+            // Unix filesystems do not allow fsync on directories, so this
+            // additional rename-durability barrier is best effort.
+            let _ = directory.sync_all();
+        }
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&temporary);
+    }
+    result
+}
+
 #[tauri::command]
 fn write_e2e_receipt(receipt_file: String, receipt: serde_json::Value) -> Result<(), String> {
     if env::var("EAI_SETUP_E2E").ok().as_deref() != Some("1") {
@@ -1012,11 +1250,8 @@ fn write_e2e_receipt(receipt_file: String, receipt: serde_json::Value) -> Result
     if path.as_os_str().is_empty() {
         return Err("The E2E receipt path is empty.".to_string());
     }
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
     let content = serde_json::to_string_pretty(&receipt).map_err(|error| error.to_string())?;
-    fs::write(path, format!("{content}\n")).map_err(|error| error.to_string())
+    write_e2e_receipt_atomically(&path, format!("{content}\n").as_bytes())
 }
 
 fn project_directory(parent: &Path, project_name: &str) -> PathBuf {
@@ -1050,15 +1285,22 @@ fn detect_environment() -> EnvironmentReport {
     } else {
         None
     };
+    let mut tools = vec![
+        ToolState { command: "git".to_string(), version: git_version() },
+        ToolState { command: "node".to_string(), version: node_version() },
+        ToolState { command: "npm".to_string(), version: npm_version() },
+        ToolState { command: "eai".to_string(), version: eai_cli_version() },
+    ];
+    if cfg!(target_os = "windows") {
+        tools.push(ToolState {
+            command: "windows-runtime".to_string(),
+            version: windows_vc_runtime_version(),
+        });
+    }
     EnvironmentReport {
         platform: platform.to_string(),
         architecture: env::consts::ARCH.to_string(),
-        tools: vec![
-            ToolState { command: "git".to_string(), version: git_version() },
-            ToolState { command: "node".to_string(), version: version("node", &["--version"]) },
-            ToolState { command: "npm".to_string(), version: npm_version() },
-            ToolState { command: "eai".to_string(), version: eai_cli_version() },
-        ],
+        tools,
         package_manager,
     }
 }
@@ -1069,10 +1311,38 @@ fn package_install_step(app: &AppHandle, step: &str, package: &str, message: &st
         if version("winget", &["--version"]).is_none() {
             return command_result(step, false, "WinGet is not available in this Windows session.", Some("Install or enable App Installer, then rerun EAI Setup."), None, true);
         }
-        let package_id = if package == "git" { "Git.Git" } else { "OpenJS.NodeJS.LTS" };
-        let install_result = run_program("winget", &["install", "--id", package_id, "-e", "--source", "winget", "--accept-source-agreements", "--accept-package-agreements", "--disable-interactivity"]);
+        let mut output = Vec::new();
+        let mut errors = Vec::new();
+        if package == "git" {
+            match run_program("winget", &["install", "--id", "Git.Git", "-e", "--source", "winget", "--accept-source-agreements", "--accept-package-agreements", "--disable-interactivity"]) {
+                Ok((stdout, stderr)) => output.push(format!("{stdout}\n{stderr}")),
+                Err(error) => errors.push(error),
+            }
+        } else {
+            if node_version().is_none() || npm_version().is_none() {
+                let winget_node_action = if version("node", &["--version"]).is_some() { "upgrade" } else { "install" };
+                match run_program("winget", &[winget_node_action, "--id", "OpenJS.NodeJS.LTS", "-e", "--source", "winget", "--accept-source-agreements", "--accept-package-agreements", "--disable-interactivity"]) {
+                    Ok((stdout, stderr)) => output.push(format!("{stdout}\n{stderr}")),
+                    Err(error) => errors.push(error),
+                }
+            }
+            if windows_vc_runtime_version().is_none() {
+                emit_progress(app, step, "Installing Windows app support", "Installing Microsoft's signed runtime required by native Node.js packages.", Some(70), Some(30));
+                match run_program("winget", &["install", "--id", windows_runtime_package_id(), "-e", "--source", "winget", "--accept-source-agreements", "--accept-package-agreements", "--disable-interactivity"]) {
+                    Ok((stdout, stderr)) => output.push(format!("{stdout}\n{stderr}")),
+                    Err(error) => errors.push(error),
+                }
+            }
+        }
         emit_progress(app, step, &format!("Checking {package}"), "Confirming the installed commands are ready.", Some(90), Some(5));
         let ready = wait_for_package_ready(package, 5);
+        let install_result = if ready {
+            Ok((output.join("\n"), errors.join("\n")))
+        } else if errors.is_empty() {
+            Ok((output.join("\n"), String::new()))
+        } else {
+            Err(errors.join("\n"))
+        };
         return windows_package_install_result(step, package, message, install_result, ready);
     }
 
@@ -1083,12 +1353,20 @@ fn package_install_step(app: &AppHandle, step: &str, package: &str, message: &st
             }
             return node_pkg_install_step(app);
         }
-        return match run_program("brew", &["install", package]) {
+        let brew_action = if package == "node" && version("node", &["--version"]).is_some() { "upgrade" } else { "install" };
+        let brew_result = run_program("brew", &[brew_action, package]).or_else(|error| {
+            if package == "node" && brew_action == "upgrade" {
+                run_program("brew", &["install", package])
+            } else {
+                Err(error)
+            }
+        });
+        return match brew_result {
             Ok((stdout, stderr)) => {
                 emit_progress(app, step, &format!("{package} installed"), "Verifying the installation.", Some(90), Some(5));
-                command_result(step, true, message, Some("brew install (fixed package name)"), Some(format!("{stdout}\n{stderr}")), false)
+                package_install_verified_result(step, package, message, "brew install/upgrade (fixed package name)", Some(format!("{stdout}\n{stderr}")))
             }
-            Err(error) => command_result(step, false, &error, Some("brew install (fixed package name)"), None, true),
+            Err(error) => command_result(step, false, &error, Some("brew install/upgrade (fixed package name)"), None, true),
         };
     }
 
@@ -1111,7 +1389,7 @@ fn package_install_step(app: &AppHandle, step: &str, package: &str, message: &st
         return match run_program("pkexec", [&["apt-get", "install", "-y"][..], packages].concat().as_slice()) {
             Ok((stdout, stderr)) => {
                 emit_progress(app, step, &format!("{package} installed"), "Verifying the installation.", Some(90), Some(5));
-                command_result(step, true, message, Some("pkexec apt-get install"), Some(format!("{stdout}\n{stderr}")), false)
+                package_install_verified_result(step, package, message, "pkexec apt-get install", Some(format!("{stdout}\n{stderr}")))
             }
             Err(error) => command_result(step, false, &error, Some("pkexec apt-get install"), None, true),
         };
@@ -1122,7 +1400,7 @@ fn package_install_step(app: &AppHandle, step: &str, package: &str, message: &st
         return match run_program("pkexec", [&["dnf", "install", "-y"][..], packages].concat().as_slice()) {
             Ok((stdout, stderr)) => {
                 emit_progress(app, step, &format!("{package} installed"), "Verifying the installation.", Some(90), Some(5));
-                command_result(step, true, message, Some("pkexec dnf install"), Some(format!("{stdout}\n{stderr}")), false)
+                package_install_verified_result(step, package, message, "pkexec dnf install", Some(format!("{stdout}\n{stderr}")))
             }
             Err(error) => command_result(step, false, &error, Some("pkexec dnf install"), None, true),
         };
@@ -1135,7 +1413,39 @@ fn package_ready(package: &str) -> bool {
     if package == "git" {
         git_version().is_some()
     } else {
-        version("node", &["--version"]).is_some() && npm_version().is_some()
+        node_version().is_some()
+            && npm_version().is_some()
+            && (!cfg!(target_os = "windows") || windows_vc_runtime_version().is_some())
+    }
+}
+
+fn package_install_verified_result(
+    step: &str,
+    package: &str,
+    success_message: &str,
+    command: &'static str,
+    output: Option<String>,
+) -> BootstrapResult {
+    if package_ready(package) {
+        command_result(step, true, success_message, Some(command), output, false)
+    } else if package == "node" {
+        command_result(
+            step,
+            false,
+            "The package step finished, but Node.js 24 and npm are not ready.",
+            Some("Install Node.js 24 LTS, then choose Try again."),
+            output,
+            true,
+        )
+    } else {
+        command_result(
+            step,
+            false,
+            "The package step finished, but the required command is not ready.",
+            Some("Repair the package installation, then choose Try again."),
+            output,
+            true,
+        )
     }
 }
 
@@ -1301,6 +1611,8 @@ fn latest_node_artifact() -> Result<(String, String), String> {
     };
     for release in releases {
         let Some(version) = release.get("version").and_then(|value| value.as_str()) else { continue; };
+        let Some((major, _, _)) = semantic_version(version) else { continue; };
+        if major < MIN_NODE_MAJOR_VERSION { continue; }
         let is_lts = release.get("lts").and_then(|value| value.as_str()).is_some();
         let files = release.get("files").and_then(|value| value.as_array());
         let has_macos_pkg = files.map(|items| items.iter().any(|file| file.as_str() == Some(package_file))).unwrap_or(false);
@@ -1316,7 +1628,7 @@ fn latest_node_artifact() -> Result<(String, String), String> {
             return Ok((version.to_string(), filename));
         }
     }
-    Err("no supported Node.js LTS macOS package was found".to_string())
+    Err("no supported Node.js 24 LTS macOS package was found".to_string())
 }
 
 fn node_tar_install_step(app: &AppHandle, node_version: &str, filename: &str, url: &str) -> BootstrapResult {
@@ -1324,9 +1636,9 @@ fn node_tar_install_step(app: &AppHandle, node_version: &str, filename: &str, ur
     let checksum_file = env::temp_dir().join(format!("eai-node-{}-SHASUMS256.txt", Uuid::new_v4()));
     let archive_string = archive.to_string_lossy().to_string();
     let checksum_string = checksum_file.to_string_lossy().to_string();
-    emit_progress(app, "node", "Downloading Node.js", "Downloading the official native Node.js LTS archive.", Some(10), Some(90));
+    emit_progress(app, "node", "Downloading Node.js", "Downloading the official native Node.js 24 LTS archive.", Some(10), Some(90));
     if let Err(error) = run_program("curl", &["--fail", "--location", "--proto", "=https", "--tlsv1.2", "--output", &archive_string, url]) {
-        return command_result("node", false, &error, Some("Download the official Node.js LTS archive over HTTPS"), None, true);
+        return command_result("node", false, &error, Some("Download the official Node.js 24 LTS archive over HTTPS"), None, true);
     }
     let checksum_url = format!("https://nodejs.org/dist/{node_version}/SHASUMS256.txt");
     emit_progress(app, "node", "Checking Node.js installer", "Verifying the archive checksum before installation.", Some(35), Some(75));
@@ -1403,24 +1715,24 @@ fn node_tar_install_step(app: &AppHandle, node_version: &str, filename: &str, ur
     if let Err(error) = expose_user_npm_bin() {
         return command_result("node", false, &format!("Node.js installed, but its user command path could not be configured: {error}"), Some("Open a new terminal after adding ~/.eai-setup/node/bin to PATH"), None, true);
     }
-    if version("node", &["--version"]).is_none() || version("npm", &["--version"]).is_none() {
+    if !package_ready("node") {
         return command_result(
             "node",
             false,
-            "Node.js files were downloaded, but the desktop app could not run node and npm from the installed path.",
-            Some("Retry EAI Setup; if the problem continues, install the official Node.js LTS release for this Mac"),
+            "Node.js files were downloaded, but the desktop app could not run Node.js 24 and npm from the installed path.",
+            Some("Retry EAI Setup; if the problem continues, install the official Node.js 24 LTS release for this Mac"),
             None,
             true,
         );
     }
     emit_progress(app, "node", "Node.js and npm ready", "Continuing with the EAI CLI.", Some(100), Some(0));
-    command_result("node", true, "Native Node.js and npm were installed for this user.", Some("official Node.js LTS ARM64 archive with checksum verification"), None, false)
+    command_result("node", true, "Native Node.js 24 and npm were installed for this user.", Some("official Node.js 24 LTS archive with checksum verification"), None, false)
 }
 
 fn node_pkg_install_step(app: &AppHandle) -> BootstrapResult {
     let (node_version, filename) = match latest_node_artifact() {
         Ok(artifact) => artifact,
-        Err(error) => return command_result("node", false, &error, Some("Download the official Node.js LTS macOS installer"), None, true),
+        Err(error) => return command_result("node", false, &error, Some("Download the official Node.js 24 LTS macOS installer"), None, true),
     };
     let url = format!("https://nodejs.org/dist/{node_version}/{filename}");
     if filename.ends_with(".tar.gz") {
@@ -1428,9 +1740,9 @@ fn node_pkg_install_step(app: &AppHandle) -> BootstrapResult {
     }
     let path = env::temp_dir().join(format!("eai-node-{}.pkg", Uuid::new_v4()));
     let path_string = path.to_string_lossy().to_string();
-    emit_progress(app, "node", "Downloading Node.js", "Downloading the official signed Node.js LTS installer.", Some(10), Some(90));
+    emit_progress(app, "node", "Downloading Node.js", "Downloading the official signed Node.js 24 LTS installer.", Some(10), Some(90));
     if let Err(error) = run_program("curl", &["--fail", "--location", "--proto", "=https", "--tlsv1.2", "--output", &path_string, &url]) {
-        return command_result("node", false, &error, Some("Download the official Node.js LTS installer over HTTPS"), None, true);
+        return command_result("node", false, &error, Some("Download the official Node.js 24 LTS installer over HTTPS"), None, true);
     }
     emit_progress(app, "node", "Checking Node.js installer", "Verifying the package signature before installation.", Some(35), Some(75));
     if let Err(error) = run_program("/usr/sbin/pkgutil", &["--check-signature", &path_string]) {
@@ -1446,10 +1758,10 @@ fn node_pkg_install_step(app: &AppHandle) -> BootstrapResult {
     }
     emit_progress(app, "node", "Finishing Node.js setup", "Checking that Node.js and npm are ready.", Some(85), Some(20));
     for attempt in 0..120 {
-        if version("node", &["--version"]).is_some() && version("npm", &["--version"]).is_some() {
+        if package_ready("node") {
             let _ = fs::remove_file(&path);
             emit_progress(app, "node", "Node.js and npm ready", "Continuing with the EAI CLI.", Some(100), Some(0));
-            return command_result("node", true, "Node.js and npm installation completed.", Some("official signed Node.js LTS package with native macOS authorization"), None, false);
+            return command_result("node", true, "Node.js 24 and npm installation completed.", Some("official signed Node.js 24 LTS package with native macOS authorization"), None, false);
         }
         if attempt % 5 == 0 {
             emit_progress(app, "node", "Finishing Node.js setup", "Checking that Node.js and npm are ready.", Some(85), Some(20));
@@ -1457,7 +1769,7 @@ fn node_pkg_install_step(app: &AppHandle) -> BootstrapResult {
         thread::sleep(Duration::from_secs(1));
     }
     let _ = fs::remove_file(&path);
-    command_result("node", false, "Node.js and npm did not become available after the macOS installer finished.", Some("Retry EAI Setup or install the official Node.js LTS package"), None, true)
+    command_result("node", false, "Node.js 24 and npm did not become available after the macOS installer finished.", Some("Retry EAI Setup or install the official Node.js 24 LTS package"), None, true)
 }
 
 // Homebrew is installed from the project's official signed package. The
@@ -1657,7 +1969,7 @@ fn run_bootstrap_sync(app: AppHandle, step: String, project_name: Option<String>
                     } else {
                         "eai init <project-name> --company-tenant <company-tenant-id> --current-dir --skip-prompts --no-splash --no-install"
                     };
-                    command_result("init", false, &error, Some(command), None, true)
+                    command_result("init", false, &error, Some(command), Some(error.clone()), true)
                 }
             }
         }
@@ -1695,14 +2007,18 @@ fn open_signup() -> Result<String, String> {
 
 #[tauri::command]
 fn detect_ai_surfaces(directory: String) -> Result<AiSurfaceInventory, String> {
-    let (stdout, stderr) = run_program("eai", &["start", &directory, "--check", "--format", "json"])?;
+    let (stdout, stderr) = run_program(
+        "eai",
+        &["start", &directory, "--check", "--format", "json", "--contract-version", "v2"],
+    )?;
     let inventory: AiSurfaceInventory = serde_json::from_str(&stdout).map_err(|error| {
         let detail = if stderr.is_empty() { stdout } else { stderr };
         format!("EAI could not read the installed AI workspaces: {error}. {detail}")
     })?;
-    if inventory.contract_version != "eai.ai-surfaces/v1" {
+    if inventory.contract_version != "eai.ai-surfaces/v2" {
         return Err(format!("EAI returned an unsupported AI workspace contract: {}", inventory.contract_version));
     }
+    validate_ai_surface_inventory(&inventory)?;
     Ok(inventory)
 }
 
@@ -1710,19 +2026,32 @@ fn detect_ai_surfaces(directory: String) -> Result<AiSurfaceInventory, String> {
 fn start_ai_surface(directory: String, surface_id: String) -> Result<AiLaunchResult, String> {
     let (stdout, stderr) = run_program(
         "eai",
-        &["start", &directory, "--surface", &surface_id, "--format", "json"],
+        &["start", &directory, "--surface", &surface_id, "--format", "json", "--contract-version", "v2"],
     )?;
-    serde_json::from_str(&stdout).map_err(|error| {
+    let result: AiLaunchResult = serde_json::from_str(&stdout).map_err(|error| {
         let detail = if stderr.is_empty() { stdout } else { stderr };
         format!("EAI could not confirm the AI workspace handoff: {error}. {detail}")
-    })
+    })?;
+
+    // The CLI reports the macOS VS Code handoff as dispatched, but its
+    // authenticated application path is an .app bundle. Spawning that
+    // bundle directly can succeed without creating a GUI process. Use the
+    // native LaunchServices entry point as a guarded compatibility fallback;
+    // the CLI receipt and surface authentication remain required above.
+    #[cfg(target_os = "macos")]
+    if surface_id == "vscode-copilot" && result.launched {
+        run_program("open", &["-a", "Visual Studio Code", &directory])
+            .map_err(|error| format!("VS Code could not be opened for AI handoff: {error}"))?;
+    }
+
+    Ok(result)
 }
 
 #[tauri::command]
 fn install_ai_surface(surface_id: String) -> Result<String, String> {
     let (stdout, _) = run_program(
         "eai",
-        &["start", "--surface", &surface_id, "--install", "--format", "json"],
+        &["start", "--surface", &surface_id, "--install", "--format", "json", "--contract-version", "v2"],
     )?;
     Ok(stdout)
 }
@@ -1804,6 +2133,65 @@ mod tests {
     }
 
     #[test]
+    fn e2e_receipt_write_atomically_replaces_a_regular_file() {
+        let directory = env::temp_dir().join(format!(
+            "eai-setup-receipt-test-{}",
+            Uuid::new_v4()
+        ));
+        fs::create_dir(&directory).expect("receipt test directory should be created");
+        let receipt = directory.join("receipt.json");
+
+        write_e2e_receipt_atomically(&receipt, b"{\"status\":\"checkpoint\"}\n")
+            .expect("creation checkpoint should be written");
+        write_e2e_receipt_atomically(&receipt, b"{\"status\":\"passed\"}\n")
+            .expect("final receipt should atomically replace the checkpoint");
+
+        assert_eq!(
+            fs::read_to_string(&receipt).expect("receipt should remain readable"),
+            "{\"status\":\"passed\"}\n"
+        );
+        assert_eq!(
+            fs::read_dir(&directory)
+                .expect("receipt directory should be readable")
+                .count(),
+            1,
+            "no same-directory temporary receipt should remain"
+        );
+        fs::remove_dir_all(directory).expect("receipt test directory should be removed");
+    }
+
+    #[test]
+    fn e2e_receipt_write_rejects_relative_and_symlink_targets() {
+        assert_eq!(
+            write_e2e_receipt_atomically(Path::new("relative-receipt.json"), b"{}\n"),
+            Err("The E2E receipt path must be absolute.".to_string())
+        );
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::symlink;
+            let directory = env::temp_dir().join(format!(
+                "eai-setup-receipt-symlink-test-{}",
+                Uuid::new_v4()
+            ));
+            fs::create_dir(&directory).expect("receipt symlink test directory should be created");
+            let real = directory.join("real.json");
+            let receipt = directory.join("receipt.json");
+            fs::write(&real, "unchanged\n").expect("symlink target should be created");
+            symlink(&real, &receipt).expect("receipt symlink should be created");
+            assert_eq!(
+                write_e2e_receipt_atomically(&receipt, b"changed\n"),
+                Err("The E2E receipt destination is not a regular file.".to_string())
+            );
+            assert_eq!(
+                fs::read_to_string(&real).expect("symlink target should remain readable"),
+                "unchanged\n"
+            );
+            fs::remove_dir_all(directory).expect("receipt symlink test directory should be removed");
+        }
+    }
+
+    #[test]
     fn winget_already_current_is_success_when_commands_are_ready() {
         let result = windows_package_install_result(
             "node",
@@ -1828,6 +2216,19 @@ mod tests {
         );
         assert!(!result.ok);
         assert!(result.requires_user_action);
+    }
+
+    #[test]
+    fn windows_runtime_registry_output_is_parsed() {
+        let output = r#"
+HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\arm64
+    Version    REG_SZ    v14.51.36247.00
+"#;
+        assert_eq!(
+            parse_windows_runtime_version(output),
+            Some("v14.51.36247.00".to_string()),
+        );
+        assert_eq!(parse_windows_runtime_version("ERROR: not found"), None);
     }
 
     #[test]

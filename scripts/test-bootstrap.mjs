@@ -41,6 +41,13 @@ if (!git?.installers?.macos?.includes("Command Line Tools") || git.installers.ma
   throw new Error("manifest: macOS Git path must use Command Line Tools without requiring full Xcode");
 }
 const node = manifest.prerequisites.find((item) => item.id === "node");
+if (node?.minimumVersion !== "24") {
+  throw new Error("manifest: Node.js 24 must be the minimum supported runtime");
+}
+const eaiCli = manifest.prerequisites.find((item) => item.id === "eai-cli");
+if (eaiCli?.minimumVersion !== "3.17.0") {
+  throw new Error("manifest: EAI CLI minimum must include the Configurator Plus handoff in 3.17.0");
+}
 const nodeMacInstaller = node?.installers?.macos ?? "";
 const nodeMacUrls = nodeMacInstaller.match(/https:\/\/[^\s]+/g) ?? [];
 const hasOfficialNodeUrl = nodeMacUrls.some((value) => {
@@ -51,8 +58,11 @@ const hasOfficialNodeUrl = nodeMacUrls.some((value) => {
     return false;
   }
 });
-if (!hasOfficialNodeUrl || !nodeMacInstaller.includes("checksum verification") || !nodeMacInstaller.includes("user-local")) {
+if (!hasOfficialNodeUrl || !nodeMacInstaller.includes("Node.js 24 LTS") || !nodeMacInstaller.includes("checksum verification") || !nodeMacInstaller.includes("user-local")) {
   throw new Error("manifest: macOS Node.js path must use the official checksum-verified user-local archive");
+}
+if (!node?.installers?.linux?.includes("Node.js 24 or newer")) {
+  throw new Error("manifest: Linux Node.js path must require Node.js 24 or newer");
 }
 
 const dmgBackgroundSource = await readFile(new URL("../src-tauri/icons/dmg-background.svg", import.meta.url), "utf8");
@@ -70,8 +80,14 @@ if ((rust.match(/env::var_os\("HOME"\)/g) ?? []).length !== 1 || rust.includes('
 for (const value of ['command.env("HOME", &home)', 'command.env("npm_config_cache", home.join(".eai-setup/npm-cache"))', 'command.env_remove("HOME")', 'command.env_remove("npm_config_cache")']) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter lets a GUI child process inherit an invalid home: ${value}`);
 }
-for (const value of ["MIN_EAI_CLI_VERSION", "@enterpriseai/cli", "eai_cli_version()", "user_npm_global_exec_dirs", "current_version >= MIN_EAI_CLI_VERSION", "fn eai_cli_script", "APPDATA", "run_program_in_directory_with_env(\"node\", &node_args, directory, environment)"] ) {
+for (const value of ["const MIN_EAI_CLI_VERSION: (u64, u64, u64) = (3, 17, 0)", "MIN_NODE_MAJOR_VERSION: u64 = 24", "fn node_version()", "@enterpriseai/cli", "eai_cli_version()", "user_npm_global_exec_dirs", "current_version >= MIN_EAI_CLI_VERSION", "fn eai_cli_script", "APPDATA", "run_program_in_directory_with_env(\"node\", &node_args, directory, environment)"] ) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter does not verify the canonical EAI CLI release: ${value}`);
+}
+if (!rust.includes('ToolState { command: "node".to_string(), version: node_version() }')) {
+  throw new Error("Tauri adapter must report only Node.js 24 or newer as ready");
+}
+if (!rust.includes("The package step finished, but Node.js 24 and npm are not ready.")) {
+  throw new Error("Tauri adapter must explain incompatible Node.js package installs");
 }
 if (rust.includes("latest_eai_cli_requirement") || rust.includes('version("npm", &["view", "@enterpriseai/cli"')) {
   throw new Error("Tauri adapter must not use live npm metadata to decide whether the installed EAI CLI is ready");
@@ -101,6 +117,9 @@ for (const step of ["homebrew", "git", "node", "eai-cli", "login", "init", "star
 for (const value of ["detect_ai_surfaces", "start_ai_surface", "install_ai_surface", "AiSurfaceInventory", "eai", "start", "--check"]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing AI workspace handoff: ${value}`);
 }
+if (!rust.includes("at position {}; expected '{}' ({})")) {
+  throw new Error("Tauri adapter AI inventory mismatch does not report expected and observed surface details");
+}
 for (const value of ["get_company_tenants", "get_company_apps", "list_company_apps", "app", "tenant", "list", "--format", "json", "directMembership", "app_key", "--app-key"]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing company workspace discovery: ${value}`);
 }
@@ -114,8 +133,13 @@ for (const value of ["run_eai_with_retries", "with_transient_retries", "is_trans
 if (rust.includes("let is_root") || rust.includes("if !is_root")) {
   throw new Error("Tauri adapter must allow directly assigned child company workspaces");
 }
-for (const value of ["E2eConfiguration", "get_e2e_configuration", "verify_e2e_auth", "write_e2e_receipt", "EAI_SETUP_E2E", "EAI_SETUP_E2E_RECEIPT_FILE"]) {
+for (const value of ["E2eConfiguration", "get_e2e_configuration", "verify_e2e_auth", "write_e2e_receipt", "write_e2e_receipt_atomically", "replace_file_atomically", "sync_all", "EAI_SETUP_E2E", "EAI_SETUP_E2E_RECEIPT_FILE"]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing bounded release E2E support: ${value}`);
+}
+if (!rust.includes("MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH")
+    || !rust.includes("options.write(true).create_new(true)")
+    || !rust.includes("metadata.file_type().is_symlink() || !metadata.is_file()")) {
+  throw new Error("Tauri E2E receipts must use a synchronized same-directory atomic replacement and reject unsafe targets");
 }
 if (!rust.includes("@enterpriseai/cli")) throw new Error("Tauri adapter uses the wrong CLI package");
 if (!rust.includes('run_program_in_directory_with_progress(&app, "init", "eai", &init_args_ref')) throw new Error("Tauri adapter does not run eai init non-interactively with live progress in the selected directory");
@@ -154,19 +178,37 @@ if (!rust.includes("project_directory: Option<String>") || !rust.includes("resul
 }
 
 const appSource = await readFile(new URL("../ui/app.js", import.meta.url), "utf8");
-for (const value of ["let e2eAppCreated = false", "e2eAppCreated = Boolean(result?.app_created)", "appCreated: e2eAppCreated", 'e2eAppCreated ? "project" : "app"']) {
+for (const value of ["let e2eAppCreated = false", "e2eAppCreated = Boolean(result?.app_created)", "appCreated: e2eAppCreated", 'e2eAppCreated ? "project" : "app"', "writeE2eAppCreationCheckpoint", 'schemaVersion: "eai.setup.e2e-app-created.v1"', 'status: "checkpoint"', 'checkpoint: "app-created"', "cleanupRequired: true", "cleanupRequested: true"]) {
   if (!appSource.includes(value)) throw new Error(`Desktop release receipt does not preserve app creation evidence: ${value}`);
 }
-if (!rust.includes('inventory.contract_version != "eai.ai-surfaces/v1"')) {
+const runInitSource = appSource.slice(appSource.indexOf("async function runInit()"), appSource.indexOf("function renderAiSurfaces()"));
+const initInvoke = runInitSource.indexOf('result = await invoke("run_bootstrap"');
+const appCreatedAssignment = runInitSource.indexOf("e2eAppCreated = Boolean(result?.app_created)", initInvoke);
+const creationCheckpoint = runInitSource.indexOf("await writeE2eAppCreationCheckpoint(result, name)", appCreatedAssignment);
+const outputProcessing = runInitSource.indexOf("recordCommandSummaries", initInvoke);
+if (initInvoke < 0 || appCreatedAssignment < initInvoke || creationCheckpoint < appCreatedAssignment
+    || outputProcessing < creationCheckpoint) {
+  throw new Error("Desktop E2E app creation must be checkpointed before any returned init output is processed");
+}
+if (!rust.includes('inventory.contract_version != "eai.ai-surfaces/v2"')) {
   throw new Error("Tauri adapter does not enforce the versioned AI surface contract");
+}
+if ((rust.match(/"--contract-version", "v2"/g) ?? []).length !== 3) {
+  throw new Error("Tauri adapter does not explicitly negotiate the EAI AI surface v2 contract for detect, launch, and install");
+}
+if (!rust.includes("capabilities: Vec<String>")) {
+  throw new Error("Tauri adapter drops AI workspace v2 capability metadata");
+}
+for (const value of ["EXPECTED_AI_SURFACES", "validate_ai_surface_inventory", '("vscode-copilot", "editor")', '("copilot-desktop", "desktop")', '("antigravity-desktop", "desktop")', '("claude-desktop", "desktop")', '("codex-desktop", "desktop")', '("grok-bot", "desktop")', '("copilot-cli", "cli")', '("antigravity-cli", "cli")', '("claude-cli", "cli")', '("codex-cli", "cli")', '("grok-cli", "cli")']) {
+  if (!rust.includes(value)) throw new Error(`Tauri adapter does not enforce the exact ordered 6 graphical + 5 CLI catalog: ${value}`);
 }
 for (const value of ["Homebrew.pkg", "/usr/sbin/pkgutil", "--check-signature", "with administrator privileges", "--stdinpass", "No Terminal window will open"]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing native macOS installation control: ${value}`);
 }
-for (const value of ["windows_package_bin_dirs", "windows_resolved_path", "env::split_paths", "ProgramW6432", "ProgramFiles(Arm)", "ProgramFiles(x86)", "CREATE_NO_WINDOW", "creation_flags", "APPDATA", "windows_shell_arg", "ComSpec", "ends_with(\".cmd\")", "command_line.push_str", "call {}", "windows_package_install_result", "npm_version", "run_npm_in_directory(&[\"--version\"], None)", "Node.js and npm are already installed and ready.", "installed EAI CLI could not be started."]) {
+for (const value of ["windows_package_bin_dirs", "windows_resolved_path", "windows_best_candidate", "windows_node_candidate_is_supported", "env::split_paths", "ProgramW6432", "ProgramFiles(Arm)", "ProgramFiles(x86)", "CREATE_NO_WINDOW", "creation_flags", "APPDATA", "windows_shell_arg", "ComSpec", "ends_with(\".cmd\")", "command_line.push_str", "call {}", "windows_package_install_result", "windows_vc_runtime_version", "Microsoft.VCRedist.2015+", "npm_version", "run_npm_in_directory(&[\"--version\"], None)", "winget_node_action", "\"upgrade\"", "Node.js and npm are already installed and ready.", "installed EAI CLI could not be started."]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing Windows prerequisite safety support: ${value}`);
 }
-for (const value of ["xcode-select", "full Xcode is not required", "softwareupdate", "latest_command_line_tools_label", "refresh_macos_command_line_tools_catalog", "Refreshing Apple Software Update", "with administrator privileges", "secure administrator dialog", "native administrator install", "latest_node_artifact", "nodejs.org/dist/index.json", "osx-arm64-pkg", "osx-x64-pkg", "osx-arm64-tar", "osx-x64-tar", "SHASUMS256.txt", "shasum", "uname", "--prefix", "expose_user_npm_bin", "NVM_DIR", "versions/node", "NVM_BIN", "nvm_node_bin_dirs", "macos_package_bin_dirs"]) {
+for (const value of ["xcode-select", "full Xcode is not required", "softwareupdate", "latest_command_line_tools_label", "refresh_macos_command_line_tools_catalog", "Refreshing Apple Software Update", "with administrator privileges", "secure administrator dialog", "native administrator install", "latest_node_artifact", "nodejs.org/dist/index.json", "brew_action", "brew install/upgrade", "osx-arm64-pkg", "osx-x64-pkg", "osx-arm64-tar", "osx-x64-tar", "SHASUMS256.txt", "shasum", "uname", "--prefix", "expose_user_npm_bin", "NVM_DIR", "versions/node", "NVM_BIN", "nvm_node_bin_dirs", "macos_package_bin_dirs"]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing minimal macOS setup support: ${value}`);
 }
 if (!rust.includes("fn macos_git_ready()") || !rust.includes("/usr/bin/xcode-select") || !rust.includes("usr/bin/git")) {
@@ -196,8 +238,8 @@ if (!rust.includes('command.env("PATH", path)') || !rust.includes(".eai-setup/no
 if (!rust.includes("fn clean_process_output") || !rust.includes("character == '\\u{1b}'")) {
   throw new Error("Tauri adapter does not remove terminal control sequences from GUI diagnostics");
 }
-if (!rust.includes("Node.js files were downloaded, but the desktop app could not run node and npm")) {
-  throw new Error("Tauri adapter reports Node.js ready before verifying the installed executables");
+if (!rust.includes("Node.js files were downloaded, but the desktop app could not run Node.js 24 and npm")) {
+  throw new Error("Tauri adapter reports Node.js ready before verifying the installed executables and version");
 }
 if (!rust.includes("async fn run_bootstrap") || !rust.includes("spawn_blocking")) {
   throw new Error("Tauri adapter blocks the UI while running a bootstrap task");
@@ -274,11 +316,69 @@ if (app.split("\n").some((line) => line.includes("setActivity(") && line.include
   throw new Error("wizard: raw exception details must not be written to the build summary");
 }
 if (app.includes("initialComputerCheck")) throw new Error("wizard: repeat computer checks can leave the stage active");
-if (!app.includes("setActivity") || !app.includes("Installation complete") || !app.includes("listenForBootstrapProgress") || !app.includes("eventApi.listen") || !app.includes("setDetectionState") || !app.includes("phaseForTitle") || !app.includes("async function startSetup") || !app.includes("window.setTimeout(() => startSetup(), 250)") || !app.includes("setStep(4)") || !app.includes("async function runSignup") || !app.includes("open_signup") || !app.includes("dialog.open") || !app.includes("choose-folder") || !app.includes("get_company_tenants") || !app.includes("get_company_apps") || !app.includes("loadCompanyApps") || !app.includes("describeWorkspaceFailure") || !app.includes("companyTenantId") || !app.includes("appKey") || !app.includes("renderCompanyApps") || !app.includes("open_project") || !app.includes("projectPath") || !app.includes("initInProgress") || !app.includes("setInitButtonBusy") || !app.includes("aria-busy") || !app.includes("describeInitFailure")) {
+if (!app.includes("setActivity") || !app.includes("Installation complete") || !app.includes("listenForBootstrapProgress") || !app.includes("eventApi.listen") || !app.includes("setDetectionState") || !app.includes("phaseForTitle") || !app.includes("async function startSetup") || !app.includes("window.setTimeout(() => startSetup(), 250)") || !app.includes("setStep(4)") || !app.includes("async function runSignup") || !app.includes("open_signup") || !app.includes("dialog.open") || !app.includes("choose-folder") || !app.includes("get_company_tenants") || !app.includes("get_company_apps") || !app.includes("loadCompanyApps") || !app.includes("describeWorkspaceFailure") || !app.includes("companyTenantId") || !app.includes("appKey") || !app.includes("renderCompanyApps") || !app.includes("open_project") || !app.includes("projectPath") || !app.includes("initInProgress") || !app.includes("setInitButtonBusy") || !app.includes("aria-busy") || !app.includes("describeInitFailure") || !app.includes('showOutput(failure.title, `${failure.detail} Next: ${failure.next}`)')) {
   throw new Error("wizard: live activity status updates are missing");
 }
-for (const value of ["loadAiSurfaces", "renderAiSurfaces", "startAiSurface", "refreshAiSurfaces", "updateAiSurfaceControls", "createHarveyBall", "aiSurfaceRecommendation", "showModal", "aiSurfaceGuidance", "GitHub Copilot app", "GitHub Copilot CLI", "copilot-desktop", "copilot-cli", "detect_ai_surfaces", "start_ai_surface", "install_ai_surface"]) {
+for (const value of ["loadAiSurfaces", "renderAiSurfaces", "startAiSurface", "refreshAiSurfaces", "updateAiSurfaceControls", "createHarveyBall", "aiSurfaceRecommendation", "aiSurfaceCompletionMessage", "showModal", "aiSurfaceGuidance", "GitHub Copilot app", "GitHub Copilot CLI", "Google Antigravity 2.0", "Antigravity CLI (agy)", "Claude Desktop", "Claude Code", "ChatGPT desktop (Codex)", "Codex CLI", "Grok Bot", "Grok Build", "copilot-desktop", "copilot-cli", "antigravity-desktop", "antigravity-cli", "claude-desktop", "claude-cli", "codex-desktop", "codex-cli", "grok-bot", "grok-cli", "detect_ai_surfaces", "start_ai_surface", "install_ai_surface"]) {
   if (!app.includes(value)) throw new Error(`wizard: AI workspace behavior is missing ${value}`);
+}
+if (app.includes("agy -i") || app.includes("receives the EAI first request automatically")) {
+  throw new Error("wizard: Antigravity CLI must use a bare interactive handoff without claiming automatic prompt delivery");
+}
+if (!app.includes("A terminal will open Antigravity CLI in this project. Enter the EAI first request after it starts.")) {
+  throw new Error("wizard: Antigravity CLI bare interactive handoff guidance is missing");
+}
+const graphicalAiSurfaceIds = [
+  "vscode-copilot",
+  "copilot-desktop",
+  "antigravity-desktop",
+  "claude-desktop",
+  "codex-desktop",
+  "grok-bot",
+];
+const cliAiSurfaceIds = [
+  "copilot-cli",
+  "antigravity-cli",
+  "claude-cli",
+  "codex-cli",
+  "grok-cli",
+];
+const demoInventoryStart = app.indexOf("if (aiSurfaceInventory.demo)");
+const demoInventoryEnd = app.indexOf("renderAiSurfaces();", demoInventoryStart);
+const demoInventory = app.slice(demoInventoryStart, demoInventoryEnd);
+const demoSurfaces = [...demoInventory.matchAll(/\{\s*id:\s*["']([^"']+)["'][^}]*?kind:\s*["'](desktop|editor|cli)["'][^}]*?\}/g)]
+  .map((match) => ({ id: match[1], kind: match[2] }));
+if (demoSurfaces.length !== 11 || new Set(demoSurfaces.map((surface) => surface.id)).size !== 11) {
+  throw new Error("wizard: the demo inventory must contain exactly 11 unique AI surfaces");
+}
+const expectedAiSurfaceIds = [...graphicalAiSurfaceIds, ...cliAiSurfaceIds];
+if (JSON.stringify(demoSurfaces.map((surface) => surface.id)) !== JSON.stringify(expectedAiSurfaceIds)) {
+  throw new Error(`wizard: expected six graphical surfaces followed by five CLI surfaces, got ${demoSurfaces.map((surface) => surface.id).join(", ")}`);
+}
+const actualGraphicalAiSurfaceIds = demoSurfaces
+  .filter((surface) => surface.kind === "desktop" || surface.kind === "editor")
+  .map((surface) => surface.id);
+if (JSON.stringify(actualGraphicalAiSurfaceIds) !== JSON.stringify(graphicalAiSurfaceIds)) {
+  throw new Error(`wizard: expected exactly six graphical AI workspaces, got ${actualGraphicalAiSurfaceIds.join(", ")}`);
+}
+const actualCliAiSurfaceIds = demoSurfaces
+  .filter((surface) => surface.kind === "cli")
+  .map((surface) => surface.id);
+if (JSON.stringify(actualCliAiSurfaceIds) !== JSON.stringify(cliAiSurfaceIds)) {
+  throw new Error(`wizard: expected exactly five CLI AI workspaces, got ${actualCliAiSurfaceIds.join(", ")}`);
+}
+const installerContract = await readFile(new URL("../docs/installer-contract.md", import.meta.url), "utf8");
+if (!installerContract.includes("| Google Antigravity 2.0 | `antigravity-desktop` |")) {
+  throw new Error("installer contract: Google graphical surface must use the current Antigravity 2.0 name");
+}
+if (installerContract.includes("agy -i") || installerContract.includes("help advertises interactive prompts")) {
+  throw new Error("installer contract: stale help-driven agy prompt injection must not be documented");
+}
+for (const value of ["canProveProjectHandoff", '["project-and-prompt", "project-only"]', "No installed project-capable AI workspace", "opened without a local-project handoff"]) {
+  if (!app.includes(value)) throw new Error(`wizard: launch-only workspaces must not satisfy project handoff evidence: ${value}`);
+}
+if (/id:\s*["']gemini-(?:desktop|cli)["']/.test(app)) {
+  throw new Error("wizard: Gemini must not replace Google's Antigravity 2.0 desktop or agy CLI surfaces");
 }
 for (const value of ["setInterval(refreshActivityHeartbeat, 1000)", "Elapsed ${elapsed}s", "Screen updated every second", "Last installer update", "Waiting for your input", "waitingDetails", "activityEvents", "Stopped with error", "Checking the required tools", "journeyStages", "renderJourneyStages", "setJourneyStage", "bootstrap-summary", "recordSafeSummary", "summarizeCommandOutput"]) {
   if (!app.includes(value)) throw new Error(`wizard: per-second progress feedback is missing: ${value}`);
@@ -311,7 +411,7 @@ if (!styles.includes(".setup-stage summary::marker") || !styles.includes(".activ
 console.log("wizard structure checks ok");
 
 const bundles = await readFile(new URL("../.github/workflows/test-bundles.yml", import.meta.url), "utf8");
-for (const value of ["Windows", "macOS", "Ubuntu", "bundle: nsis", "bundle: dmg", "bundle: deb", "actions/upload-artifact@v6", "actions/download-artifact@v5", "tauri-apps/tauri-action@v1", "Smoke-test Windows installer", "Smoke-test macOS disk image", "Smoke-test Ubuntu package"]) {
+for (const value of ["Windows", "macOS", "Ubuntu", "bundle: nsis", "bundle: dmg", "bundle: deb", "actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6", "actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5", "tauri-apps/tauri-action@944946e3e4cac6603d1fe8f514171e9ecd3c78aa # v1", "Smoke-test Windows installer", "Smoke-test macOS disk image", "Smoke-test Ubuntu package"]) {
   if (!bundles.includes(value)) throw new Error(`test-bundles workflow is missing: ${value}`);
 }
 if (!bundles.includes("$null -ne $LASTEXITCODE")) {
@@ -322,6 +422,9 @@ if (!bundles.includes("expected install roots") || !bundles.includes("Where-Obje
 }
 if (!bundles.includes("Start-Sleep -Seconds 1")) {
   throw new Error("test-bundles workflow does not wait for the Windows installer handoff");
+}
+if (!bundles.includes("$appExecutable.Length -le 0") || !bundles.includes("did not become non-empty and readable")) {
+  throw new Error("test-bundles workflow does not wait for the installed Windows executable to become readable");
 }
 const debSelector = await readFile(new URL("./find-valid-deb.sh", import.meta.url), "utf8");
 if (!debSelector.includes("dpkg-deb --contents") || !debSelector.includes("usr\\/bin\\/eai-setup")) {
@@ -354,11 +457,11 @@ if (dmgBackground.length < 64 || dmgBackground.readUInt32BE(0) !== 0x89504e47) {
   throw new Error("Tauri DMG background image is missing or invalid");
 }
 const testRelease = await readFile(new URL("../.github/workflows/test-release.yml", import.meta.url), "utf8");
-for (const value of ["workflow_dispatch", "gh release create", "gh release upload", "actions/download-artifact@v5", "tauri-apps/tauri-action@v1", "eai-setup-macos-arm64.dmg", "eai-setup-macos-x64.dmg", "eai-setup-windows-x64.exe", "eai-setup-windows-arm64.exe", "eai-setup-ubuntu-amd64.deb", "eai-setup-ubuntu-arm64.deb", "x86_64-apple-darwin", "aarch64-pc-windows-msvc", "ubuntu-24.04-arm"]) {
+for (const value of ["workflow_dispatch", "gh release create", "gh release upload", "actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5", "tauri-apps/tauri-action@944946e3e4cac6603d1fe8f514171e9ecd3c78aa # v1", "eai-setup-macos-arm64.dmg", "eai-setup-macos-x64.dmg", "eai-setup-windows-x64.exe", "eai-setup-windows-arm64.exe", "eai-setup-ubuntu-amd64.deb", "eai-setup-ubuntu-arm64.deb", "x86_64-apple-darwin", "aarch64-pc-windows-msvc", "ubuntu-24.04-arm"]) {
   if (!testRelease.includes(value)) throw new Error(`test-release workflow is missing: ${value}`);
 }
 const release = await readFile(new URL("../.github/workflows/release.yml", import.meta.url), "utf8");
-for (const value of ["Add stable direct-download assets", "tauri-apps/tauri-action@v1", "eai-setup-macos-arm64.dmg", "eai-setup-macos-x64.dmg", "eai-setup-windows-x64.exe", "eai-setup-windows-arm64.exe", "eai-setup-ubuntu-amd64.deb", "eai-setup-ubuntu-arm64.deb", "x86_64-apple-darwin", "aarch64-pc-windows-msvc", "ubuntu-24.04-arm", "codesign --verify --deep --strict", "spctl --assess --type execute", "xcrun stapler validate", "Get-AuthenticodeSignature"]) {
+for (const value of ["Stage exact stable release asset", "Upload verified release asset to workflow storage", "Publish verified cross-platform draft", "tauri-apps/tauri-action@", "eai-setup-macos-arm64.dmg", "eai-setup-macos-x64.dmg", "eai-setup-windows-x64.exe", "eai-setup-windows-arm64.exe", "eai-setup-ubuntu-amd64.deb", "eai-setup-ubuntu-arm64.deb", "x86_64-apple-darwin", "aarch64-pc-windows-msvc", "ubuntu-24.04-arm", "codesign --verify --deep --strict", "spctl --assess --type execute", "xcrun stapler validate", "Get-AuthenticodeSignature", "LINUX_SIGNING_PRIVATE_KEY"]) {
   if (!release.includes(value)) throw new Error(`release workflow is missing: ${value}`);
 }
 const testBundles = await readFile(new URL("../.github/workflows/test-bundles.yml", import.meta.url), "utf8");

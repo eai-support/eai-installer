@@ -40,7 +40,7 @@
 
   function journeyStageForActivity(activeStep, title) {
     const context = `${activeStep || ""} ${title || ""}`;
-    if (/ai workspace|copilot|claude|codex|grok/i.test(context)) return "ai";
+    if (/ai workspace|copilot|antigravity|\bagy\b|claude|chatgpt|codex|grok/i.test(context)) return "ai";
     if (/sign[ -]?in|login|signup|account/i.test(context)) return "signin";
     if (/company workspace|\bapp\b|project|folder|tenant/i.test(context)) return "app";
     if (/eai[ -]?cli/i.test(context)) return "eai-cli";
@@ -57,6 +57,34 @@
 
   function describeInitFailure(message, platform = "") {
     const cleanMessage = cleanText(message) || "The app could not be initialised.";
+    if (/no app named .* was found in the selected company workspace/i.test(cleanMessage)) {
+      return {
+        title: "Existing app could not be found",
+        detail: "The selected app is no longer available in this company workspace. No new platform app was created.",
+        next: "Choose Create a new app, or refresh the workspace list and select the existing app again.",
+      };
+    }
+    if (/more than one enrollment was returned for app/i.test(cleanMessage)) {
+      return {
+        title: "Existing app record needs attention",
+        detail: "EAI found more than one platform record for the selected app, so it stopped to avoid connecting this project to the wrong app. No new platform app was created.",
+        next: "Ask a company administrator to resolve the duplicate app record, then retry.",
+      };
+    }
+    if (/does not identify a runtime tenant/i.test(cleanMessage)) {
+      return {
+        title: "Existing app is not ready",
+        detail: "The selected app does not have a runtime workspace recorded, so EAI stopped before creating a project. No new platform app was created.",
+        next: "Choose Create a new app, or ask a company administrator to repair the selected app record before retrying.",
+      };
+    }
+    if (/app.*disabled|status[^\n]*disabled/i.test(cleanMessage)) {
+      return {
+        title: "Selected app is disabled",
+        detail: "The selected EAI app is disabled. EAI did not create a new app or change the existing app.",
+        next: "Choose a different active app, or ask a company administrator to enable this app before retrying.",
+      };
+    }
     if (/the app was created, but its dependencies could not be installed/i.test(cleanMessage)) {
       return {
         title: "App dependencies need attention",
@@ -168,7 +196,9 @@
   function prerequisitesReady(report, demo = false) {
     if (demo) return true;
     if (!report) return false;
-    return ["git", "node", "npm", "eai"].every((command) => report.tools.some((tool) => tool.command === command && tool.version));
+    const required = ["git", "node", "npm", "eai"];
+    if (report.platform === "windows") required.push("windows-runtime");
+    return required.every((command) => report.tools.some((tool) => tool.command === command && tool.version));
   }
 
   function chooseAiSurface(inventory) {
@@ -183,17 +213,43 @@
     "vscode-copilot": 4,
     "copilot-cli": 3,
     "copilot-desktop": 2,
-    "claude-desktop": 2,
+    "antigravity-desktop": 2,
+    "antigravity-cli": 3,
+    "claude-desktop": 4,
     "claude-cli": 3,
     "codex-desktop": 3,
     "codex-cli": 3,
-    "grok-cli": 1,
+    "grok-bot": 1,
+    "grok-cli": 3,
   });
 
-  function aiSurfaceRecommendation(surfaceId) {
-    const score = aiSurfaceRecommendationScores[surfaceId] ?? 0;
+  function aiSurfaceRecommendation(surfaceOrId) {
+    const surfaceId = typeof surfaceOrId === "string" ? surfaceOrId : surfaceOrId?.id;
+    const launchSupportScores = {
+      "project-and-prompt": 4,
+      "project-only": 3,
+      "manual-project": 2,
+      "launch-only": 1,
+    };
+    const catalogScore = aiSurfaceRecommendationScores[surfaceId] ?? 0;
+    const score = typeof surfaceOrId === "object" && surfaceOrId
+      ? Math.min(catalogScore, launchSupportScores[surfaceOrId.launchSupport] ?? catalogScore)
+      : catalogScore;
     const labels = ["Not scored", "Basic handoff", "Supported", "Strong fit", "Best fit"];
     return { score, maximum: 4, label: labels[score] };
+  }
+
+  function aiSurfaceCompletionMessage(surface, label) {
+    if (surface?.launchSupport === "launch-only") {
+      return `${label} is open. Complete its sign-in step to use the app; this did not hand off the local project.`;
+    }
+    if (surface?.launchSupport === "manual-project") {
+      return `${label} is open. Complete sign-in and choose this project folder to start building.`;
+    }
+    if (["project-and-prompt", "project-only"].includes(surface?.launchSupport)) {
+      return `${label} is open with this project. Complete sign-in if requested to start building.`;
+    }
+    return `${label} is open, but its project handoff mode is unknown. Confirm the project before you start building.`;
   }
 
   root.EAIWizard = {
@@ -207,6 +263,7 @@
     isKebabCase,
     prerequisitesReady,
     chooseAiSurface,
+    aiSurfaceCompletionMessage,
     aiSurfaceRecommendation,
     retryActionLabel,
     resolveTenantSelection,
