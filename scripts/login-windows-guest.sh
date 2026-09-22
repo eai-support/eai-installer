@@ -446,8 +446,9 @@ if [[ "$mode" != cli ]]; then
   [[ "$status" == *running* ]] \
     || fail "The Windows VM must already be running before browser login."
   actual_user="$(
-    printf '%s\n' '[Security.Principal.WindowsIdentity]::GetCurrent().Name' | windows_hidden_current_user_ps "$vm_name" 2>/dev/null \
-      | /usr/bin/tr -d '\r\n'
+    run_guest_powershell_readonly <<'POWERSHELL' | /usr/bin/tr -d '\r\n'
+[Security.Principal.WindowsIdentity]::GetCurrent().Name
+POWERSHELL
   )"
   actual_user_lower="$(printf '%s' "$actual_user" | /usr/bin/tr '[:upper:]' '[:lower:]')"
   [[ -n "$actual_user" && "$actual_user_lower" != *"system"* ]] \
