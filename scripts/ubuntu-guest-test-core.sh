@@ -1131,6 +1131,20 @@ process_alive "$normal_pid_file" \
 kill -0 "$normal_bridge_pid" 2>/dev/null \
   || guest_test_fail "The normal Ubuntu application started without its host bridge."
 
+stage normal-welcome-start
+welcome_started=0
+for _ in $(seq 1 30); do
+  if screen_has 'Get started'; then
+    input key tab
+    input key enter
+    welcome_started=1
+    break
+  fi
+  sleep 1
+done
+[[ "$welcome_started" == 1 ]] \
+  || guest_test_fail "The released Ubuntu app did not show its Get started welcome action."
+
 stage prerequisite-install
 ready_reads=0
 node_defect_reads=0
@@ -1160,7 +1174,7 @@ for attempt in $(seq 1 300); do
   fi
 
   versions="$(versions_json || true)"
-  if [[ -n "$versions" ]] && versions_ready "$versions" && screen_has 'Sign in to EAI'; then
+  if [[ -n "$versions" ]] && versions_ready "$versions" && screen_has 'This Linux PC is ready'; then
     ready_reads=$((ready_reads + 1))
     [[ "$ready_reads" -ge 2 ]] && break
   else
@@ -1187,6 +1201,20 @@ NODE
 done
 [[ "$ready_reads" -ge 2 ]] \
   || guest_test_fail "The released Ubuntu app did not reach stable Git/Node.js 24/npm/EAI CLI readiness within 20 minutes."
+
+stage normal-welcome-continue
+input key tab
+input key enter
+signin_visible=0
+for _ in $(seq 1 30); do
+  if screen_has 'Sign in with browser'; then
+    signin_visible=1
+    break
+  fi
+  sleep 1
+done
+[[ "$signin_visible" == 1 ]] \
+  || guest_test_fail "The released Ubuntu app did not take Let’s go to the sign-in screen."
 
 after_git="$(git_version)"
 after_node="$(node_version)"

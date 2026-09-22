@@ -2076,23 +2076,30 @@ assert.match(guestTestLibrarySource, /installerBridgeEvidence[?][.]workerProcess
 assert.match(guestTestLibrarySource, /defenderAddEvidence[?][.]completionSignalVerified === true/);
 assert.match(guestTestLibrarySource, /defenderAddEvidence[?][.]targetHashVerified === true/);
 const windowsNormalLaunchSection = windowsGuestAdapterSource.slice(windowsNormalLaunch, windowsE2eLaunch);
+assert.match(guestTestLibrarySource, /EAI_PARALLELS_PRLCTL='\/Applications\/Parallels Desktop[.]app\/Contents\/MacOS\/prlctl'/);
+assert.match(guestTestLibrarySource, /PATH="\$\(dirname "\$EAI_PARALLELS_PRLCTL"\):\$PATH"/);
+assert.match(vmAdapterPreflightSource, /prlctl_bin='\/Applications\/Parallels Desktop[.]app\/Contents\/MacOS\/prlctl'/);
+assert.match(vmAdapterPreflightSource, /codesign --verify --deep --strict "\$prlctl_bin"/);
+assert.match(vmAdapterPreflightSource, /"\$prlctl_bin" list "\$vm_name" --info/);
+assert.match(vmAdapterPreflightSource, /"\$prlctl_bin" snapshot-list "\$vm_name"/);
 assert.match(windowsNormalLaunchSection, /launch_guest_app_detached normal "" "\$executable_hash"/);
 assert.match(windowsNormalLaunchSection, /validate_guest_app_launch "\$guest_normal_pid"/);
 assert.match(windowsNormalLaunchSection, /cleanup_detached_guest_app normal/);
 assert.doesNotMatch(windowsNormalLaunchSection, /EAI_SETUP_E2E(?:_|\s*=)/);
 assert.match(windowsNormalLaunchSection, /versions_satisfy_contract "\$versions"/);
-assert.match(windowsNormalLaunchSection, /screen_has "Sign in"/);
-assert.match(windowsNormalLaunchSection, /screen_has "Prerequisites installed successfully"/);
-assert.doesNotMatch(windowsNormalLaunchSection, /screen_has "Sign in to EAI"/);
+assert.match(windowsNormalLaunchSection, /screen_has "Get started"/);
+assert.match(windowsNormalLaunchSection, /screen_has "This Windows PC is ready"/);
+assert.match(windowsNormalLaunchSection, /screen_has "Sign in with browser"/);
+assert.match(windowsNormalLaunchSection, /input key tab[\s\S]*input key enter/);
+assert.doesNotMatch(windowsNormalLaunchSection, /Prerequisites installed successfully/);
+assert.doesNotMatch(windowsNormalLaunchSection, /Sign in to EAI/);
 const windowsVersionsReadyGate = windowsNormalLaunchSection.indexOf('versions_satisfy_contract "$versions"');
-const windowsSignInReadyGate = windowsNormalLaunchSection.indexOf('screen_has "Sign in"');
-const windowsPrerequisiteSuccessReadyGate = windowsNormalLaunchSection.indexOf(
-  'screen_has "Prerequisites installed successfully"',
-);
-assert.ok(windowsVersionsReadyGate >= 0 && windowsVersionsReadyGate < windowsSignInReadyGate);
+const windowsWelcomeReadyGate = windowsNormalLaunchSection.indexOf('screen_has "This Windows PC is ready"');
+const windowsSignInReadyGate = windowsNormalLaunchSection.indexOf('screen_has "Sign in with browser"');
+assert.ok(windowsVersionsReadyGate >= 0 && windowsVersionsReadyGate < windowsWelcomeReadyGate);
 assert.ok(
-  windowsSignInReadyGate < windowsPrerequisiteSuccessReadyGate,
-  "Windows readiness must require both receipt-bound visible phrases after the version contract",
+  windowsWelcomeReadyGate < windowsSignInReadyGate,
+  "Windows must continue from the visible ready state to the sign-in screen before the CLI phase",
 );
 assert.match(macosParallelsWindowIdSource, /[.]optionOnScreenOnly/);
 assert.match(macosParallelsWindowIdSource, /kCGWindowOwnerName[\s\S]*Parallels Desktop/);
@@ -2437,6 +2444,7 @@ assert.ok(
 );
 for (const job of [productionWindowsBuildJob, productionAppleJob, productionLinuxJob]) {
   assert.match(job, /uses: tauri-apps\/tauri-action@[a-f0-9]{40} # v1/);
+  assert.match(job, /name: Install JavaScript dependencies\n        run: npm ci\n      - run: npm test/);
 }
 assert.equal((releaseWorkflow.match(/uses: tauri-apps\/tauri-action@[a-f0-9]{40}/g) ?? []).length, 4);
 assert.doesNotMatch(productionAppleJob, /mapfile/);
@@ -3069,8 +3077,8 @@ assert.equal(
 );
 assert.equal(execFileSync("bash", ["-n", guestTestLibrary], { cwd: root, encoding: "utf8" }), "");
 assert.equal(execFileSync("bash", ["-n", vmAdapterPreflight], { cwd: root, encoding: "utf8" }), "");
-assert.match(vmAdapterPreflightSource, /\$prlctl_bin list "\$vm_name" --info/);
-assert.match(vmAdapterPreflightSource, /\$prlctl_bin snapshot-list "\$vm_name"/);
+assert.match(vmAdapterPreflightSource, /"\$prlctl_bin" list "\$vm_name" --info/);
+assert.match(vmAdapterPreflightSource, /"\$prlctl_bin" snapshot-list "\$vm_name"/);
 assert.match(vmAdapterPreflightSource, /"schemaVersion":"eai\.vm-adapter-preflight\.v1"/);
 assert.match(vmAdapterPreflightSource, /"mutationAttempted":false/);
 assert.doesNotMatch(vmAdapterPreflightSource, /\$prlctl_bin (?:start|stop|snapshot-switch|exec)/);

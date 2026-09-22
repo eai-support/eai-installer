@@ -2,6 +2,16 @@
 
 set -euo pipefail
 
+readonly EAI_PARALLELS_PRLCTL='/Applications/Parallels Desktop.app/Contents/MacOS/prlctl'
+# On this host, the generic /usr/local/bin/prlctl launcher is copied to a
+# temporary path and rejected by macOS 26's launch constraints.  Put the
+# signed binary inside the Parallels app bundle first so every adapter and its
+# keyboard helper executes the accepted executable directly.  Availability
+# and signature are deliberately checked by vm-adapter-preflight.sh, not on
+# source, so static CI may inspect these adapters without Parallels installed.
+PATH="$(dirname "$EAI_PARALLELS_PRLCTL"):$PATH"
+export PATH
+
 guest_test_fail() {
   printf 'Guest release test failed: %s\n' "$*" >&2
   exit 1
