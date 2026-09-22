@@ -1,419 +1,1403 @@
-const output = document.querySelector("#output");
-const platform = document.querySelector("#platform");
-const panels = [...document.querySelectorAll("[data-panel]")];
-const completeMessage = document.querySelector("#complete-message");
-const completeLocation = document.querySelector("#complete-location");
-const openProjectButton = document.querySelector("#open-project");
-const activity = document.querySelector("#activity");
-const activityTitle = document.querySelector("#activity-title");
-const activityDetail = document.querySelector("#activity-detail");
-const activityBar = document.querySelector("#activity-bar");
-const activityTrack = document.querySelector(".activity-track");
-const activityPhase = document.querySelector("#activity-phase");
-const activityEta = document.querySelector("#activity-eta");
-const activityHeartbeat = document.querySelector("#activity-heartbeat");
-const activityStep = document.querySelector("#activity-step");
-const setupStages = document.querySelector("#setup-stages");
-const activityLog = document.querySelector("#activity-log");
-const activityLogStatus = document.querySelector("#activity-log-status");
-const retryInstall = document.querySelector("#retry-install");
-const retryWorkspaces = document.querySelector("#retry-workspaces");
-const adminPasswordPanel = document.querySelector("#admin-password-panel");
-const adminPasswordInput = document.querySelector("#admin-password");
-const adminPasswordSubmit = document.querySelector("#admin-password-submit");
-const adminPasswordCancel = document.querySelector("#admin-password-cancel");
-const companyTenantField = document.querySelector("#company-tenant-field");
-const companyTenantSelect = document.querySelector("#company-tenant");
-const appSelectionField = document.querySelector("#app-selection-field");
-const appSelection = document.querySelector("#app-selection");
-const projectNameInput = document.querySelector("#project-name");
-const initAppButton = document.querySelector("#init-app");
-const aiSurfaceStatus = document.querySelector("#ai-surface-status");
-const aiSurfaceField = document.querySelector("#ai-surface-field");
-const aiSurfaceOptions = document.querySelector("#ai-surface-options");
-const aiSurfaceNext = document.querySelector("#ai-surface-next");
-const aiSurfaceConsent = document.querySelector("#ai-surface-consent");
-const refreshAiButton = document.querySelector("#refresh-ai");
-const startAiButton = document.querySelector("#start-ai");
-const recommendationHelp = document.querySelector("#recommendation-help");
-const recommendationDialog = document.querySelector("#recommendation-dialog");
-const recommendationClose = document.querySelector("#recommendation-close");
+/* ------------------------------------------------------------------
+   EAI Setup — the app that the state machine drives.
 
-const wizard = EAIWizard.createState();
-let environmentReport = null;
-let demoMode = false;
-let setupStarted = false;
-let activeBootstrapStep = null;
-let activityTicker = null;
-let activityStartedAt = 0;
-let activityLastUpdateAt = 0;
-let pendingAdminPassword = null;
-let companyTenants = [];
-let selectedCompanyTenantId = null;
-let selectedCompanyAppKey = null;
-let failedAppTenantId = null;
-let createdProjectDirectory = null;
-let aiSurfaceInventory = null;
-let selectedAiSurfaceId = null;
-let projectPath = null;
-let initInProgress = false;
+   ui/state-machine.js owns the state and every sentence about it. This
+   file owns the DOM and the outside world: Tauri commands, the CLI's
+   progress events, the folder chooser, the browser hand-off. It makes
+   no decisions of its own about what a screen says.
+
+   The pattern is the prototype's, and it is the whole reason the
+   machine can be trusted: `paint()` resets the window to its base and
+   then applies the current state from scratch. There is no "undo the
+   failure" path, because nothing is ever half-applied — and the list of
+   things an undo path has to remember is the list of bugs.
+
+   Two rules for anyone editing this file:
+
+   · **Ask the machine, don't write the sentence.** If a screen needs a
+     new line of copy, it goes in state-machine.js where the tests can
+     read it and where the Windows and Linux wordings live next to the
+     Mac one.
+
+   · **el() throws.** This file reaches into markup by id. When a screen
+     gains or loses an element, "index.html has no #welcomeMark" is the
+     answer; "Cannot read properties of null" is a morning of hunting.
+------------------------------------------------------------------- */
+
+const machine = window.EAISetup;
+const helpers = window.EAIWizard;
+
+/* ===================== 1. REACHING THE MARKUP ==================== */
+
+function el(id) {
+  const node = document.getElementById(id);
+  if (!node) throw new Error(`ui/index.html has no #${id} — app.js and the markup have drifted apart`);
+  return node;
+}
+
+/** For the boxes the app builds at runtime rather than ships in markup. */
+function maybe(id) {
+  return document.getElementById(id);
+}
+
+function screenNode(id) {
+  const node = document.querySelector(`[data-screen="${id}"]`);
+  if (!node) throw new Error(`ui/index.html has no [data-screen="${id}"]`);
+  return node;
+}
+
+function stepNode(name) {
+  return document.querySelector(`.i3-step[data-step="${name}"]`);
+}
+
+/* ======================== 2. THE STATE =========================== */
+
+const state = machine.createState();
+
+/** Everything the outside world has told us. Never rendered directly. */
+const facts = {
+  environment: null,        // detect_environment
+  account: null,            // the address the CLI signed in as
+  signinUrl: null,          // the link, for when the browser never came back
+  connectivity: null,       // { ok, host }
+  tenants: [],
+  selectedTenantId: null,
+  /* Only the release test ever sets this. EAI Setup creates from the
+     EAI template every time, so there is no app question in the form —
+     see docs/known-issues.md. The plumbing stays because the CLI takes
+     --app-key and the guest-machine gate can be pointed at a fixed app. */
+  selectedAppKey: null,
+  projectName: "",
+  projectFolder: "",
+  projectPath: null,
+  projectDirectory: null,
+  surfaces: null,           // detect_ai_surfaces inventory
+  selectedSurfaceId: null,
+  waitingForSurfaceId: null,
+  failureContext: {},       // per-fault detail, handed to the machine
+  runReached: "workspace",
+  runFailedAt: null,
+  runValues: {},
+  demo: false,
+  prereqBusy: null,         // the step whose row is spinning
+  prereqDetail: "",
+  prereqPlan: [],           // every prerequisite identified at the start of this readiness pass
+  prereqCompleted: 0,
+  preparationStarted: false,
+  signinWaiting: false,
+  signinEscapeShown: false,   // the way out, once waiting has become a problem
+};
+
 let e2eConfig = null;
 let e2eAppCreated = false;
-const activityEvents = [];
-const activitySummaryKeys = new Set();
+let initInProgress = false;
+let readinessInProgress = false;
+let welcomeEscapeTimer = null;
+let harnessPollTimer = null;
+let pendingAdminPassword = null;
 
-const stepLabels = {
-  git: "Git",
-  node: "Node.js 24 and npm",
-  "eai-cli": "EAI CLI",
-};
-
-const prerequisiteSteps = ["git", "node", "eai-cli"];
-
-const journeyStages = [
-  { id: "computer", label: "Check computer", waiting: "Waiting to check this computer." },
-  { id: "git", label: "Prepare Git", waiting: "Waiting for the computer check." },
-  { id: "node", label: "Prepare Node.js 24 and npm", waiting: "Waiting for Git." },
-  { id: "eai-cli", label: "Prepare EAI CLI", waiting: "Waiting for Node.js 24 and npm." },
-  { id: "signin", label: "Sign in", waiting: "Waiting for the required tools." },
-  { id: "app", label: "Create app", waiting: "Waiting for sign-in." },
-  { id: "ai", label: "Open AI workspace", waiting: "Waiting for the app." },
-];
-
-const journeyState = new Map(journeyStages.map((stage) => [stage.id, { state: "pending", detail: stage.waiting }]));
-let currentJourneyStageId = "computer";
-
-const stepEstimates = {
-  git: 45,
-  node: 75,
-  "eai-cli": 45,
-};
-
-const aiSurfaceGuidance = {
-  "copilot-desktop": {
-    label: "GitHub Copilot app",
-    ready: "GitHub Copilot will open this project when Copilot CLI is also ready. Otherwise sign in to GitHub if asked, choose Add local repositories, and select the project folder shown above.",
-    notInstalled: "Download GitHub Copilot from GitHub. After installing it, return here and select Check again.",
-  },
-  "copilot-cli": {
-    label: "GitHub Copilot CLI",
-    ready: "A terminal will open in this project. The first use asks you to run /login and confirm that you trust this folder.",
-    notInstalled: "GitHub supports a terminal install for Copilot CLI. EAI will open the official instructions; after installing, return here and select Check again.",
-  },
-  "vscode-copilot": {
-    label: "GitHub Copilot in VS Code",
-    ready: "VS Code will open this project. Sign in to GitHub in VS Code if asked, then open Copilot Chat.",
-    notInstalled: "Install VS Code and the GitHub Copilot extension from the official page. Return here and select Check again.",
-  },
-  "antigravity-desktop": {
-    label: "Google Antigravity 2.0",
-    ready: "Google Antigravity 2.0 will open. Choose New Project, add the project folder shown above, and use the repository EAI skill.",
-    notInstalled: "Download Google Antigravity 2.0. The desktop app and agy CLI are separate installs; after installing the desktop app, return here and select Check again.",
-  },
-  "antigravity-cli": {
-    label: "Antigravity CLI (agy)",
-    ready: "A terminal will open Antigravity CLI in this project. Enter the EAI first request after it starts. Complete Google sign-in or folder trust if Antigravity asks.",
-    notInstalled: "Install the agy CLI from Google's Antigravity page. This is separate from the desktop app; after installing it, return here and select Check again.",
-  },
-  "claude-desktop": {
-    label: "Claude Desktop",
-    ready: "Claude Desktop will open a Code session for this project when its deep link is available. Confirm the folder if asked.",
-    notInstalled: "Download Claude Desktop from Anthropic. After installing it, return here and select Check again.",
-  },
-  "claude-cli": {
-    label: "Claude Code",
-    ready: "A terminal will open in this project. Current Claude Code releases receive the EAI first request automatically; otherwise enter it after startup. Complete Anthropic sign-in or folder trust if asked.",
-    notInstalled: "Install Claude Code from Anthropic's official setup page. After installing it, return here and select Check again.",
-  },
-  "codex-desktop": {
-    label: "ChatGPT desktop (Codex)",
-    ready: "ChatGPT will open this project in Codex when the Codex CLI launcher is available. Otherwise choose the project and Codex in the app.",
-    notInstalled: "Download the ChatGPT desktop app from OpenAI. After installing it, return here and select Check again.",
-  },
-  "codex-cli": {
-    label: "Codex CLI",
-    ready: "A terminal will open in this project with the EAI first request. Complete OpenAI sign-in or folder trust if asked.",
-    notInstalled: "Install Codex CLI from OpenAI's official page. After installing it, return here and select Check again.",
-  },
-  "grok-bot": {
-    label: "Grok Bot",
-    ready: "Grok Bot will open for cloud Bot chat, review, and approvals. It does not automatically open this local project; choose Grok Build for local coding.",
-    notInstalled: "Download Grok Bot for macOS, Windows, or Linux from xAI's official page. It is a cloud Bot desktop client, not the Grok Build CLI; after installing it, return here and select Check again.",
-  },
-  "grok-cli": {
-    label: "Grok Build",
-    ready: "A terminal will open in this project. Current Grok Build releases receive the EAI first request as the documented interactive prompt; otherwise enter it after startup. Complete xAI sign-in or folder trust if asked.",
-    notInstalled: "Install Grok Build from xAI's official page. After installing it, return here and select Check again.",
-  },
-};
-
-function journeyStatusLabel(state) {
-  return { pending: "Waiting", active: "In progress", done: "Ready", error: "Needs attention" }[state] || "Waiting";
+function platform() {
+  return facts.environment?.platform || state.platform;
 }
 
-function renderJourneyStages() {
-  if (!setupStages) return;
-  const openStages = new Set(
-    [...setupStages.querySelectorAll("details[open]")].map((details) => details.dataset.stage),
-  );
-  setupStages.replaceChildren();
-  for (const [index, stage] of journeyStages.entries()) {
-    const value = journeyState.get(stage.id);
-    const details = document.createElement("details");
-    details.className = "setup-stage";
-    details.dataset.stage = stage.id;
-    details.dataset.state = value.state;
-    details.open = openStages.has(stage.id)
-      || (stage.id === currentJourneyStageId && ["active", "error"].includes(value.state));
-    const summary = document.createElement("summary");
-    const number = document.createElement("span");
-    number.className = "setup-stage-number";
-    number.textContent = String(index + 1);
-    const name = document.createElement("span");
-    name.className = "setup-stage-name";
-    name.textContent = stage.label;
-    const status = document.createElement("span");
-    status.className = "setup-stage-status";
-    status.textContent = journeyStatusLabel(value.state);
-    const detail = document.createElement("p");
-    detail.className = "setup-stage-detail";
-    detail.textContent = value.detail;
-    summary.append(number, name, status);
-    details.append(summary, detail);
-    setupStages.append(details);
+/* ======================= 3. THE RECORD =========================== */
+
+/**
+ * What the installer actually did, for the call in fifty where the
+ * designed sentence is not enough.
+ *
+ * Deliberately not the screen. The prototype has no panel like this,
+ * and the reason it works is that nothing in it competes with the
+ * primary: it is shut, it is the same height on every screen, and no
+ * failure opens it.
+ */
+const diagnostics = [];
+
+function note(message, kind = "update") {
+  const previous = diagnostics.at(-1);
+  if (previous?.message === message && previous.kind === kind) return;
+  diagnostics.push({ at: Date.now(), message, kind });
+  if (diagnostics.length > 60) diagnostics.shift();
+  renderDiagnostics();
+}
+
+function renderDiagnostics() {
+  const log = maybe("diagLog");
+  if (!log) return;
+  log.replaceChildren();
+  for (const entry of [...diagnostics].reverse()) {
+    const item = document.createElement("li");
+    item.dataset.kind = entry.kind;
+    const time = document.createElement("time");
+    time.textContent = new Date(entry.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" });
+    const text = document.createElement("span");
+    text.textContent = entry.message;
+    item.append(time, text);
+    log.append(item);
   }
-  const currentIndex = Math.max(0, journeyStages.findIndex((stage) => stage.id === currentJourneyStageId));
-  if (activityStep) activityStep.textContent = `Step ${currentIndex + 1} of ${journeyStages.length}`;
+  const status = maybe("diagStatus");
+  if (status) {
+    const failed = diagnostics.filter((entry) => entry.kind === "error").length;
+    status.textContent = failed
+      ? `${failed} problem${failed === 1 ? "" : "s"} recorded`
+      : diagnostics.length === 0
+        ? "nothing yet"
+        : `${diagnostics.length} step${diagnostics.length === 1 ? "" : "s"}`;
+  }
+  const foot = maybe("diagFoot");
+  if (foot) {
+    const report = facts.environment;
+    foot.textContent = report
+      ? `${report.platform} · ${report.architecture} · ${report.tools.map((tool) => `${tool.command} ${tool.version || "missing"}`).join(" · ")}`
+      : "";
+  }
 }
 
-function setJourneyStage(stageId, state, detail) {
-  if (!journeyState.has(stageId)) return;
-  if (["active", "error"].includes(state)) {
-    const targetIndex = journeyStages.findIndex((stage) => stage.id === stageId);
-    for (const [otherId, otherValue] of journeyState.entries()) {
-      if (otherId === stageId || otherValue.state !== "active") continue;
-      const otherIndex = journeyStages.findIndex((stage) => stage.id === otherId);
-      journeyState.set(otherId, {
-        ...otherValue,
-        state: otherIndex < targetIndex ? "done" : "pending",
-      });
+/** Command output, summarised into things that are safe to show. */
+function recordCommandSummaries(commandOutput) {
+  for (const detail of helpers.summarizeCommandOutput(commandOutput)) note(detail);
+}
+
+/* ==================== 4. TALKING TO THE SHELL ==================== */
+
+async function invoke(command, args = {}) {
+  const tauri = window.__TAURI__;
+  if (!tauri?.core?.invoke) {
+    facts.demo = true;
+    return { ok: true, demo: true, message: "Preview mode: install actions run in the signed EAI Setup app." };
+  }
+  return tauri.core.invoke(command, args);
+}
+
+async function listenForBootstrapProgress() {
+  const eventApi = window.__TAURI__?.event;
+  if (!eventApi?.listen) return;
+  if (!window.__eaiBootstrapProgressListener) {
+    window.__eaiBootstrapProgressListener = await eventApi.listen("bootstrap-progress", ({ payload }) => {
+      onBootstrapProgress(payload);
+    });
+  }
+  if (!window.__eaiBootstrapSummaryListener) {
+    window.__eaiBootstrapSummaryListener = await eventApi.listen("bootstrap-summary", ({ payload }) => {
+      if (!payload?.detail) return;
+      note(payload.detail);
+      if (payload.step !== "init") return;
+      const row = machine.runRowForProgress(payload.detail, "");
+      if (!row) return;
+      facts.runReached = row;
+      if (state.screen === "running") paint();
+    });
+  }
+  if (!window.__eaiSigninUrlListener) {
+    window.__eaiSigninUrlListener = await eventApi.listen("bootstrap-signin-url", ({ payload }) => {
+      if (!payload?.url) return;
+      facts.signinUrl = payload.url;
+      note("The browser sign-in link is ready.");
+      if (state.screen === "welcome") paint();
+    });
+  }
+}
+
+/**
+ * The CLI's progress, turned into whichever screen is listening.
+ *
+ * Sign-in and Creating are the two screens with something running under
+ * them, and they read the same stream differently: one wants a row that
+ * says which tool is installing, the other wants to know how far down
+ * its own four rows the CLI has got.
+ */
+function onBootstrapProgress(payload) {
+  if (!payload) return;
+  note(`${payload.title}: ${payload.detail}`);
+  if (payload.step === "init") {
+    const row = machine.runRowForProgress(payload.title, payload.detail);
+    if (row) facts.runReached = row;
+    if (state.screen === "running") paint();
+    return;
+  }
+  if (["git", "node", "eai-cli", "homebrew", "detect"].includes(payload.step)) {
+    facts.prereqBusy = payload.step;
+    facts.prereqDetail = payload.detail;
+    if (state.screen === "start") paint();
+  }
+}
+
+/* ======================= 5. THE RESET ============================
+
+   Everything paint() is allowed to change, put back. This is the only
+   reason the machine is trustworthy: a state is what the screen paints
+   on top of this, never what the last state happened to leave behind. */
+
+function reset() {
+  for (const node of document.querySelectorAll("[data-screen]")) node.hidden = true;
+
+  const dev = machine.device(platform());
+
+  // Sign in
+  el("signinSub").textContent = machine.signinHead(machine.createState());
+  el("checkRows").replaceChildren();
+  el("adminPanel").hidden = !pendingAdminPassword;
+  el("setupCreate").textContent = "Create an EAI account";
+  el("setupSignin").textContent = "Sign in with browser";
+  el("setupSignin").classList.remove("off");
+  el("setupSignin").disabled = false;
+
+  // Signed in
+  const mark = el("welcomeMark");
+  mark.classList.remove("failed", "waiting");
+  mark.innerHTML = '<svg viewBox="0 0 24 24" fill="none">'
+    + '<path d="M5 12.5l4.5 4.5L19 7.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  el("welcomeTitle").textContent = "Signed in";
+  el("welcomeSub").textContent = facts.account || "";
+  el("welcomeSub").classList.remove("wide");
+  el("welcomeActs").hidden = true;
+  el("welcomeRetry").hidden = false;
+  el("welcomeRetry").textContent = "Try again";
+  el("welcomeFine").hidden = false;
+  el("welcomeFine").textContent = "If your browser never opened, paste the link into it yourself.";
+
+  // Set up
+  el("setupSub").textContent = machine.setupSub(state, { account: facts.account });
+  el("wsRows").replaceChildren();
+  el("wsMenuRows").replaceChildren();
+  el("wsPick").hidden = true;
+  closeWorkspaceMenu();
+  el("wsNote").hidden = true;
+  el("wsActs").hidden = true;
+  el("folderHelp").textContent = dev.chooserNote;
+  // Only when it differs: assigning `value` moves the caret to the end,
+  // and the reveal repaints while somebody is still typing the name.
+  if (el("projName").value.trim() !== facts.projectName) el("projName").value = facts.projectName;
+  // The location question's two shapes are PAINT.setup's, because they
+  // follow the stage. Reset only puts it back to the unanswered one.
+  el("projFolder").value = "";
+  el("locCombo").hidden = true;
+  el("chooseFolderStart").hidden = false;
+  for (const field of document.querySelectorAll(".eai-field")) {
+    const error = field.querySelector(".eai-err");
+    if (error) error.hidden = true;
+    field.classList.remove("invalid", "shake");
+  }
+  for (const name of ["workspace", "app", "name", "folder"]) {
+    const node = stepNode(name);
+    if (node) {
+      node.hidden = true;
+      node.classList.remove("answered");
     }
   }
-  const current = journeyState.get(stageId);
-  journeyState.set(stageId, { state: state || current.state, detail: detail || current.detail });
-  if (["active", "error"].includes(state)) currentJourneyStageId = stageId;
-  renderJourneyStages();
+  el("projName").readOnly = false;
+  el("createApp").disabled = true;
+
+  // Creating
+  el("runTitle").textContent = `Creating ${facts.projectName || "your EAI app"}`;
+  el("runSub").textContent = "This takes a couple of minutes. You can leave it running.";
+  el("runLines").replaceChildren();
+  el("runNote").hidden = true;
+  el("runActs").hidden = true;
+  el("runBack").hidden = false;
+  el("runRetry").hidden = false;
+  el("runContinue").hidden = true;
+
+  // Choose a harness
+  el("harnessRows").replaceChildren();
+  el("harnessSub").textContent = "";
+  el("harnessNote").hidden = true;
+  el("harnessRefresh").hidden = true;
+  el("harnessGo").hidden = true;
+  el("harnessGo").disabled = false;
+
+  // Hand-off
+  el("handoffTitle").textContent = "One last thing";
+  el("handoffNote").hidden = true;
+  el("handoffFolder").hidden = !facts.projectPath;
 }
 
-function journeyStageForActivity(title) {
-  return EAIWizard.journeyStageForActivity(activeBootstrapStep, title);
+/* ==================== 6. THE SEVEN PAINTS ========================
+
+   One function per screen. Each is handed the faults in force — a list,
+   possibly empty — and is responsible for the whole screen either way.
+   No function here reads what another one did. */
+
+const SPINNER = "<s></s><s></s><s></s><s></s><s></s><s></s><s></s><s></s>";
+
+/**
+ * A rail button's words, without disturbing its chevron.
+ *
+ * `textContent = "..."` on one of these would throw the arrow away, and
+ * it would come back on the next paint from the markup — so the bug
+ * would only show between a label change and a repaint, which is the
+ * hardest kind to see.
+ */
+function setLabel(button, text) {
+  const words = [...button.childNodes].find((node) => node.nodeType === Node.TEXT_NODE && node.textContent.trim());
+  if (words) words.textContent = text;
+  else button.prepend(document.createTextNode(text));
 }
 
-function syncJourneyActivity(title, detail, active, phase) {
-  const stageId = journeyStageForActivity(title);
-  if (!stageId) return;
-  if (phase === "Error") setJourneyStage(stageId, "error", detail);
-  else if (active) setJourneyStage(stageId, "active", detail);
-  else setJourneyStage(stageId, null, detail);
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"]/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[character]));
 }
 
-function recordSafeSummary(step, detail) {
-  const summaryKey = `${step}:${detail}`;
-  if (activitySummaryKeys.has(summaryKey)) return;
-  activitySummaryKeys.add(summaryKey);
-  const stageId = step === "init" ? "app" : step === "login" ? "signin" : step;
-  const label = journeyStages.find((stage) => stage.id === stageId)?.label || stepLabels[step] || "Setup";
-  recordActivityEvent(label, detail, "Update");
-  if (journeyState.has(stageId)) setJourneyStage(stageId, null, detail);
+function addCheckRow(mark, title, body) {
+  const row = document.createElement("div");
+  row.className = `eai-row${mark === "fail" ? " failed" : mark === "busy" ? " active" : ""}`;
+  const glyph = mark === "done" ? '<i class="mk done">&#10003;</i>'
+    : mark === "busy" ? `<i class="mk busy">${SPINNER}</i>`
+      : '<i class="mk fail bang">!</i>';
+  row.innerHTML = glyph
+    + `<span class="lbl">${escapeHtml(title)}`
+    + (body ? `<span class="sub">${escapeHtml(body)}</span>` : "")
+    + "</span>";
+  el("checkRows").appendChild(row);
+  return row;
 }
 
-function recordCommandSummaries(step, commandOutput) {
-  for (const detail of EAIWizard.summarizeCommandOutput(commandOutput)) {
-    recordSafeSummary(step, detail);
+function renderReadinessProgress() {
+  const panel = el("readinessProgress");
+  const checking = facts.prereqBusy === "detect";
+  // Detection happens before the installer knows which tools are missing.
+  // It is one live check, not the eventual Git/Node/CLI checklist.
+  const plan = checking ? ["detect"] : facts.prereqPlan;
+  if (!facts.preparationStarted) {
+    panel.hidden = true;
+    return;
+  }
+
+  if (!facts.prereqBusy) {
+    const device = { macos: "Mac", windows: "Windows PC", linux: "Linux PC" }[platform()] || "computer";
+    el("readinessProgressTitle").textContent = `This ${device} is ready`;
+    el("readinessProgressPercent").textContent = "Ready";
+    el("readinessProgressDetail").textContent = "Everything Enterprise AI needs is in place. You can sign in when you’re ready.";
+    el("readinessProgressBar").style.width = "100%";
+    panel.querySelector("[role=progressbar]").setAttribute("aria-valuenow", "100");
+    const log = el("readinessProgressLog");
+    log.replaceChildren();
+    const item = document.createElement("li");
+    item.className = "done";
+    item.innerHTML = "<i>✓</i><span>Computer preparation complete</span>";
+    log.append(item);
+    panel.hidden = false;
+    return;
+  }
+
+  if (!plan.length) {
+    panel.hidden = true;
+    return;
+  }
+
+  const active = Math.max(0, plan.indexOf(facts.prereqBusy));
+  const completed = Math.max(facts.prereqCompleted, active);
+  const percent = Math.round((completed / plan.length) * 100);
+  const device = { macos: "Mac", windows: "Windows PC", linux: "Linux PC" }[platform()] || "computer";
+  el("readinessProgressTitle").textContent = checking
+    ? `Checking this ${device}`
+    : `Preparing this computer · ${completed + 1} of ${plan.length}`;
+  el("readinessProgressPercent").textContent = checking ? "" : `${percent}%`;
+  el("readinessProgressDetail").textContent = facts.prereqDetail
+    || (checking
+      ? "Finding the few tools Enterprise AI needs."
+      : `${machine.toolName(facts.prereqBusy)} is being prepared. You can leave this running.`);
+  el("readinessProgressBar").style.width = `${percent}%`;
+  const track = panel.querySelector("[role=progressbar]");
+  track.setAttribute("aria-valuenow", String(percent));
+
+  const log = el("readinessProgressLog");
+  log.replaceChildren();
+  for (const [index, step] of plan.entries()) {
+    const item = document.createElement("li");
+    const status = index < completed ? "done" : index === active ? "active" : "pending";
+    item.className = status;
+    const marker = document.createElement("i");
+    marker.textContent = status === "done" ? "✓" : "";
+    const label = document.createElement("span");
+    label.textContent = checking
+      ? "Checking what this computer already has"
+      : status === "done"
+      ? `${machine.toolName(step)} ready`
+      : status === "active"
+        ? `Installing ${machine.toolName(step)}`
+        : `${machine.toolName(step)} waiting`;
+    item.append(marker, label);
+    log.append(item);
+  }
+  panel.hidden = false;
+}
+
+function renderAdminPrompt() {
+  const panel = el("adminPanel");
+  const visible = Boolean(pendingAdminPassword);
+  panel.hidden = !visible;
+  if (!visible) return;
+
+  const prompt = {
+    macos: {
+      title: "Authorise the Git installation",
+      body: "Enter your Mac login password once. EAI Setup uses it only for Apple's minimal Command Line Tools, never saves it, and does not open Terminal.",
+      password: true,
+    },
+    windows: {
+      title: "Approve the Windows permission prompt",
+      body: "Windows may ask you to allow the developer tools to be installed. Approve that Windows prompt to continue; do not enter your EAI password here.",
+      password: false,
+    },
+    linux: {
+      title: "Approve the Linux system prompt",
+      body: "Your Linux desktop may ask you to approve the developer-tools installation. Approve that system prompt to continue; do not enter your EAI password here.",
+      password: false,
+    },
+  }[platform()] || {};
+  el("adminTitle").textContent = prompt.title || "Approve the system prompt";
+  el("adminBody").textContent = prompt.body || "Approve the system prompt to continue.";
+  el("adminPasswordField").hidden = !prompt.password;
+  el("adminActions").hidden = !prompt.password;
+}
+
+const PAINT = {
+  start() {
+    const ready = !machine.faultsInForce(state).length
+      && (facts.demo || helpers.prerequisitesReady(facts.environment, facts.demo));
+    const copy = machine.startCopy({ ready });
+    el("startTitle").textContent = copy.title;
+    el("startSub").textContent = copy.sub;
+    const button = el("setupStart");
+    const startPanel = document.querySelector(".setup-start");
+    renderReadinessProgress();
+    renderAdminPrompt();
+    startPanel.classList.toggle("preparing", facts.preparationStarted && Boolean(facts.prereqBusy));
+    if (!facts.preparationStarted) {
+      button.textContent = "Get started";
+      button.disabled = false;
+      button.hidden = false;
+      startPanel.classList.remove("ready-to-go");
+    } else if (facts.prereqBusy) {
+      button.hidden = true;
+      startPanel.classList.remove("ready-to-go");
+    } else {
+      button.textContent = "Let’s go";
+      button.disabled = false;
+      button.hidden = false;
+      startPanel.classList.add("ready-to-go");
+    }
+  },
+
+  /**
+   * Sign in, with none, one or both of its failures.
+   *
+   * The two are independent, so the screen is built out of them rather
+   * than switched between them: each failure contributes one row, and
+   * the title is the count. The tick does not survive a failure — it is
+   * replaced by it, because the app cannot call itself ready and refuse
+   * to continue in the same breath.
+   */
+  signin(faults) {
+    el("signinSub").textContent = machine.signinHead(state, facts.failureContext);
+    renderReadinessProgress();
+
+    if (faults.length) {
+      for (const [title, body] of machine.signinProblems(state, facts.failureContext)) {
+        addCheckRow("fail", title, body);
+      }
+      // The design's own inversion: the primary greys out because
+      // sign-in genuinely cannot proceed, and the way forward is Retry.
+      el("setupCreate").textContent = "Retry";
+      el("setupSignin").classList.add("off");
+      el("setupSignin").disabled = true;
+      return;
+    }
+
+    if (facts.prereqBusy) {
+      const row = machine.workingRow(platform(), facts.prereqBusy, facts.prereqDetail);
+      addCheckRow("busy", row.title, row.body);
+      el("setupSignin").classList.add("off");
+      el("setupSignin").disabled = true;
+      return;
+    }
+
+    const ready = machine.readyRow(platform());
+    addCheckRow("done", ready.title, ready.body);
+  },
+
+  /* The tick and the address are the whole screen — until they aren't. */
+  welcome(faults) {
+    if (faults.length) {
+      const mark = el("welcomeMark");
+      mark.classList.add("failed");
+      mark.innerHTML = '<svg viewBox="0 0 24 24" fill="none">'
+        + '<path d="M12 6.5v7" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>'
+        + '<circle cx="12" cy="17.6" r="1.45" fill="currentColor"/></svg>';
+      el("welcomeTitle").textContent = faults[0].head(platform(), facts.failureContext.callback || {});
+      el("welcomeSub").textContent = faults[0].body(platform(), facts.failureContext.callback || {});
+      el("welcomeSub").classList.add("wide");
+      el("welcomeActs").hidden = false;
+      el("welcomeCopy").hidden = !facts.signinUrl;
+      // The fine print explains the button beside it. Without the link
+      // there is no button, and the sentence is advice about something
+      // the screen cannot give them.
+      el("welcomeFine").hidden = !facts.signinUrl;
+      return;
+    }
+
+    if (facts.signinWaiting) {
+      const mark = el("welcomeMark");
+      mark.classList.add("waiting");
+      mark.innerHTML = `<i class="mk busy">${SPINNER}</i>`;
+      el("welcomeTitle").textContent = "Waiting for your browser";
+      el("welcomeSub").textContent = "Finish signing in in the browser, then close that tab. This window carries on by itself. "
+        + "Your password is only ever typed into the browser.";
+      el("welcomeSub").classList.add("wide");
+
+      /* The way out, but only once waiting has gone on long enough to be
+         a problem. Before that, a button offering an escape from
+         something that is working is a button asking whether it is.
+
+         Try again is not offered here, and that is deliberate: the login
+         command is still running and there is no way to stop it, so a
+         second one would race the first against the same account.
+
+         The link is offered when we have one. Today the CLI only prints
+         it when it is given an explicit callback port, which the
+         installer does not do — so most of the time this is a sentence
+         rather than a button, and it says the true thing rather than
+         offering to copy something that does not exist. */
+      el("welcomeActs").hidden = !facts.signinEscapeShown;
+      el("welcomeCopy").hidden = !facts.signinUrl;
+      el("welcomeRetry").hidden = true;
+      el("welcomeFine").hidden = !facts.signinEscapeShown;
+      el("welcomeFine").textContent = facts.signinUrl
+        ? "Still waiting. If your browser never opened, copy the link and paste it in yourself."
+        : "Still waiting on your browser. Finish signing in there if the tab is still open, then close it — "
+          + "this window continues. Otherwise close this window and open EAI Setup again to start over. Nothing has been saved, so that is safe.";
+      return;
+    }
+
+    el("welcomeTitle").textContent = "Signed in";
+    el("welcomeSub").textContent = facts.account || "Your account is connected.";
+  },
+
+  /**
+   * Set up, revealed downwards.
+   *
+   * The reveal is a derivation, not a counter: the stage comes from
+   * which answers are in, so taking one back closes the questions under
+   * it. A counter that only goes up cannot do that, and a form whose
+   * later questions survive the deletion of the answer they depend on
+   * is a form that will create something nobody asked for.
+   */
+  setup(faults) {
+    const fault = faults[0] || null;
+    el("setupSub").textContent = machine.setupSub(state, { account: facts.account });
+
+    if (fault?.id === "workspace") {
+      /* "No workspace for this account" underneath a green tick naming a
+         workspace is the screen contradicting itself in two lines, so
+         the row goes rather than sitting above the thing that says there
+         isn't one. */
+      el("wsRows").replaceChildren();
+      el("wsPick").hidden = true;
+      closeWorkspaceMenu();
+      const node = stepNode("workspace");
+      node.hidden = false;
+      const context = facts.failureContext.workspace || {};
+      el("wsNoteTitle").textContent = context.title || fault.name;
+      el("wsNoteBody").textContent = fault.body(platform(), { account: facts.account, detail: context.detail });
+      el("wsNote").hidden = false;
+      /* A workspace nobody can add you to has no retry — an EAI admin
+         has to add them and then they sign in again. A list that timed
+         out has one. Offering the wrong one of those is worse than
+         offering neither, so it follows what the failure actually was. */
+      el("wsActs").hidden = !context.retryable;
+      return;
+    }
+
+    for (const step of machine.setupSteps(state)) {
+      const node = stepNode(step.id);
+      if (!node) continue;
+      node.hidden = !step.shown;
+      node.classList.toggle("answered", step.answered);
+      const numeral = node.querySelector(".i3-num");
+      if (numeral) numeral.textContent = step.answered ? "✓" : step.number;
+    }
+
+    renderWorkspaceRows();
+
+    /* The location question, in whichever of its two shapes the state
+       says. Before an answer it is one button at the left, because
+       somebody reads the heading and wants to go and choose; a greyed
+       path sitting there instead reads as an answer that is already in. */
+    const chosen = machine.locationShape(state) === "chosen" && Boolean(facts.projectFolder);
+    el("chooseFolderStart").hidden = chosen;
+    el("locCombo").hidden = !chosen;
+    if (chosen) el("projFolder").value = facts.projectFolder;
+
+    if (fault?.id === "name") {
+      setFieldError("name", fault.message(platform(), { projectName: facts.projectName }));
+    }
+
+    /* Every question answered, and the name actually usable. The reveal
+       is happy with any name; the button that creates a folder is not. */
+    el("createApp").disabled = !machine.setupComplete(state) || !helpers.isKebabCase(facts.projectName);
+  },
+
+  /* eai init, said in the words of the flow board. */
+  running(faults) {
+    const fault = faults[0] || null;
+    const values = {
+      workspace: selectedTenant()?.displayName || "",
+      folder: facts.projectPath || facts.projectDirectory || "",
+      template: facts.runValues.template || "",
+      dependencies: facts.runValues.dependencies || "",
+    };
+
+    const rows = fault
+      ? machine.runRows(state, { reached: facts.runReached, values, failedAt: facts.runFailedAt || facts.runReached })
+      : machine.runRows(state, { reached: facts.runReached, values });
+
+    for (const row of rows) addRunRow(row);
+
+    if (fault) {
+      const context = facts.failureContext.init || {};
+      el("runTitle").textContent = fault.head(platform(), { projectName: facts.projectName });
+      el("runSub").textContent = fault.body(platform(), context);
+      el("runNoteTitle").textContent = fault.noteTitle(platform(), context);
+      el("runNoteBody").textContent = fault.noteBody(platform(), context);
+      el("runNote").hidden = false;
+      el("runActs").hidden = false;
+      return;
+    }
+
+    if (facts.runReached === "done") {
+      el("runTitle").textContent = `${facts.projectName} is ready`;
+      el("runSub").textContent = "Everything is finished. Choose the AI tool you want to bring to your new app.";
+      el("runActs").hidden = false;
+      el("runBack").hidden = true;
+      el("runRetry").hidden = true;
+      el("runContinue").hidden = false;
+      return;
+    }
+
+    el("runTitle").textContent = `Creating ${facts.projectName}`;
+    el("runSub").textContent = "This takes a couple of minutes. You can leave it running.";
+  },
+
+  /**
+   * Choosing a harness.
+   *
+   * Two groups: what is already here, and what has to be fetched from
+   * somebody else's website. Which group the chosen tool is in decides
+   * the button's verb and whether there is an alert under the row, and
+   * nothing else on the screen changes — which is what makes the
+   * installed and not-installed machines comparable.
+   */
+  done(faults) {
+    const fault = faults[0] || null;
+    const surfaces = facts.surfaces?.surfaces || [];
+
+    if (fault?.id === "detect") {
+      el("harnessSub").textContent = fault.head(platform());
+      el("harnessNoteTitle").textContent = fault.head(platform());
+      el("harnessNoteBody").textContent = fault.body(platform());
+      el("harnessNote").hidden = false;
+      el("harnessGo").hidden = false;
+      setLabel(el("harnessGo"), "Check again");
+      return;
+    }
+
+    el("harnessSub").textContent = machine.harnessSubtitle(surfaces, platform());
+    renderHarnessRows(surfaces);
+
+    const chosen = selectedSurface();
+
+    if (fault?.id === "install") {
+      el("harnessNoteTitle").textContent = fault.head(platform(), { harnessName: chosen?.name });
+      el("harnessNoteBody").textContent = fault.body(platform());
+      el("harnessNote").hidden = false;
+      return;
+    }
+
+    if (facts.waitingForSurfaceId && chosen?.id === facts.waitingForSurfaceId) {
+      showWaiting(chosen);
+      return;
+    }
+
+    if (chosen?.installed) {
+      el("harnessGo").hidden = false;
+      setLabel(el("harnessGo"), machine.harnessButtonLabel(chosen));
+      el("harnessGo").disabled = false;
+    }
+  },
+
+  /* One instruction, on its own screen. */
+  handoff(faults) {
+    const surface = selectedSurface();
+    const copy = machine.handoffCopy(surface, { projectName: facts.projectName });
+    el("handoffTitle").textContent = copy.title;
+    el("handoffSub").textContent = copy.sub;
+    // /eai is a command when the selected surface supports an initial
+    // prompt. Build both lines from nodes so provider data is never markup.
+    const instruction = el("harnessEaiInstruction");
+    instruction.replaceChildren();
+    for (const [index, piece] of copy.instruction.split("/eai").entries()) {
+      if (index > 0) {
+        const code = document.createElement("code");
+        code.textContent = "/eai";
+        instruction.append(code);
+      }
+      instruction.append(document.createTextNode(piece));
+    }
+    const body = el("harnessEaiBody");
+    body.replaceChildren();
+    for (const [index, piece] of copy.body.split("/eai").entries()) {
+      if (index > 0) {
+        const code = document.createElement("code");
+        code.textContent = "/eai";
+        body.append(code);
+      }
+      body.append(document.createTextNode(piece));
+    }
+    setLabel(el("handoffGo"), copy.button);
+    el("handoffFolder").hidden = !facts.projectPath;
+
+    const film = el("harnessVideo");
+    // The animation demonstrates the one automated prompt hand-off. Do not
+    // show it for modes where the person must choose a folder or continue
+    // manually, because that would promise a command EAI cannot send.
+    const canShowPromptAnimation = surface?.launchSupport === "project-and-prompt";
+    film.hidden = !canShowPromptAnimation;
+    if (!canShowPromptAnimation) {
+      film.__eaiVideoReset?.();
+    } else {
+      const filmKey = `${surface.id}:${facts.projectName || "your app"}`;
+      if (window.mountVideo && film.dataset.mountedFor !== filmKey) {
+        window.mountVideo(film, { app: surface.name, project: facts.projectName || "your app" });
+        film.dataset.mountedFor = filmKey;
+      }
+    }
+
+    if (faults.length) {
+      const fault = faults[0];
+      el("handoffNoteTitle").textContent = fault.head(platform(), { harnessName: surface?.name });
+      el("handoffNoteBody").textContent = fault.body(platform(), { projectPath: facts.projectPath });
+      el("handoffNote").hidden = false;
+    }
+  },
+
+  /* Complete — the harness opened on the project. */
+  built() {
+    const copy = machine.builtCopy({
+      projectName: facts.projectName,
+      workspaceName: selectedTenant()?.displayName,
+      harnessName: selectedSurface()?.name,
+    });
+    el("builtTitle").textContent = copy.title;
+    const built = el("builtBody");
+    built.replaceChildren();
+    const name = facts.projectName || "Your app";
+    for (const [index, piece] of copy.body.split(name).entries()) {
+      if (index > 0) {
+        const strong = document.createElement("b");
+        strong.textContent = name;
+        built.append(strong);
+      }
+      built.append(document.createTextNode(piece));
+    }
+    el("builtFolder").hidden = !facts.projectPath;
+  },
+};
+
+/* ========================= 7. PAINT ============================== */
+
+/**
+ * The bar across the top, redrawn with everything else.
+ *
+ * Rebuilt rather than patched, like the rest of paint(): a bar whose
+ * segments are updated in place is a bar that can be left showing the
+ * last state's colours when a step is skipped.
+ */
+function renderSteps() {
+  const progress = document.querySelector(".setup-split-progress");
+  const onStart = state.screen === "start";
+  if (progress) progress.hidden = onStart;
+
+  const list = el("steps");
+  const steps = machine.stepper(state);
+  list.replaceChildren();
+  for (const step of steps) {
+    const item = document.createElement("li");
+    item.className = `eai-step ${step.status}`;
+    if (step.current) item.setAttribute("aria-current", "step");
+    const name = document.createElement("span");
+    name.className = "sr-only";
+    name.textContent = step.status === "failed" ? `${step.name} — needs attention` : step.name;
+    item.append(name);
+    list.append(item);
+  }
+  const at = Math.max(1, steps.findIndex((step) => step.current) + 1);
+  const count = maybe("stepCount");
+  if (count) count.textContent = `${at} / ${steps.length}`;
+}
+
+function paint() {
+  /* Which field somebody was in, so a repaint triggered by their own
+     typing does not take the caret away from them. The reveal repaints
+     mid-word by design — that is what makes the next question appear —
+     so this is not an edge case, it is the common path. */
+  const focused = document.activeElement?.id;
+  const caret = document.activeElement?.selectionStart ?? null;
+
+  reset();
+  const screen = machine.screenById(state.screen);
+  screenNode(state.screen).hidden = false;
+  renderSteps();
+  PAINT[state.screen](machine.faultsInForce(state));
+  document.querySelector(".eai-body").scrollTop = 0;
+
+  if (focused) {
+    const node = maybe(focused);
+    if (node && typeof node.focus === "function" && !node.closest("[hidden]")) {
+      node.focus();
+      if (caret !== null && typeof node.setSelectionRange === "function") {
+        try { node.setSelectionRange(caret, caret); } catch { /* not a text field */ }
+      }
+    }
+  }
+
+  if (screen && window.__eaiDevAddress) history.replaceState(null, "", machine.writeAddress(state));
+}
+
+function goTo(screenId, options) {
+  const from = state.screen;
+  machine.goTo(state, screenId, options);
+  paint();
+  if (from !== state.screen) focusScreenHeading();
+}
+
+/**
+ * Put the cursor at the top of the screen somebody has just arrived on.
+ *
+ * Without this, moving from Set up to Creating leaves a screen reader
+ * announcing the Create app button on a screen that no longer exists,
+ * and leaves the keyboard focus on a detached node.
+ */
+function focusScreenHeading() {
+  const node = screenNode(state.screen).querySelector("h3");
+  if (!node) return;
+  node.setAttribute("tabindex", "-1");
+  node.focus({ preventScroll: true });
+}
+
+function raise(faultId, context) {
+  if (context) facts.failureContext[faultId] = context;
+  machine.raise(state, faultId);
+  note(`${machine.faultById(faultId)?.name || faultId}`, "error");
+  paint();
+}
+
+/* ===================== 8. DRAWING THE PIECES ===================== */
+
+function addRunRow({ label, value, mark }) {
+  const row = document.createElement("div");
+  row.className = `eai-row ${mark === "fail" ? "failed" : mark}`;
+  const glyph = mark === "done" ? '<i class="mk done">&#10003;</i>'
+    : mark === "active" ? `<i class="mk busy">${SPINNER}</i>`
+      : mark === "fail" ? '<i class="mk fail">&#10005;</i>'
+        : '<i class="mk pending"></i>';
+  // A row that has not run has nothing to report. Showing the folder path
+  // beside "Folder created" before the folder exists is the screen
+  // claiming something it has not done.
+  const reported = mark === "pending" ? "" : value || "";
+  row.innerHTML = glyph
+    + `<span class="lbl">${escapeHtml(label)}</span>`
+    + `<span class="val">${escapeHtml(reported)}</span>`;
+  el("runLines").appendChild(row);
+}
+
+function setFieldError(name, message) {
+  const field = document.querySelector(`.eai-field[data-field="${name}"]`);
+  if (!field) return;
+  const error = field.querySelector(".eai-err");
+  error.querySelector("span").textContent = message;
+  error.hidden = false;
+  field.classList.add("invalid");
+}
+
+function clearFieldError(name) {
+  const field = document.querySelector(`.eai-field[data-field="${name}"]`);
+  if (!field) return;
+  field.querySelector(".eai-err").hidden = true;
+  field.classList.remove("invalid", "shake");
+}
+
+function pickRow(label, meta, selected, onPick) {
+  const row = document.createElement("button");
+  row.type = "button";
+  row.className = "eai-row pick";
+  row.setAttribute("role", "option");
+  row.setAttribute("aria-selected", String(selected));
+  row.innerHTML = (selected ? '<i class="mk done">&#10003;</i>' : '<i class="mk pending"></i>')
+    + `<span class="lbl">${escapeHtml(label)}`
+    + (meta ? `<span class="sub">${escapeHtml(meta)}</span>` : "")
+    + "</span>";
+  row.addEventListener("click", onPick);
+  return row;
+}
+
+let workspaceMenuOpen = false;
+
+function closeWorkspaceMenu() {
+  workspaceMenuOpen = false;
+  el("wsMenu").hidden = true;
+  el("wsTrigger").setAttribute("aria-expanded", "false");
+}
+
+function openWorkspaceMenu() {
+  workspaceMenuOpen = true;
+  el("wsMenu").hidden = false;
+  el("wsTrigger").setAttribute("aria-expanded", "true");
+}
+
+function toggleWorkspaceMenu() {
+  if (workspaceMenuOpen) closeWorkspaceMenu();
+  else openWorkspaceMenu();
+}
+
+function renderWorkspacePicker() {
+  const tenant = selectedTenant();
+  el("wsTriggerLabel").textContent = tenant?.displayName || "Choose a workspace";
+  el("wsTriggerMeta").textContent = tenant?.slug || "";
+  el("wsTriggerMeta").hidden = !tenant?.slug;
+
+  const menu = el("wsMenuRows");
+  menu.replaceChildren();
+  const sorted = [...facts.tenants].sort((left, right) => left.displayName.localeCompare(right.displayName));
+  for (const item of sorted) {
+    menu.appendChild(pickRow(
+      item.displayName,
+      item.slug || "",
+      item.id === facts.selectedTenantId,
+      () => {
+        chooseTenant(item.id);
+        closeWorkspaceMenu();
+      },
+    ));
   }
 }
 
-function aiSurfaceCopy(surface) {
-  return aiSurfaceGuidance[surface?.id] || {
-    label: surface?.name || "AI workspace",
-    ready: `${surface?.name || "The AI workspace"} will open with this project. Follow its sign-in or project selection prompts.`,
-    notInstalled: `Open the official ${surface?.provider || "provider"} page, install ${surface?.name || "the workspace"}, then return here and select Check again.`,
+function selectedTenant() {
+  return facts.tenants.find((tenant) => tenant.id === facts.selectedTenantId) || null;
+}
+
+function renderWorkspaceRows() {
+  const rows = el("wsRows");
+  rows.replaceChildren();
+  closeWorkspaceMenu();
+  if (!facts.tenants.length) {
+    el("wsPick").hidden = true;
+    return;
+  }
+
+  // One workspace is not a question. It is shown answered, which is what
+  // the prototype does, because a list of one asks somebody to confirm
+  // something they were never given a choice about.
+  if (facts.tenants.length === 1) {
+    el("wsPick").hidden = true;
+    const tenant = facts.tenants[0];
+    const row = document.createElement("div");
+    row.className = "eai-row";
+    row.innerHTML = '<i class="mk done">&#10003;</i>'
+      + `<span class="lbl">${escapeHtml(tenant.displayName)}`
+      + (tenant.slug ? `<span class="sub">${escapeHtml(tenant.slug)}</span>` : "")
+      + "</span>";
+    rows.appendChild(row);
+    return;
+  }
+
+  el("wsPick").hidden = false;
+  renderWorkspacePicker();
+}
+
+/* The tiles, so six tools are six things to look at rather than six lines
+   of text. Keyed on the surface id's family, because the ids are the
+   CLI's contract and the providers are not going to renumber.
+
+   The brand colour is deliberately NOT here. It is a `data-tile`
+   attribute that ui/styles.css matches on, because the app runs under a
+   `default-src 'self'` policy, and a background written into innerHTML
+   as a style attribute is exactly what that policy exists to refuse. */
+const TILES = {
+  vscode: '<svg viewBox="0 0 64 64" fill="none"><path d="M46 9 30 26l-9-7-5 3.4 7.6 6.6L16 36l5 3.4 9-7 16 17 8-4V13z" fill="#ffffff"/></svg>',
+  copilot: '<svg viewBox="0 0 64 64" fill="none"><path d="M32 20c8 0 12 3 12 3s4-1 6 1c1.6 1.6 1.4 6 1.4 6s2.6 1.4 2.6 5.6c0 6-4 9.4-8 11.2-4 1.8-9 2.2-14 2.2s-10-.4-14-2.2c-4-1.8-8-5.2-8-11.2 0-4.2 2.6-5.6 2.6-5.6s-.2-4.4 1.4-6c2-2 6-1 6-1s4-3 12-3z" fill="#ffffff"/><ellipse cx="24" cy="37" rx="5.4" ry="6.4" fill="#0d1117"/><ellipse cx="40" cy="37" rx="5.4" ry="6.4" fill="#0d1117"/></svg>',
+  claude: '<svg viewBox="0 0 24 24" fill="none"><g stroke="#ffffff" stroke-width="2.6" stroke-linecap="round"><path d="M12 4v16"/><path d="M4 12h16"/><path d="M6.3 6.3l11.4 11.4"/><path d="M17.7 6.3L6.3 17.7"/></g></svg>',
+  codex: '<svg viewBox="0 0 24 24" fill="none"><path d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.938 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.985 5.985 0 0 0-3.997 2.9 6.046 6.046 0 0 0 .742 7.097 5.98 5.98 0 0 0 .511 4.938 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.055 6.055 0 0 0-.747-7.073zM13.26 22.43a4.476 4.476 0 0 1-2.876-1.04l.141-.081 4.779-2.758a.795.795 0 0 0 .392-.681v-6.737l2.02 1.168a.071.071 0 0 1 .038.052v5.583a4.478 4.478 0 0 1-4.494 4.494zM3.6 18.304a4.47 4.47 0 0 1-.535-3.014l.142.085 4.783 2.759a.771.771 0 0 0 .78 0l5.843-3.369v2.332a.08.08 0 0 1-.033.062L9.74 19.95a4.5 4.5 0 0 1-6.14-1.646zM2.34 7.896a4.485 4.485 0 0 1 2.366-1.973V11.6a.766.766 0 0 0 .388.676l5.815 3.355-2.02 1.168a.076.076 0 0 1-.071 0l-4.83-2.786A4.504 4.504 0 0 1 2.34 7.872zm16.597 3.855l-5.833-3.387L15.16 6.2a.076.076 0 0 1 .071 0l4.83 2.791a4.494 4.494 0 0 1-.676 8.105v-5.678a.79.79 0 0 0-.407-.667zm2.01-3.023l-.141-.085-4.774-2.755a.775.775 0 0 0-.785 0L9.409 9.23V6.897a.066.066 0 0 1 .028-.061l4.83-2.787a4.5 4.5 0 0 1 6.68 4.66zm-12.64 4.135l-2.02-1.163a.077.077 0 0 1-.038-.057V6.075a4.5 4.5 0 0 1 7.375-3.453l-.142.08L8.704 5.46a.795.795 0 0 0-.393.681zm1.097-2.365l2.602-1.5 2.607 1.5v2.999l-2.597 1.5-2.607-1.5z" fill="#ffffff"/></svg>',
+  antigravity: '<svg viewBox="0 0 24 24" fill="none"><path d="M12 2c.6 5.2 4.2 8.8 9.4 9.4-5.2.6-8.8 4.2-9.4 9.4-.6-5.2-4.2-8.8-9.4-9.4C7.8 10.8 11.4 7.2 12 2z" fill="#ffffff"/></svg>',
+  grok: '<svg viewBox="0 0 24 24" fill="none"><g stroke="#ffffff" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></g></svg>',
+};
+
+function tileFor(surface) {
+  const family = Object.keys(TILES).find((key) => surface.id.includes(key));
+  return { family: family || "other", svg: family ? TILES[family] : "" };
+}
+
+/* The chooser is for the place someone will work, never for its plumbing.
+   EAI installs and checks each chosen app's companion CLI in the background;
+   old v1 inventories may still use CLI-shaped ids, so keep their technical
+   ids for the command contract while giving people the desktop-app name. */
+const APP_SURFACES = Object.freeze({
+  vscode: { name: "VS Code" },
+  "vscode-copilot": { name: "VS Code" },
+  "copilot-cli": { name: "GitHub Copilot" },
+  "copilot-desktop": { name: "GitHub Copilot" },
+  "claude-cli": { name: "Claude Code" },
+  "claude-desktop": { name: "Claude Code" },
+  "codex-cli": { name: "Codex" },
+  "codex-desktop": { name: "Codex" },
+  "grok-bot": { name: "Grok Build" },
+  "grok-cli": { name: "Grok Build" },
+  "grok-desktop": { name: "Grok Build" },
+  "antigravity-cli": { name: "Antigravity" },
+  "antigravity-desktop": { name: "Antigravity" },
+});
+
+const GRAPHICAL_SURFACE_IDS = new Set([
+  "vscode-copilot",
+  "copilot-desktop",
+  "antigravity-desktop",
+  "claude-desktop",
+  "codex-desktop",
+  "grok-bot",
+]);
+
+function appFacingSurface(surface) {
+  const app = APP_SURFACES[surface?.id];
+  return app ? { ...surface, ...app } : surface;
+}
+
+function appFacingInventory(inventory) {
+  if (!inventory?.surfaces) return inventory;
+  const surfaces = inventory.surfaces
+    .filter((surface) => GRAPHICAL_SURFACE_IDS.has(surface.id))
+    .map(appFacingSurface);
+  const selected = (id) => surfaces.some((surface) => surface.id === id) ? id : null;
+  return {
+    ...inventory,
+    surfaces,
+    preferredSurface: selected(inventory.preferredSurface),
+    recommendedSurface: selected(inventory.recommendedSurface),
   };
 }
 
-function aiSurfaceReadyDetail(surface) {
-  if (surface?.launchSupport === "launch-only") return "; opens the app only";
-  if (surface?.launchSupport === "manual-project") return "; connect the project when it opens";
-  if (["project-and-prompt", "project-only"].includes(surface?.launchSupport)) return "; opens this project";
-  return "; verify the project after opening";
-}
+const TICK_SVG = '<svg viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.5 4.5L19 7.5" stroke="#ffffff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
-function updateAiSurfaceControls(surface) {
-  if (!surface) {
-    if (aiSurfaceNext) aiSurfaceNext.hidden = true;
-    if (startAiButton) startAiButton.textContent = "Choose an AI workspace";
+function appendHarnessPickPanel(pick, surface, { waiting = false } = {}) {
+  const panel = document.createElement("div");
+  panel.className = "i4-pick-panel";
+
+  if (waiting) {
+    const copy = machine.harnessWaiting(surface, platform());
+    const box = document.createElement("div");
+    box.className = "i4-wait";
+    box.innerHTML = `<i class="mk busy">${SPINNER}</i><div class="tx"><b></b><span></span></div>`;
+    box.querySelector(".tx b").textContent = copy.title;
+    box.querySelector(".tx span").textContent = copy.body;
+    panel.appendChild(box);
+    pick.appendChild(panel);
     return;
   }
-  const copy = aiSurfaceCopy(surface);
-  if (startAiButton) startAiButton.textContent = surface.installed ? `Open ${copy.label}` : `Get ${copy.label}`;
-  if (aiSurfaceNext) {
-    aiSurfaceNext.hidden = false;
-    aiSurfaceNext.textContent = surface.installed ? copy.ready : copy.notInstalled;
-  }
-}
 
-function createHarveyBall(surface) {
-  const recommendation = EAIWizard.aiSurfaceRecommendation(surface);
-  const wrapper = document.createElement("span");
-  wrapper.className = "harvey-ball-label";
-  wrapper.setAttribute("aria-label", `Recommendation: ${recommendation.score} of ${recommendation.maximum}, ${recommendation.label}`);
-  wrapper.title = `${recommendation.label}: ${recommendation.score} of ${recommendation.maximum}`;
-  const ball = document.createElement("span");
-  ball.className = "harvey-ball";
-  ball.style.setProperty("--recommendation-score", recommendation.score);
-  ball.setAttribute("aria-hidden", "true");
-  wrapper.append(ball);
-  return { element: wrapper, recommendation };
-}
-
-function formatEta(seconds) {
-  if (seconds === null || seconds === undefined) return "";
-  if (seconds <= 0) return "Finishing";
-  if (seconds < 60) return `Typical duration: under ${seconds} seconds`;
-  return `Typical duration: about ${Math.ceil(seconds / 60)} minutes`;
-}
-
-function activityCategory(title, phase) {
-  if (/error|fail|attention/i.test(title) || phase === "Error") return "Error";
-  if (/wait|permission/i.test(title) || phase === "Waiting") return "Waiting";
-  if (/download/i.test(title) || phase === "Downloading") return "Download";
-  if (/install|prepar/i.test(title) || phase === "Installing") return "Install";
-  if (/ready|complete/i.test(title) || phase === "Ready") return "Ready";
-  return phase || "Update";
-}
-
-function renderActivityLog() {
-  if (!activityLog) return;
-  activityLog.replaceChildren();
-  for (const event of [...activityEvents].reverse()) {
-    const item = document.createElement("li");
-    item.dataset.category = event.category.toLowerCase();
-    const timestamp = document.createElement("time");
-    timestamp.textContent = new Date(event.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" });
-    const category = document.createElement("strong");
-    category.textContent = event.category;
-    const message = document.createElement("span");
-    message.textContent = `${event.title}: ${event.detail}`;
-    item.append(timestamp, category, message);
-    activityLog.append(item);
-  }
-}
-
-function recordActivityEvent(title, detail, phase) {
-  const previous = activityEvents.at(-1);
-  if (previous?.title === title && previous.detail === detail) return;
-  activityEvents.push({ at: Date.now(), category: activityCategory(title, phase), title, detail });
-  if (activityEvents.length > 8) activityEvents.shift();
-  renderActivityLog();
-}
-
-function setActivity(title, detail, progress = null, active = true, eta = "", phase = "") {
-  activityLastUpdateAt = Date.now();
-  // Keep the activity log visible after a failure so the user can see the last
-  // successful action and the exact step that needs attention.
-  activity.hidden = !active && phase !== "Error";
-  activityTitle.textContent = title;
-  activityDetail.textContent = detail;
-  activityPhase.textContent = phase || (progress === null ? "In progress" : `${progress}% complete`);
-  activityEta.textContent = eta;
-  activity.classList.toggle("complete", progress === 100);
-  activity.classList.toggle("error", phase === "Error");
-  if (activityLogStatus) activityLogStatus.textContent = phase === "Error" ? "Stopped with error" : active ? "Live updates" : progress === 100 ? "Complete" : "Stopped";
-  syncJourneyActivity(title, detail, active, phase);
-  recordActivityEvent(title, detail, phase);
-  if (progress === null) {
-    activityTrack.removeAttribute("aria-valuenow");
-    activityBar.classList.add("indeterminate");
-  } else {
-    const value = Math.max(0, Math.min(100, progress));
-    activityTrack.setAttribute("aria-valuenow", String(value));
-    activityBar.style.width = `${value}%`;
-    activityBar.classList.remove("indeterminate");
-  }
-}
-
-const waitingDetails = {
-  detect: "Checking the required tools.",
-  git: "Checking Apple Software Update for the minimal Command Line Tools package. No Terminal window is needed.",
-  node: "Downloading or validating the official Node.js package.",
-  "eai-cli": "Downloading the EAI CLI package from npm.",
-  login: "Waiting for browser sign-in.",
-  init: "Waiting for app setup to finish.",
-};
-
-function refreshActivityHeartbeat() {
-  if (!activityHeartbeat || !activityStartedAt) return;
-  const now = Date.now();
-  const elapsed = Math.max(0, Math.floor((now - activityStartedAt) / 1000));
-  const sinceUpdate = Math.max(0, Math.floor((now - activityLastUpdateAt) / 1000));
-  const updateAge = sinceUpdate === 0 ? "just now" : `${sinceUpdate}s ago`;
-  const waitingForAdmin = adminPasswordPanel && !adminPasswordPanel.hidden;
-  activityHeartbeat.textContent = waitingForAdmin
-    ? `Elapsed ${elapsed}s · Screen updated every second · Waiting for your input`
-    : `Elapsed ${elapsed}s · Screen updated every second · Last installer update ${updateAge}`;
-  if (waitingForAdmin) {
-    activityPhase.textContent = "Action needed";
+  if (surface.installed) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "eai-btn primary i3-nav i4-pick-go";
+    btn.textContent = machine.harnessButtonLabel(surface);
+    btn.addEventListener("click", () => harnessNext());
+    panel.appendChild(btn);
+    pick.appendChild(panel);
     return;
   }
-  if (sinceUpdate >= 10 && !activity.classList.contains("complete") && activeBootstrapStep) {
-    if (activeBootstrapStep === "git" && /installing git/i.test(activityTitle.textContent)) {
-      activityDetail.textContent = "Apple Software Update is still installing Git. EAI Setup is checking for Git every second; the next status will appear here.";
-    } else {
-      activityDetail.textContent = waitingDetails[activeBootstrapStep] || "The installer is still working and will show the next result here.";
+
+  const copy = machine.harnessPickCopy(surface, platform());
+  if (copy?.body) {
+    const note = document.createElement("p");
+    note.className = "i4-pick-note";
+    note.textContent = copy.body;
+    panel.appendChild(note);
+  }
+
+  const acts = document.createElement("div");
+  acts.className = "i4-pick-acts";
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "eai-btn primary i3-nav i4-pick-go";
+  btn.textContent = machine.harnessButtonLabel(surface);
+  btn.addEventListener("click", () => harnessNext());
+  const check = document.createElement("button");
+  check.type = "button";
+  check.className = "eai-btn i3-nav ghost-quiet i4-pick-check";
+  check.textContent = "Check again";
+  check.addEventListener("click", () => refreshHarness());
+  acts.append(btn, check);
+  panel.appendChild(acts);
+  pick.appendChild(panel);
+}
+
+function renderHarnessRows(surfaces) {
+  const rows = el("harnessRows");
+  rows.replaceChildren();
+
+  for (const group of machine.harnessGroups(surfaces, platform())) {
+    const head = document.createElement("div");
+    head.className = "i4-group";
+    head.innerHTML = `<b>${escapeHtml(group.label)}</b>${group.note ? `<span>${escapeHtml(group.note)}</span>` : ""}`;
+    rows.appendChild(head);
+
+    for (const surface of group.items) {
+      const chosen = surface.id === facts.selectedSurfaceId;
+      const pick = document.createElement("div");
+      pick.className = `i4-pick${chosen ? " on" : ""}`;
+
+      const tile = tileFor(surface);
+      const row = document.createElement("button");
+      row.type = "button";
+      /* `missing` and `on` only — both change how the name reads. There
+         was a `ready` too, and once the state column went it styled
+         nothing: a tool that is here is simply not muted. A class that
+         does nothing is a hook somebody will later assume is load-bearing. */
+      row.className = `eai-row i4-row${surface.installed ? "" : " missing"}${chosen ? " on" : ""}`;
+      /* No state on the row. The group heading above it already says
+         whether these are here or not, so a column repeating that on
+         every line is the same fact twice — once where it organises the
+         list, once where it only takes up the right edge. */
+      row.innerHTML = `<span class="mark">${TICK_SVG}</span>`
+        + `<span class="tile" data-tile="${tile.family}">${tile.svg}</span>`
+        + `<span class="nm">${escapeHtml(surface.name)}</span>`;
+      row.addEventListener("click", () => chooseSurface(surface.id));
+      pick.appendChild(row);
+
+      if (chosen) {
+        const waiting = facts.waitingForSurfaceId === surface.id;
+        appendHarnessPickPanel(pick, surface, { waiting });
+      }
+      rows.appendChild(pick);
     }
-    activityPhase.textContent = "Working - no action needed";
   }
 }
 
-function startActivityHeartbeat(step) {
-  if (activityTicker) clearInterval(activityTicker);
-  activeBootstrapStep = step;
-  activityStartedAt = Date.now();
-  activityLastUpdateAt = activityStartedAt;
-  refreshActivityHeartbeat();
-  activityTicker = setInterval(refreshActivityHeartbeat, 1000);
+function showWaiting(surface) {
+  renderHarnessRows(facts.surfaces?.surfaces || []);
 }
 
-function stopActivityHeartbeat() {
-  if (activityTicker) clearInterval(activityTicker);
-  activityTicker = null;
-  if (activityHeartbeat && activityStartedAt) {
-    const elapsed = Math.max(0, Math.floor((Date.now() - activityStartedAt) / 1000));
-    activityHeartbeat.textContent = `Finished after ${elapsed}s`;
+function selectedSurface() {
+  const surfaces = facts.surfaces?.surfaces || [];
+  return surfaces.find((surface) => surface.id === facts.selectedSurfaceId) || null;
+}
+
+/* =================== 9. READINESS AND SIGN-IN ==================== */
+
+async function detect() {
+  facts.prereqBusy = "detect";
+  facts.prereqDetail = "";
+  if (state.screen === "signin") paint();
+  try {
+    const report = await invoke("detect_environment");
+    if (report.demo) {
+      facts.demo = true;
+      facts.environment = { platform: state.platform, architecture: "preview", tools: [] };
+      note("Preview mode: nothing on this computer is changed.");
+      return true;
+    }
+    facts.demo = false;
+    facts.environment = report;
+    state.platform = report.platform;
+    note(`Checked ${report.platform} ${report.architecture}.`);
+    return true;
+  } catch (error) {
+    note(`The computer check could not finish: ${helpers.cleanText(error)}`, "error");
+    return false;
   }
-  activityStartedAt = 0;
+}
+
+async function checkConnectivity() {
+  try {
+    const result = await invoke("check_connectivity");
+    if (result?.demo) return { ok: true, host: "api.eai" };
+    facts.connectivity = result;
+    return result;
+  } catch (error) {
+    // A shell that cannot run the probe is not evidence that the network
+    // is down, and claiming it is would send somebody to their VPN over
+    // a missing curl. Unknown is reported as reachable and login finds
+    // out for certain.
+    note(`Connectivity could not be checked: ${helpers.cleanText(error)}`);
+    return { ok: true, host: "", unknown: true };
+  }
+}
+
+function missingSteps() {
+  const report = facts.environment;
+  if (!report || facts.demo) return [];
+  const tools = new Map(report.tools.map((tool) => [tool.command, tool]));
+  const steps = [];
+  if (!tools.get("git")?.version) steps.push("git");
+  if (!tools.get("node")?.version
+    || !tools.get("npm")?.version
+    || (report.platform === "windows" && !tools.get("windows-runtime")?.version)) steps.push("node");
+  if (!tools.get("eai")?.version) steps.push("eai-cli");
+  return steps;
+}
+
+/**
+ * The quiet fix-up behind the sign-in screen.
+ *
+ * Everything here happens before anybody presses anything, which is why
+ * the screen only ever shows the result: a tick, or the row for what
+ * stood in the way.
+ */
+async function runReadiness() {
+  if (readinessInProgress) return false;
+  readinessInProgress = true;
+  machine.clear(state);
+  facts.failureContext = {};
+  try {
+    await listenForBootstrapProgress();
+
+    if (!await detect()) {
+      facts.prereqBusy = null;
+      raise("prereq", { steps: ["detect"] });
+      return false;
+    }
+
+    const reachable = await checkConnectivity();
+    if (reachable && reachable.ok === false) {
+      facts.prereqBusy = null;
+      raise("network", { host: reachable.host || "the EAI API" });
+      return false;
+    }
+
+    if (facts.demo) {
+      facts.prereqBusy = null;
+      paint();
+      return true;
+    }
+
+    /* Every missing prerequisite is attempted, and every failure is
+       reported together.
+
+       This used to stop at the first one. On a machine locked down
+       enough to refuse Git — which is the machine this failure exists
+       for — Node and the CLI are usually refused too, so stopping at
+       Git meant telling somebody one thing, waiting while they fixed it,
+       and then telling them the next. Three round trips to learn what
+       was knowable on the first.
+
+       The one thing not attempted after a failure is a tool that needed
+       the failed one: the EAI CLI is installed with npm, so reporting
+       that it could not be installed when the real cause is that Node is
+       missing names the wrong thing. */
+    const failed = [];
+    facts.prereqPlan = missingSteps();
+    facts.prereqCompleted = 0;
+    for (const step of missingSteps()) {
+      if (step === "eai-cli" && failed.includes("node")) {
+        note("Skipped the EAI CLI: it is installed with npm, and Node.js is not ready.");
+        continue;
+      }
+      facts.prereqBusy = step;
+      facts.prereqDetail = "";
+      if (state.screen === "signin" || state.screen === "start") paint();
+      if (!await runBootstrapStep(step, { collect: true })) failed.push(step);
+      else facts.prereqCompleted = facts.prereqPlan.indexOf(step) + 1;
+      await detect();
+    }
+
+    facts.prereqBusy = null;
+    if (failed.length) {
+      raise("prereq", { steps: failed });
+      return false;
+    }
+    if (!helpers.prerequisitesReady(facts.environment, facts.demo)) {
+      raise("prereq", { steps: missingSteps().length ? missingSteps() : ["git"] });
+      return false;
+    }
+    note("Everything EAI needs is ready.");
+    paint();
+    return true;
+  } finally {
+    readinessInProgress = false;
+  }
+}
+
+/**
+ * One prerequisite.
+ *
+ * `collect` is for the readiness sweep, which attempts every missing
+ * tool and raises one failure naming all of them at the end. Without it
+ * each step would raise its own, and the screen would redraw itself
+ * around a single failure three times before showing the real answer.
+ */
+async function runBootstrapStep(step, { collect = false } = {}) {
+  const stop = (faultId, context) => {
+    facts.prereqBusy = null;
+    if (collect && faultId === "prereq") return false;
+    raise(faultId, context);
+    return false;
+  };
+  let result;
+  try {
+    const adminPassword = step === "git" && platform() === "macos" ? await requestMacAdminPassword() : null;
+    if (step === "git" && platform() === "macos" && !adminPassword) {
+      return stop("prereq", { steps: ["git"], detail: "Approval was cancelled, so nothing was changed." });
+    }
+    result = await invoke("run_bootstrap", {
+      step,
+      projectName: null,
+      directory: null,
+      adminPassword,
+      companyTenantId: null,
+    });
+  } catch (error) {
+    const message = helpers.cleanText(error);
+    note(`${machine.toolName(step)} could not be installed: ${message}`, "error");
+    return stop(machine.classifyBootstrapFailure(step, message), {
+      steps: [step],
+      host: facts.connectivity?.host || "the EAI API",
+    });
+  }
+  if (result.output) recordCommandSummaries(result.output);
+  if (!result.ok && !result.demo) {
+    const message = helpers.cleanText(result.message);
+    note(`${machine.toolName(step)} could not be installed: ${message}`, "error");
+    return stop(machine.classifyBootstrapFailure(step, message), {
+      steps: [step],
+      host: facts.connectivity?.host || "the EAI API",
+    });
+  }
+  note(`${machine.toolName(step)} is ready.`);
+  return true;
 }
 
 function requestMacAdminPassword() {
-  if (!adminPasswordPanel || !adminPasswordInput || !adminPasswordSubmit || !adminPasswordCancel) return Promise.resolve(null);
-  adminPasswordPanel.hidden = false;
-  adminPasswordInput.value = "";
-  adminPasswordInput.focus();
-  setActivity("Authorize Git installation", "Enter your Mac login password once. EAI Setup uses it only for Apple's minimal Git tools, never saves it, and does not open Terminal.", null, true, "", "Waiting");
+  const panel = el("adminPanel");
+  const input = el("adminPassword");
+  panel.hidden = false;
+  input.value = "";
+  input.focus();
+  // The row above the panel would otherwise spin under "Installing Git"
+  // while nothing is installing and the app is waiting on a person.
+  facts.prereqDetail = "Waiting for your approval before Apple's installer can run.";
+  note("Waiting for the Mac login password to authorise Apple's Command Line Tools.");
   return new Promise((resolve) => {
     pendingAdminPassword = resolve;
-    adminPasswordSubmit.onclick = () => {
-      const password = adminPasswordInput.value;
+    el("adminSubmit").onclick = () => {
+      const password = input.value;
       if (!password) return;
-      adminPasswordPanel.hidden = true;
-      adminPasswordInput.value = "";
+      panel.hidden = true;
+      input.value = "";
       const finish = pendingAdminPassword;
       pendingAdminPassword = null;
       finish(password);
     };
-    adminPasswordCancel.onclick = () => {
-      adminPasswordPanel.hidden = true;
-      adminPasswordInput.value = "";
+    el("adminCancel").onclick = () => {
+      panel.hidden = true;
+      input.value = "";
       const finish = pendingAdminPassword;
       pendingAdminPassword = null;
       finish(null);
@@ -421,233 +1405,418 @@ function requestMacAdminPassword() {
   });
 }
 
-function setDetectionState(report) {
-  const tools = new Map(report.tools.map((tool) => [tool.command, tool]));
-  const gitReady = Boolean(tools.get("git")?.version);
-  const nodeReady = Boolean(
-    tools.get("node")?.version &&
-    tools.get("npm")?.version &&
-    (report.platform !== "windows" || tools.get("windows-runtime")?.version),
-  );
-  const eaiReady = Boolean(tools.get("eai")?.version);
-  setJourneyStage("git", gitReady ? "done" : "pending", gitReady ? "Git is already ready." : "Git needs to be installed.");
-  setJourneyStage("node", nodeReady ? "done" : "pending", nodeReady ? "Node.js 24, npm, and required app support are ready." : "Node.js 24, npm, or required app support needs to be installed.");
-  setJourneyStage("eai-cli", eaiReady ? "done" : "pending", eaiReady ? "The EAI CLI is already ready." : "The EAI CLI needs to be installed.");
-}
+/* --- sign-in ---------------------------------------------------------- */
 
-function phaseForTitle(title) {
-  if (/waiting|permission/i.test(title)) return "Waiting for permission";
-  if (/download/i.test(title)) return "Downloading";
-  if (/check|verify/i.test(title)) return "Verifying";
-  if (/install|prepar|finish/i.test(title)) return "Installing";
-  if (/ready|complete/i.test(title)) return "Ready";
-  return "In progress";
-}
-
-async function listenForBootstrapProgress() {
-  const eventApi = window.__TAURI__?.event;
-  if (!eventApi?.listen || window.__eaiBootstrapProgressListener) return;
-  window.__eaiBootstrapProgressListener = await eventApi.listen("bootstrap-progress", ({ payload }) => {
-    if (!activeBootstrapStep || payload.step !== activeBootstrapStep) return;
-    setActivity(payload.title, payload.detail, payload.progress ?? null, true, formatEta(payload.estimatedSeconds), phaseForTitle(payload.title));
-  });
-  if (!window.__eaiBootstrapSummaryListener) {
-    window.__eaiBootstrapSummaryListener = await eventApi.listen("bootstrap-summary", ({ payload }) => {
-      if (!payload?.detail) return;
-      recordSafeSummary(payload.step, payload.detail);
-    });
-  }
-}
-
-function showOutput(message, detail = "") {
-  output.hidden = false;
-  const cleanMessage = EAIWizard.cleanText(message);
-  const cleanDetail = EAIWizard.cleanText(detail);
-  output.textContent = cleanDetail ? `${cleanMessage} ${cleanDetail}` : cleanMessage;
-}
-
-function setInitButtonBusy(busy) {
-  if (!initAppButton) return;
-  initAppButton.disabled = busy;
-  initAppButton.setAttribute("aria-busy", String(busy));
-  initAppButton.textContent = EAIWizard.initButtonLabel(selectedCompanyAppKey, busy);
-}
-
-async function invoke(command, args = {}) {
-  const tauri = window.__TAURI__;
-  if (!tauri?.core?.invoke) {
-    return { ok: true, demo: true, message: "Preview mode: install actions run in the signed EAI Setup app." };
-  }
-  return tauri.core.invoke(command, args);
-}
-
-function setStep(step) {
-  wizard.step = EAIWizard.clampStep(step);
-  for (const panel of panels) {
-    const active = Number(panel.dataset.panel) === wizard.step;
-    panel.hidden = !active;
-    panel.classList.toggle("current", active);
-  }
-}
-
-function setToolState(report) {
-  platform.textContent = `${report.platform} · ${report.architecture}`;
-  wizard.prerequisitesReady = EAIWizard.prerequisitesReady(report, demoMode);
-  if (retryInstall) retryInstall.hidden = true;
-}
-
-function showPreviewState() {
-  demoMode = true;
-  platform.textContent = "Desktop preview";
-  wizard.prerequisitesReady = true;
-  if (retryInstall) retryInstall.hidden = true;
-}
-
-async function detect() {
-  setJourneyStage("computer", "active", "Checking this computer and the required tools.");
-  setActivity("Checking this computer", "Checking the required tools.", null, true, "", "Checking");
-  startActivityHeartbeat("detect");
-  try {
-    const report = await invoke("detect_environment");
-    if (report.demo) {
-      showPreviewState();
-      setJourneyStage("computer", "done", "Computer check complete. Preview mode made no changes.");
-      setActivity("Computer check complete", "Preview mode is ready. No changes were made.", 100, false);
-      return true;
-    }
-    demoMode = false;
-    environmentReport = report;
-    setToolState(report);
-    setDetectionState(report);
-    setJourneyStage("computer", "done", `${report.platform} check complete.`);
-    setActivity("Computer check complete", `${report.platform} is ready. Missing items are shown below.`, 100, false, "", "Complete");
-    return true;
-  } catch (error) {
-    showOutput("Could not inspect this computer.", String(error));
-    if (retryInstall) retryInstall.hidden = false;
-    setJourneyStage("computer", "error", "The computer check could not finish.");
-    setActivity("Computer check failed", "The computer check could not finish. Review the guidance below and try again.", 0, false, "", "Error");
-    return false;
-  } finally {
-    stopActivityHeartbeat();
-    if (activeBootstrapStep === "detect") activeBootstrapStep = null;
-  }
-}
-
-async function runBootstrapStep(step) {
-  const journeyStep = step === "login" ? "signin" : step;
-  if (journeyState.has(journeyStep)) setJourneyStage(journeyStep, "active", `${stepLabels[step] || "Secure sign-in"} is in progress.`);
-  activeBootstrapStep = step;
+async function runLogin() {
+  // `eai login` can take minutes — the browser is somebody else's window.
+  // A second press would start a second command against the same account.
+  if (facts.signinWaiting) return;
+  facts.signinWaiting = true;
+  facts.signinUrl = null;
+  facts.signinEscapeShown = false;
+  goTo("welcome");
   await listenForBootstrapProgress();
-  startActivityHeartbeat(step);
+
+  /* `eai login` blocks until the browser comes home, and if the tab is
+     closed it never does. The designed failure — "the browser didn't
+     come back" — can only be raised when the command returns, so this
+     is the other half of it: after long enough to be a problem, the way
+     out appears without waiting for a command that may not return. */
+  clearTimeout(welcomeEscapeTimer);
+  welcomeEscapeTimer = setTimeout(() => {
+    facts.signinEscapeShown = true;
+    if (state.screen === "welcome" && facts.signinWaiting) paint();
+  }, 40000);
+
   let result;
   try {
-    const adminPassword = step === "git" && environmentReport?.platform === "macos" ? await requestMacAdminPassword() : null;
-    if (step === "git" && environmentReport?.platform === "macos" && !adminPassword) {
-      showOutput("Mac approval was cancelled. No tools were changed.", "Next: enter the Mac password and allow installation to retry.");
-      setActivity("Git setup cancelled", "No changes were made. Enter the Mac password to retry the Apple Command Line Tools installation.", 0, false, "", "Error");
-      setJourneyStage("git", "error", "Git installation approval was cancelled.");
+    result = await invoke("run_bootstrap", { step: "login", projectName: null, directory: null, companyTenantId: null });
+  } catch (error) {
+    facts.signinWaiting = false;
+    clearTimeout(welcomeEscapeTimer);
+    note(`Sign-in did not complete: ${helpers.cleanText(error)}`, "error");
+    raise("callback", {});
+    return;
+  }
+  facts.signinWaiting = false;
+  clearTimeout(welcomeEscapeTimer);
+
+  if (result.output) {
+    recordCommandSummaries(result.output);
+    const address = /authenticated as[:\s]+([^\s]+@[^\s]+)/i.exec(helpers.cleanText(result.output));
+    if (address) facts.account = address[1];
+  }
+
+  if (!result.ok && !result.demo) {
+    note(`Sign-in did not complete: ${helpers.cleanText(result.message)}`, "error");
+    raise("callback", {});
+    return;
+  }
+
+  note("Browser sign-in completed.");
+  paint();
+  await loadWorkspaces();
+}
+
+/**
+ * Arrive on Set up at the stage the answers actually support.
+ *
+ * Demo and live both come through here. A bare goTo("setup") paints the
+ * finished form before the answers catch up, which is what a reviewer
+ * sees if the live path forgets to pass a stage.
+ */
+function goToSetup() {
+  goTo("setup", {
+    stage: machine.stageForAnswers({
+      workspace: Boolean(facts.selectedTenantId),
+    }),
+  });
+}
+
+/* ================ 10. WORKSPACES, APPS AND THE FORM ============== */
+
+async function loadWorkspaces() {
+  if (facts.demo) {
+    facts.tenants = [{ id: "preview", displayName: "Preview workspace", slug: "preview", active: true, apps: [] }];
+    facts.selectedTenantId = "preview";
+    goToSetup();
+    return true;
+  }
+  try {
+    const tenants = await invoke("get_company_tenants");
+    if (!Array.isArray(tenants) || tenants.length === 0) {
+      facts.tenants = [];
+      facts.selectedTenantId = null;
+      goToSetup();
+      raise("workspace", { account: facts.account });
       return false;
     }
-    result = await invoke("run_bootstrap", { step, projectName: null, directory: null, adminPassword, companyTenantId: null });
+    facts.tenants = tenants;
+    facts.selectedTenantId = helpers.resolveTenantSelection(tenants, facts.selectedTenantId);
+    note(`${tenants.length} workspace${tenants.length === 1 ? "" : "s"} available.`);
+    goToSetup();
+    return true;
   } catch (error) {
-    showOutput("This setup step could not start.", String(error));
-    setActivity(`${stepLabels[step] || step} setup failed`, "The step could not finish. Review the guidance below and try again.", 0, false, "", "Error");
-    if (journeyState.has(journeyStep)) setJourneyStage(journeyStep, "error", "This step could not finish.");
+    const failure = helpers.describeWorkspaceFailure(error);
+    note(`${failure.title}: ${failure.diagnostic}`, "error");
+    facts.tenants = [];
+    facts.selectedTenantId = null;
+    goToSetup();
+    raise("workspace", {
+      account: facts.account,
+      title: failure.title,
+      detail: failure.next,
+      retryable: failure.retryable,
+    });
     return false;
+  }
+}
+
+/**
+ * The workspace's existing apps, for the release gate only.
+ *
+ * Nothing in the form reads this: EAI Setup creates from the EAI
+ * template every time. The guest-machine test can be pointed at a fixed
+ * app with EAI_SETUP_E2E_APP_KEY, and this is what proves that app is
+ * really there before the receipt claims it was used.
+ */
+async function loadApps(tenantId) {
+  const tenant = facts.tenants.find((item) => item.id === tenantId);
+  if (!tenant) return false;
+  try {
+    tenant.apps = await invoke("get_company_apps", { tenantId });
+    note(`${tenant.apps?.length || 0} existing app${tenant.apps?.length === 1 ? "" : "s"} in ${tenant.displayName}.`);
+    return true;
+  } catch (error) {
+    const failure = helpers.describeAppFailure(error);
+    note(`${failure.title}: ${failure.diagnostic}`, "error");
+    return false;
+  }
+}
+
+function chooseTenant(tenantId) {
+  facts.selectedTenantId = tenantId;
+  machine.clear(state);
+  syncStage();
+  if (facts.tenants.length > 1) renderWorkspacePicker();
+  paint();
+}
+
+/**
+ * The reveal, recomputed from the answers rather than counted upwards.
+ *
+ * The name counts as answered when there is one, not when it is a valid
+ * kebab-case one. Those are different questions and tying the reveal to
+ * validity makes the location question flap: typing "contract-renewals"
+ * passes through "contract-", which is not valid, so the question below
+ * would close on the hyphen and reopen on the next letter.
+ *
+ * Whether the name is any good is a separate matter, and it is what
+ * decides the primary rather than the reveal — see the Create app line
+ * in PAINT.setup.
+ */
+function syncStage() {
+  const workspace = Boolean(facts.selectedTenantId);
+  const name = workspace && facts.projectName.length > 0;
+  state.stage = machine.stageForAnswers({
+    workspace,
+    name,
+    folder: name && Boolean(facts.projectFolder),
+  });
+}
+
+/* ===================== 11. CREATING THE APP ====================== */
+
+async function runInit() {
+  if (initInProgress) return false;
+
+  if (!helpers.isKebabCase(facts.projectName)) {
+    machine.clear(state);
+    paint();
+    setFieldError("name", "Use lowercase words separated by hyphens, for example customer-portal.");
+    el("projName").focus();
+    return false;
+  }
+  if (!facts.projectFolder) {
+    setFieldError("folder", `Choose where the app is saved, using ${machine.device(platform()).fileManager}.`);
+    return false;
+  }
+  if (!facts.demo && !facts.selectedTenantId) {
+    raise("workspace", { account: facts.account });
+    return false;
+  }
+
+  initInProgress = true;
+  facts.runReached = "folder";
+  facts.runFailedAt = null;
+  facts.runValues = {
+    workspace: selectedTenant()?.displayName || "",
+  };
+  goTo("running");
+  await listenForBootstrapProgress();
+
+  let result;
+  try {
+    result = await invoke("run_bootstrap", {
+      step: "init",
+      projectName: facts.projectName,
+      directory: facts.projectFolder,
+      companyTenantId: facts.selectedTenantId,
+      appKey: facts.selectedAppKey,
+    });
+  } catch (error) {
+    initInProgress = false;
+    return failInit(helpers.cleanText(error));
   } finally {
-    stopActivityHeartbeat();
-    activeBootstrapStep = null;
+    initInProgress = false;
   }
-  if (result.output) {
-    recordCommandSummaries(step, result.output);
+
+  if (result?.output) recordCommandSummaries(result.output);
+  e2eAppCreated = Boolean(result?.app_created);
+  if (result?.project_directory) {
+    facts.projectDirectory = result.project_directory;
+    facts.projectPath = result.project_path || result.project_directory;
   }
-  if (!result.ok && !result.demo) {
-    const message = result.message || "This setup step failed.";
-    showOutput(message, result.command ? `Next: ${result.command}` : "");
-    setActivity(`${stepLabels[step] || step} setup failed`, message, 0, false, "", "Error");
-    if (journeyState.has(journeyStep)) setJourneyStage(journeyStep, "error", message);
-    return false;
+
+  if (!result.ok && !result.demo) return failInit(helpers.cleanText(result.message));
+
+  if (!facts.projectDirectory) {
+    facts.projectDirectory = `${facts.projectFolder}/${facts.projectName}`;
+    facts.projectPath = facts.projectDirectory;
   }
-  if (journeyState.has(journeyStep)) setJourneyStage(journeyStep, "done", result.message || `${stepLabels[step] || "This step"} is ready.`);
+  facts.runReached = "done";
+  facts.runValues = {
+    template: "ready",
+    dependencies: "installed",
+  };
+  note("The app and its project files are ready.");
+  paint();
   return true;
 }
 
-async function installPrerequisites() {
-  if (demoMode) {
-    showOutput("Preview only: no changes were made to this computer.");
-    for (const step of prerequisiteSteps) setJourneyStage(step, "done", `${stepLabels[step]} will be prepared by the signed installer.`);
-    setActivity("Preview only", "The signed desktop app will install only what is missing.", 100, false);
+/**
+ * An init failure, put on the screen that owns it.
+ *
+ * A name that is already taken belongs on the form, in the field, next
+ * to the thing that has to change — not on the progress screen, where
+ * the only available verb is Retry and retrying the same name does the
+ * same thing.
+ */
+function failInit(message) {
+  if (machine.looksLikeTakenName(message)) {
+    goTo("setup", { stage: machine.stageForAnswers({ workspace: true, name: true, folder: true }) });
+    raise("name", { projectName: facts.projectName });
+    return false;
+  }
+  const failure = helpers.describeInitFailure(message, platform());
+  facts.runFailedAt = failure.failedAt
+    || (failure.title === "App dependencies need attention" || /dependenc/i.test(failure.title)
+      ? "dependencies"
+      : facts.runReached);
+  note(`${failure.title}: ${failure.diagnostic || failure.detail}`, "error");
+  raise("init", { title: failure.title, detail: failure.detail, next: failure.next });
+  return false;
+}
+
+/* ==================== 12. HARNESS AND HAND-OFF =================== */
+
+function previewInventory() {
+  return {
+    contractVersion: "eai.ai-surfaces/v2",
+    preferredSurface: null,
+    recommendedSurface: "vscode-copilot",
+    surfaces: [
+      { id: "vscode-copilot", name: "VS Code", provider: "GitHub", installUrl: "https://code.visualstudio.com/docs/copilot/setup", launchSupport: "project-and-prompt", installed: false, companionCli: "copilot" },
+      { id: "copilot-desktop", name: "GitHub Copilot", provider: "GitHub", installUrl: "https://docs.github.com/en/copilot/get-started/quickstart-copilot-app", launchSupport: "manual-project", installed: false, companionCli: "copilot" },
+      { id: "antigravity-desktop", name: "Antigravity", provider: "Google", installUrl: "https://antigravity.google/download", launchSupport: "manual-project", installed: false, companionCli: "agy" },
+      { id: "claude-desktop", name: "Claude Code", provider: "Anthropic", installUrl: "https://claude.com/download", launchSupport: "project-and-prompt", installed: false, companionCli: "claude" },
+      { id: "codex-desktop", name: "Codex", provider: "OpenAI", installUrl: "https://learn.chatgpt.com/docs/app", launchSupport: "manual-project", installed: false, companionCli: "codex" },
+      { id: "grok-bot", name: "Grok Build", provider: "xAI", installUrl: "https://x.ai/bot", launchSupport: "launch-only", installed: false, companionCli: "grok" },
+    ],
+  };
+}
+
+async function loadSurfaces() {
+  if (!facts.projectDirectory) {
+    facts.surfaces = previewInventory();
+    facts.selectedSurfaceId = helpers.chooseAiSurface(facts.surfaces);
     return true;
   }
-  if (!environmentReport) await detect();
-  if (!environmentReport) return false;
-  const toolMap = new Map(environmentReport.tools.map((tool) => [tool.command, tool]));
-  const steps = [];
-  if (!toolMap.get("git")?.version) steps.push("git");
-  if (
-    !toolMap.get("node")?.version ||
-    !toolMap.get("npm")?.version ||
-    (environmentReport.platform === "windows" && !toolMap.get("windows-runtime")?.version)
-  ) steps.push("node");
-  if (!toolMap.get("eai")?.version) steps.push("eai-cli");
-  if (!steps.length) {
-    wizard.prerequisitesReady = true;
-    if (retryInstall) retryInstall.hidden = true;
-    showOutput("All prerequisites are ready.");
-    setActivity("Everything is ready", "Git, Node.js 24, npm, required app support, and the EAI CLI are ready.", 100, false);
-    for (const step of prerequisiteSteps) setJourneyStage(step, "done", `${stepLabels[step]} is ready.`);
+  try {
+    const inventory = await invoke("detect_ai_surfaces", { directory: facts.projectDirectory });
+    facts.surfaces = appFacingInventory(inventory?.demo ? previewInventory() : inventory);
+    facts.selectedSurfaceId = helpers.chooseAiSurface(facts.surfaces);
+    const ready = facts.surfaces.surfaces.filter((surface) => surface.installed).length;
+    note(`${ready} AI tool${ready === 1 ? " is" : "s are"} already installed.`);
+    machine.clear(state, "detect");
     return true;
-  }
-  setActivity("Preparing installation", `${steps.length} prerequisite${steps.length === 1 ? "" : "s"} need attention.`, 0, true, "Preparing");
-  for (const [index, step] of steps.entries()) {
-    const name = stepLabels[step] || step;
-    const start = Math.round((index / steps.length) * 100);
-    setJourneyStage(step, "active", `Installing ${name}.`);
-    setActivity(`Installing ${name}`, "Downloading and installing only what is missing. The live status below will show each installer action.", start, true, formatEta(stepEstimates[step]));
-    if (!await runBootstrapStep(step)) {
-      if (retryInstall) retryInstall.hidden = false;
-      return false;
-    }
-    setJourneyStage(step, "done", `${name} is ready.`);
-    await detect();
-    setActivity(`${name} installed`, "Continuing setup.", Math.round(((index + 1) / steps.length) * 100), true, formatEta(Math.max(0, steps.slice(index + 1).reduce((total, item) => total + stepEstimates[item], 0))));
-  }
-  if (environmentReport) setToolState(environmentReport);
-  if (wizard.prerequisitesReady) {
-    showOutput("Prerequisites installed successfully.");
-    setActivity("Installation complete", "All required tools are ready. Continue to sign in.", 100, false, "Ready");
-    return true;
-  } else {
-    if (retryInstall) retryInstall.hidden = false;
-    showOutput("Some prerequisites still need attention. Try again.");
-    setActivity("Installation needs attention", "Review Build summary, then retry the installation step.", 0, false, "", "Error");
+  } catch (error) {
+    note(`The AI tool check did not finish: ${helpers.cleanText(error)}`, "error");
+    facts.surfaces = { surfaces: [] };
+    if (state.screen === "done") raise("detect", {});
+    else { machine.goTo(state, "done"); machine.raise(state, "detect"); }
     return false;
   }
 }
 
-async function startSetup() {
-  if (setupStarted) return;
-  setupStarted = true;
-  try {
-    const config = await invoke("get_e2e_configuration");
-    e2eConfig = config?.enabled ? config : null;
-  } catch {
-    e2eConfig = null;
-  }
-  setStep(1);
-  if (!await detect()) {
-    await writeE2eReceipt("prerequisites", "The computer check could not finish.");
+function chooseSurface(surfaceId) {
+  facts.selectedSurfaceId = surfaceId;
+  facts.waitingForSurfaceId = null;
+  stopHarnessPoll();
+  machine.clear(state);
+  paint();
+}
+
+async function harnessNext() {
+  const surface = selectedSurface();
+  if (!surface) return;
+
+  if (surface.installed) {
+    goTo("handoff");
     return;
   }
-  setStep(2);
-  if (await installPrerequisites()) {
-    setStep(3);
-    if (e2eConfig) await runE2eFlow();
-  } else {
-    await writeE2eReceipt("prerequisites", "The required tools could not be installed.");
+
+  try {
+    await invoke("install_ai_surface", { surfaceId: surface.id });
+  } catch (error) {
+    note(`The download page could not be opened: ${helpers.cleanText(error)}`, "error");
+    raise("install", { harnessName: surface.name });
+    return;
+  }
+  note(`Opened the official ${surface.provider} page for ${surface.name}.`);
+  facts.waitingForSurfaceId = surface.id;
+  paint();
+  startHarnessPoll();
+}
+
+/**
+ * While they are on somebody else's website.
+ *
+ * The waiting box promises this window updates by itself, so it has to.
+ * Polling stops the moment the tool lands, the moment they pick a
+ * different one, and the moment they leave the screen — a timer that
+ * outlives its screen is a repaint of a screen nobody is looking at.
+ */
+function startHarnessPoll() {
+  stopHarnessPoll();
+  harnessPollTimer = setInterval(async () => {
+    if (state.screen !== "done" || !facts.waitingForSurfaceId) { stopHarnessPoll(); return; }
+    if (!facts.projectDirectory) return;
+    try {
+      const inventory = await invoke("detect_ai_surfaces", { directory: facts.projectDirectory });
+      if (inventory?.demo) return;
+      facts.surfaces = appFacingInventory(inventory);
+      const landed = inventory.surfaces.find((surface) => surface.id === facts.waitingForSurfaceId && surface.installed);
+      if (landed) {
+        note(`${landed.name} is installed.`);
+        facts.waitingForSurfaceId = null;
+        stopHarnessPoll();
+        paint();
+      }
+    } catch {
+      // A failed poll is not news. The box already says what to do.
+    }
+  }, 5000);
+}
+
+function stopHarnessPoll() {
+  if (harnessPollTimer) clearInterval(harnessPollTimer);
+  harnessPollTimer = null;
+}
+
+async function openHarness() {
+  const surface = selectedSurface();
+  if (!surface || !facts.projectDirectory) return;
+  el("handoffGo").disabled = true;
+  try {
+    const result = await invoke("start_ai_surface", { directory: facts.projectDirectory, surfaceId: surface.id });
+    if (!result?.launched) {
+      throw new Error(result?.message || `${surface.name} did not report a successful launch.`);
+    }
+    note(`${surface.name} opened on the project.`);
+    goTo("built");
+  } catch (error) {
+    note(`${surface.name} could not be opened: ${helpers.cleanText(error)}`, "error");
+    raise("launch", { harnessName: surface.name, projectPath: facts.projectPath });
+  } finally {
+    el("handoffGo").disabled = false;
   }
 }
+
+async function openProjectFolder() {
+  if (!facts.projectPath) return;
+  try {
+    await invoke("open_project", { path: facts.projectPath });
+    note("Opened the project folder.");
+  } catch (error) {
+    note(`The project folder could not be opened: ${helpers.cleanText(error)}`, "error");
+  }
+}
+
+async function runSignup() {
+  try {
+    const result = await invoke("open_signup");
+    if (result?.demo) {
+      // Tauri owns the normal hand-off.  The statemachine deliberately has
+      // no Tauri bridge, so make this one external journey visible there
+      // instead of making the account action look like a dead-end.
+      const previewWindow = window.open("https://www.enterpriseaigroup.com/signup/developer", "_blank", "noopener");
+      note(previewWindow
+        ? "The Enterprise AI signup page is open in a new browser tab."
+        : "Your browser blocked the signup tab. Open enterpriseaigroup.com/signup/developer to create an account.");
+      return;
+    }
+    note("The Enterprise AI signup page is open in your browser.");
+  } catch (error) {
+    note(`The signup page could not be opened: ${helpers.cleanText(error)}`, "error");
+  }
+}
+
+/* ================== 13. THE RELEASE TEST PATH ====================
+
+   Unchanged in intent from the version before the redesign: a published
+   build, driven end to end by a guest account, writing a receipt that
+   says which check failed. It walks the same screens a person does. */
 
 async function writeE2eReceipt(failedCheck, message) {
   if (!e2eConfig?.receiptFile) return;
@@ -660,98 +1829,55 @@ async function writeE2eReceipt(failedCheck, message) {
   try {
     await invoke("write_e2e_receipt", {
       receiptFile: e2eConfig.receiptFile,
-      receipt: {
-        schemaVersion: "eai.setup.e2e-receipt.v1",
-        status: failedCheck ? "failed" : "passed",
-        message,
-        checks,
-        appName: e2eConfig.projectName || null,
-        appCreated: e2eAppCreated,
-      },
+      receipt: { status: failedCheck ? "failed" : "passed", message, checks, appCreated: e2eAppCreated },
     });
   } catch (error) {
     console.error("Could not write the E2E receipt", error);
   }
 }
 
-async function writeE2eAppCreationCheckpoint(result, appName) {
-  if (!e2eConfig?.receiptFile || result?.app_created !== true) return;
-  if (!e2eConfig.projectName || e2eConfig.projectName !== appName) {
-    throw new Error("The E2E app-creation checkpoint is not bound to the configured test app.");
-  }
-  await invoke("write_e2e_receipt", {
-    receiptFile: e2eConfig.receiptFile,
-    receipt: {
-      schemaVersion: "eai.setup.e2e-app-created.v1",
-      status: "checkpoint",
-      checkpoint: "app-created",
-      message: "The exact release-test app was created; project and AI handoff checks are still pending.",
-      checks: {
-        prerequisites: "passed",
-        authentication: "passed",
-        tenant: "passed",
-        app: "passed",
-        project: "not-run",
-        aiHandoff: "not-run",
-      },
-      appName,
-      appCreated: true,
-      cleanupRequired: true,
-      cleanupRequested: true,
-      recordedAt: new Date().toISOString(),
-    },
-  });
-}
-
 async function runE2eFlow() {
-  setActivity("Checking saved sign-in", "The release test is using the pre-authenticated guest account.", null, true, "", "Checking");
   try {
     await invoke("verify_e2e_auth");
   } catch (error) {
-    showOutput("Saved sign-in needs attention.", String(error));
-    setActivity("Saved sign-in failed", "The release test guest is not authenticated. Refresh its approved test snapshot, then retry.", 0, false, "", "Error");
     await writeE2eReceipt("authentication", String(error));
     return;
   }
-  if (!await loadCompanyTenants()) {
+  if (!await loadWorkspaces()) {
     await writeE2eReceipt("tenant", "Company workspaces could not be loaded.");
     return;
   }
   const requestedTenant = e2eConfig.companyTenantId;
-  if (!requestedTenant || !companyTenants.some((tenant) => tenant.id === requestedTenant)) {
-    const message = "The configured release-test tenant is not available to the signed-in account.";
-    showOutput("Release-test tenant needs attention.", message);
-    setActivity("Release-test tenant unavailable", message, 0, false, "", "Error");
-    await writeE2eReceipt("tenant", message);
+  if (!requestedTenant || !facts.tenants.some((tenant) => tenant.id === requestedTenant)) {
+    await writeE2eReceipt("tenant", "The configured release-test tenant is not available to the signed-in account.");
     return;
   }
-  selectedCompanyTenantId = requestedTenant;
-  renderCompanyTenants();
-  if (!await loadCompanyApps(requestedTenant)) {
+  facts.selectedTenantId = requestedTenant;
+  if (!await loadApps(requestedTenant)) {
     await writeE2eReceipt("app", "Apps could not be loaded for the release-test workspace.");
     return;
   }
-  selectedCompanyAppKey = e2eConfig.appKey || null;
-  if (appSelection && selectedCompanyAppKey) appSelection.value = selectedCompanyAppKey;
-  if (projectNameInput) projectNameInput.value = e2eConfig.projectName || "eai-release-test";
-  const directoryInput = document.querySelector("#project-directory");
-  if (directoryInput) directoryInput.value = e2eConfig.directory || "";
-  setStep(4);
-  const completed = await runInit();
-  if (!completed) {
+  facts.selectedAppKey = e2eConfig.appKey || null;
+  facts.projectName = e2eConfig.projectName || "eai-release-test";
+  facts.projectFolder = e2eConfig.directory || "";
+  syncStage();
+  paint();
+
+  if (!await runInit()) {
     await writeE2eReceipt(e2eAppCreated ? "project" : "app", "The EAI app could not be initialised by the desktop bootstrap path.");
     return;
   }
-  const canProveProjectHandoff = (item) => item?.installed
-    && ["project-and-prompt", "project-only"].includes(item.launchSupport);
-  const surface = aiSurfaceInventory?.surfaces?.find((item) => item.id === selectedAiSurfaceId && canProveProjectHandoff(item))
-    || aiSurfaceInventory?.surfaces?.find(canProveProjectHandoff);
+  const surface = facts.surfaces?.surfaces?.find((item) => item.id === facts.selectedSurfaceId && item.installed)
+    || facts.surfaces?.surfaces?.find((item) => item.installed);
   if (!surface) {
-    await writeE2eReceipt("aiHandoff", "No installed project-capable AI workspace was available for the release-test handoff.");
+    await writeE2eReceipt("aiHandoff", "No installed AI workspace was available for the release-test handoff.");
     return;
   }
   try {
-    await invoke("start_ai_surface", { directory: createdProjectDirectory, surfaceId: surface.id });
+    const result = await invoke("start_ai_surface", { directory: facts.projectDirectory, surfaceId: surface.id });
+    if (!result?.launched) {
+      throw new Error(result?.message || `${surface.name} did not report a successful launch.`);
+    }
   } catch (error) {
     await writeE2eReceipt("aiHandoff", `The AI workspace could not be opened: ${String(error)}`);
     return;
@@ -759,515 +1885,359 @@ async function runE2eFlow() {
   await writeE2eReceipt(null, "The published installer completed its desktop bootstrap path.");
 }
 
-async function runLogin() {
-  setJourneyStage("signin", "active", "Opening secure browser sign-in.");
-  setActivity("Opening secure sign-in", "Your browser will handle EAI authentication. The installer does not see your password.", null);
-  const result = await runBootstrapStep("login");
-  if (result) {
-    showOutput(demoMode ? "Preview only: the signed app will open browser sign-in." : "Browser sign-in completed.");
-    if (demoMode || await loadCompanyTenants()) {
-      setJourneyStage("signin", "done", "Secure browser sign-in is complete.");
-      setActivity("Sign-in complete", "Your company workspaces are ready. Continue to app setup.", 100, false, "Ready");
-      setStep(4);
-    }
-  } else {
-    setJourneyStage("signin", "error", "Browser sign-in did not complete.");
-    setActivity("Sign-in needs attention", "Complete browser sign-in, then try again. Build summary shows the last result.", 0, false, "", "Error");
-  }
-}
+/* ======================== 14. THE WIRING ========================= */
 
-function renderCompanyTenants() {
-  if (!companyTenantField || !companyTenantSelect) return;
-  selectedCompanyTenantId = EAIWizard.resolveTenantSelection(companyTenants, selectedCompanyTenantId);
-  companyTenantSelect.replaceChildren();
-  if (companyTenants.length === 1) {
-    companyTenantField.hidden = true;
-    if (appSelectionField) appSelectionField.hidden = true;
+el("setupSignin").addEventListener("click", () => runLogin());
+el("setupStart").addEventListener("click", async () => {
+  // “Let's go” is the transition into the visible first step. The browser
+  // only opens after the person sees that Sign in screen and chooses its
+  // explicit “Sign in with browser” action.
+  if (facts.preparationStarted && !facts.prereqBusy) return goTo("signin");
+  if (facts.preparationStarted) return;
+  facts.preparationStarted = true;
+  facts.prereqBusy = "detect";
+  facts.prereqDetail = "";
+  paint();
+  // The review prototype must stop on the state a person just chose so
+  // it can be inspected. The signed desktop app continues immediately
+  // into its real environment check.
+  if (window.__eaiDevAddress) {
+    window.parent?.postMessage({ type: "eai-setup-prototype-readiness", state: "checking" }, window.location.origin);
     return;
   }
+  await runReadiness();
+  facts.prereqBusy = null;
+  paint();
+});
+el("setupCreate").addEventListener("click", () => {
+  if (machine.faultsInForce(state).length) return runReadiness();
+  return runSignup();
+});
 
-  const placeholder = document.createElement("option");
-  placeholder.value = "";
-  placeholder.textContent = "Choose a company workspace";
-  placeholder.disabled = true;
-  placeholder.selected = !selectedCompanyTenantId;
-  companyTenantSelect.append(placeholder);
-  for (const tenant of companyTenants) {
-    const option = document.createElement("option");
-    option.value = tenant.id;
-    option.textContent = tenant.displayName;
-    option.selected = tenant.id === selectedCompanyTenantId;
-    companyTenantSelect.append(option);
+el("welcomeRetry").addEventListener("click", () => runLogin());
+el("welcomeCopy").addEventListener("click", async () => {
+  if (!facts.signinUrl) return;
+  try {
+    await navigator.clipboard.writeText(facts.signinUrl);
+    el("welcomeCopy").textContent = "Link copied";
+    setTimeout(() => { el("welcomeCopy").textContent = "Copy the sign-in link"; }, 2000);
+  } catch {
+    el("welcomeFine").textContent = facts.signinUrl;
   }
-  companyTenantField.hidden = false;
-  if (appSelectionField) appSelectionField.hidden = true;
-}
+});
 
-function selectedCompanyTenant() {
-  return companyTenants.find((tenant) => tenant.id === selectedCompanyTenantId) || null;
-}
+el("wsRetry").addEventListener("click", () => {
+  machine.clear(state);
+  paint();
+  loadWorkspaces();
+});
 
-function renderCompanyApps() {
-  if (!appSelectionField || !appSelection) return;
-  const tenant = selectedCompanyTenant();
-  const apps = Array.isArray(tenant?.apps) ? tenant.apps : [];
-  appSelection.replaceChildren();
-  selectedCompanyAppKey = null;
+/**
+ * Typing a name, one keystroke at a time.
+ *
+ * A full repaint per keystroke would rebuild the workspace rows under
+ * the field and take the caret with them, so the screen is only
+ * repainted when something about it actually changed: the reveal moved
+ * on, or a taken-name error is no longer true.
+ */
+/* A disabled primary with nothing explaining it is a dead end. The name
+   is checked when they leave the field rather than on every keystroke,
+   because "contract-" is not wrong, it is half-typed. */
+el("projName").addEventListener("blur", () => {
+  if (!facts.projectName || helpers.isKebabCase(facts.projectName)) return;
+  setFieldError("name", "Use lowercase words separated by hyphens, for example customer-portal.");
+});
 
-  if (apps.length === 0) {
-    appSelectionField.hidden = true;
-    if (projectNameInput) {
-      projectNameInput.readOnly = false;
-      projectNameInput.value = "";
-    }
-    setInitButtonBusy(false);
+el("projName").addEventListener("input", (event) => {
+  facts.projectName = event.target.value.trim();
+  const before = state.stage;
+  const hadNameFault = machine.isBroken(state, "name");
+  machine.clear(state, "name");
+  /* Typing clears the complaint, the way the taken-name error does:
+     nothing was attempted, so there is nothing to retry. Cleared here
+     rather than by a repaint, because most keystrokes change nothing
+     else on the screen and do not earn one. */
+  clearFieldError("name");
+  syncStage();
+  if (state.stage !== before || hadNameFault) paint();
+  else el("createApp").disabled = !machine.setupComplete(state) || !helpers.isKebabCase(facts.projectName);
+});
+
+async function chooseFolder() {
+  const dialog = window.__TAURI__?.dialog;
+  if (!dialog?.open) {
+    note("Folder selection is available in the signed desktop app.");
     return;
   }
-
-  const createOption = document.createElement("option");
-  createOption.value = "";
-  createOption.textContent = "Create a new app";
-  appSelection.append(createOption);
-  for (const app of apps) {
-    const option = document.createElement("option");
-    option.value = app.key;
-    option.textContent = `${app.displayName} (${app.key}) · ${app.status}`;
-    appSelection.append(option);
-  }
-  appSelection.value = "";
-  appSelectionField.hidden = false;
-  if (projectNameInput) projectNameInput.readOnly = false;
-  setInitButtonBusy(false);
-}
-
-async function loadCompanyApps(tenantId) {
-  if (!tenantId) return true;
-  const tenant = companyTenants.find((item) => item.id === tenantId);
-  if (!tenant) return false;
-  if (tenant.appsLoaded) {
-    if (retryWorkspaces) {
-      retryWorkspaces.hidden = true;
-      retryWorkspaces.textContent = EAIWizard.retryActionLabel("app");
-    }
-    renderCompanyApps();
-    return true;
-  }
-  setActivity("Checking apps", `Loading apps for ${tenant.displayName}.`, null, true, "", "Checking");
-  setJourneyStage("app", "active", "Checking the apps available in the selected company workspace.");
   try {
-    tenant.apps = await invoke("get_company_apps", { tenantId });
-    tenant.appsLoaded = true;
-    failedAppTenantId = null;
-    if (retryWorkspaces) {
-      retryWorkspaces.hidden = true;
-      retryWorkspaces.textContent = EAIWizard.retryActionLabel("app");
+    const selected = await dialog.open({ directory: true, multiple: false, title: "Choose a location" });
+    if (typeof selected === "string" && selected) {
+      facts.projectFolder = selected;
+      note(`Location chosen: ${selected}`);
+      syncStage();
+      paint();
     }
-    renderCompanyApps();
-    recordActivityEvent("Apps ready", `Apps for ${tenant.displayName} are ready.`, "Ready");
-    return true;
   } catch (error) {
-    failedAppTenantId = tenantId;
-    const failure = EAIWizard.describeAppFailure(error);
-    showOutput(failure.title, `${failure.detail} ${failure.next} Diagnostic: ${failure.diagnostic}`);
-    setActivity(failure.title, `${failure.detail} ${failure.next}`, 0, false, "", "Error");
-    if (retryWorkspaces) {
-      retryWorkspaces.textContent = EAIWizard.retryActionLabel("app");
-      retryWorkspaces.hidden = !failure.retryable;
-    }
-    return false;
+    note(`The folder could not be chosen: ${helpers.cleanText(error)}`, "error");
   }
 }
 
-function selectCompanyApp() {
-  selectedCompanyAppKey = appSelection?.value || null;
-  if (selectedCompanyAppKey) {
-    if (projectNameInput) {
-      projectNameInput.value = selectedCompanyAppKey;
-      projectNameInput.readOnly = true;
-    }
-    setInitButtonBusy(false);
-    const app = selectedCompanyTenant()?.apps?.find((item) => item.key === selectedCompanyAppKey);
-    setActivity(
-      "Existing app selected",
-      `The local project will use ${app?.displayName || selectedCompanyAppKey}. No new platform app will be created.`,
-      100,
-      false,
-      "Ready",
-      "Ready",
-    );
-    return;
-  }
-  if (projectNameInput) {
-    projectNameInput.value = "";
-    projectNameInput.readOnly = false;
-  }
-  setInitButtonBusy(false);
-  setActivity("Create a new app", "Enter a project name and choose its parent folder.", 100, false, "Ready", "Ready");
-}
+el("chooseFolderStart").addEventListener("click", chooseFolder);
+el("chooseFolder").addEventListener("click", chooseFolder);
+el("wsTrigger").addEventListener("click", (event) => {
+  event.stopPropagation();
+  toggleWorkspaceMenu();
+});
+document.addEventListener("click", (event) => {
+  if (!workspaceMenuOpen) return;
+  if (event.target instanceof Element && event.target.closest("#wsPick")) return;
+  closeWorkspaceMenu();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") closeWorkspaceMenu();
+});
+el("setupBack").addEventListener("click", () => {
+  facts.signinWaiting = false;
+  goTo("signin");
+});
+el("createApp").addEventListener("click", () => runInit());
 
-async function loadCompanyTenants() {
-  if (demoMode) return true;
-  failedAppTenantId = null;
-  if (retryWorkspaces) retryWorkspaces.hidden = true;
-  setActivity("Checking company workspaces", "Finding where your new app can be created.", null, true, "", "Checking");
-  setJourneyStage("app", "active", "Finding where the new app can be created.");
+el("runBack").addEventListener("click", () => {
+  syncStage();
+  goTo("setup", { stage: machine.stageForAnswers({ workspace: true, name: true, folder: true }) });
+});
+el("runRetry").addEventListener("click", () => runInit());
+el("runContinue").addEventListener("click", async () => {
+  await loadSurfaces();
+  if (state.screen === "running") goTo("done");
+  else paint();
+});
+
+el("harnessBack").addEventListener("click", () => {
+  stopHarnessPoll();
+  goTo("setup", { stage: machine.stageForAnswers({ workspace: true, name: true, folder: true }) });
+});
+
+async function refreshHarness() {
+  for (const btn of document.querySelectorAll(".i4-pick-check, #harnessRefresh")) btn.disabled = true;
   try {
-    companyTenants = await invoke("get_company_tenants");
-    if (!Array.isArray(companyTenants) || companyTenants.length === 0) {
-      throw new Error("No company workspaces are available for this account.");
-    }
-    renderCompanyTenants();
-    if (companyTenants.length === 1) {
-      if (!await loadCompanyApps(selectedCompanyTenantId)) return false;
-      recordActivityEvent("Workspace ready", `Using ${companyTenants[0].displayName} for this app.`, "Ready");
-      return true;
-    }
-    recordActivityEvent("Workspace choice", "Choose the company workspace that should own this app.", "Waiting");
-    setActivity("Choose a company workspace", "Select the company workspace that should own this app, then continue.", 100, false, "", "Waiting");
-    return true;
-  } catch (error) {
-    const failure = EAIWizard.describeWorkspaceFailure(error);
-    showOutput(failure.title, `${failure.detail} ${failure.next} Diagnostic: ${failure.diagnostic}`);
-    setActivity(failure.title, `${failure.detail} ${failure.next}`, 0, false, "", "Error");
-    if (retryWorkspaces) {
-      retryWorkspaces.textContent = EAIWizard.retryActionLabel("workspace");
-      retryWorkspaces.hidden = !failure.retryable;
-    }
-    return false;
-  }
-}
-
-async function runSignup() {
-  setActivity("Opening account signup", "Opening the Enterprise AI signup page in your default browser. Return here when your account is ready.", null, true, "", "Opening");
-  try {
-    const result = await invoke("open_signup");
-    if (result?.demo) {
-      showOutput("Preview only: the Enterprise AI signup page would open in your browser.");
-      setActivity("Signup page ready", "In the signed installer, the public Enterprise AI signup page will open in your browser.", 100, false, "", "Ready");
-      return;
-    }
-    showOutput("Signup page opened.", "Create your account there, then return here and choose Sign in with browser.");
-    setActivity("Signup page opened", "Create your account in the browser, then return here and choose Sign in with browser.", 100, false, "", "Ready");
-  } catch (error) {
-    showOutput("The signup page could not be opened.", String(error));
-    setActivity("Signup page could not open", "Open https://www.enterpriseaigroup.com/signup/developer in your browser, then return here and sign in.", 0, false, "", "Error");
-  }
-}
-
-async function runInit() {
-  if (initInProgress) return;
-  const name = projectNameInput.value.trim();
-  const directory = document.querySelector("#project-directory").value.trim();
-  if (!EAIWizard.isKebabCase(name)) {
-    showOutput("Use lowercase words separated by hyphens, for example customer-portal.");
-    document.querySelector("#project-name").focus();
-    return false;
-  }
-  if (!directory) {
-    showOutput("Choose a parent folder for the app.", "Use Choose folder or enter a folder path.");
-    document.querySelector("#project-directory").focus();
-    return false;
-  }
-  if (!demoMode && !selectedCompanyTenantId) {
-    showOutput("Choose the company workspace for this app.");
-    setActivity("Choose a company workspace", "Select the company workspace that should own this app, then continue.", 100, false, "", "Waiting");
-    companyTenantSelect?.focus();
-    return false;
-  }
-  initInProgress = true;
-  setInitButtonBusy(true);
-  setJourneyStage("app", "active", `Creating ${name} and preparing its project files.`);
-  setActivity("Creating your EAI app", `Initialising ${name} and fetching the supported Gofer assets.`, null);
-  await listenForBootstrapProgress();
-  startActivityHeartbeat("init");
-  let result;
-  try {
-    result = await invoke("run_bootstrap", { step: "init", projectName: name, directory: directory || null, companyTenantId: selectedCompanyTenantId, appKey: selectedCompanyAppKey });
-    e2eAppCreated = Boolean(result?.app_created);
-    await writeE2eAppCreationCheckpoint(result, name);
-  } catch (error) {
-    const failure = EAIWizard.describeInitFailure(error, environmentReport?.platform);
-    showOutput(failure.title, `${failure.detail} Next: ${failure.next}`);
-    setActivity(failure.title, failure.detail, 0, false, "", "Error");
-    setJourneyStage("app", "error", failure.detail);
-    return false;
+    await loadSurfaces();
+    paint();
   } finally {
-    stopActivityHeartbeat();
-    activeBootstrapStep = null;
-    initInProgress = false;
-    setInitButtonBusy(false);
+    for (const btn of document.querySelectorAll(".i4-pick-check, #harnessRefresh")) btn.disabled = false;
   }
-  if (result?.output) {
-    recordCommandSummaries("init", result.output);
+}
+
+el("harnessRefresh").addEventListener("click", () => refreshHarness());
+el("harnessGo").addEventListener("click", () => {
+  if (machine.isBroken(state, "detect")) {
+    refreshHarness();
+    return;
   }
-  if (result?.project_directory) {
-    createdProjectDirectory = result.project_directory;
-    projectPath = result.project_path || result.project_directory;
+  harnessNext();
+});
+
+el("handoffBack").addEventListener("click", () => goTo("done"));
+el("handoffGo").addEventListener("click", () => openHarness());
+el("handoffFolder").addEventListener("click", () => openProjectFolder());
+
+el("builtFolder").addEventListener("click", () => openProjectFolder());
+
+function startAnotherProject() {
+  stopHarnessPoll();
+  facts.projectName = "";
+  facts.projectFolder = "";
+  facts.projectPath = null;
+  facts.projectDirectory = null;
+  facts.selectedSurfaceId = null;
+  facts.waitingForSurfaceId = null;
+  facts.runReached = "workspace";
+  facts.runFailedAt = null;
+  facts.runValues = {};
+  machine.clear(state);
+  note("Starting another project.");
+  goTo("setup", { stage: machine.stageForAnswers({ workspace: Boolean(facts.selectedTenantId) }) });
+}
+
+el("builtAnother").addEventListener("click", () => startAnotherProject());
+
+/* ========================== 15. GO =============================== */
+
+/**
+ * Dev builds can open on any state.
+ *
+ * The prototype's whole review model is that a state worth discussing
+ * is a state worth linking to, and losing that on the way into the app
+ * would mean the next round of review happens against the prototype
+ * rather than the thing that ships. It is off unless the query string
+ * asks for it, and it never runs the real bootstrap.
+ */
+/**
+ * Preview workspaces for the state machine. Real accounts can have many;
+ * ten is enough to review the dropdown scroll.
+ */
+function previewTenants(count = 1) {
+  const catalog = [
+    { id: "preview-acme", displayName: "Acme Corp", slug: "acme", active: true, apps: [] },
+    { id: "preview-beacon", displayName: "Beacon Health", slug: "beacon-health", active: true, apps: [] },
+    { id: "preview-contoso", displayName: "Contoso Ltd", slug: "contoso", active: true, apps: [] },
+    { id: "preview-fabrikam", displayName: "Fabrikam Inc", slug: "fabrikam", active: true, apps: [] },
+    { id: "preview-litware", displayName: "Litware Inc", slug: "litware", active: true, apps: [] },
+    { id: "preview-northwind", displayName: "Northwind Group", slug: "northwind", active: true, apps: [] },
+    { id: "preview-northwind-retail", displayName: "Northwind Retail", slug: "northwind-retail", active: true, apps: [] },
+    { id: "preview-tailwind", displayName: "Tailwind Traders", slug: "tailwind-traders", active: true, apps: [] },
+    { id: "preview-adventure", displayName: "Adventure Works", slug: "adventure-works", active: true, apps: [] },
+    { id: "preview-wide-world", displayName: "Wide World Importers", slug: "wide-world", active: true, apps: [] },
+  ];
+  return catalog.slice(0, Math.max(1, Math.min(count, catalog.length)));
+}
+
+function applyDevAddress() {
+  const query = new URLSearchParams(window.location.search);
+  if (!query.has("screen")) return false;
+  window.__eaiDevAddress = true;
+  machine.readAddress(window.location.search, state);
+
+  facts.environment = { platform: state.platform, architecture: "preview", tools: [] };
+  facts.demo = true;
+  facts.account = "you@example.com";
+  /* The form's answers, and only the ones the stage says are in.
+
+     This is the rule the fixture kept breaking: filling a field at a
+     stage whose whole point is that it is empty. It made "Name appears"
+     look finished with the location question still hidden underneath,
+     and "Location — choose" draw its answered shape before anybody had
+     chosen. `answersForStage` is the same mapping the form itself uses,
+     so the preview cannot disagree with it.
+
+     Every screen after Set up has been through the form, so they get
+     the finished answers regardless. */
+  const root = state.platform === "windows" ? "C:\\Users\\you\\Projects" : "/Users/you/Projects";
+  const separator = state.platform === "windows" ? "\\" : "/";
+  const answered = state.screen !== "setup"
+    ? { workspace: true, name: true, folder: true }
+    /* A workspace failure takes everything below question one off the
+       screen, so nothing below it has been answered. Leaving a name in a
+       hidden field means it appears out of nowhere the moment the
+       failure clears. */
+    : machine.isBroken(state, "workspace")
+      ? { workspace: false, name: false, folder: false }
+      : machine.answersForStage(state);
+
+  facts.projectName = answered.name ? "contract-renewals" : "";
+  facts.projectFolder = answered.folder ? root : "";
+  // The later screens open the folder, so they always have a path.
+  facts.projectPath = `${root}${separator}contract-renewals`;
+  facts.projectDirectory = facts.projectPath;
+
+  facts.tenants = previewTenants(1);
+  facts.selectedTenantId = facts.tenants[0].id;
+  facts.runReached = query.get("reached") || "template";
+
+  /* ?workspaces=N reaches the shape of the form a self-serve tester
+     never sees: an account that administers more than one workspace. */
+  const workspaceCount = Number.parseInt(query.get("workspaces") || "1", 10);
+  if (Number.isFinite(workspaceCount) && workspaceCount > 1) {
+    facts.tenants = previewTenants(workspaceCount);
+    facts.selectedTenantId = facts.tenants[0].id;
   }
-  if (!result.ok && !result.demo) {
-    const failure = EAIWizard.describeInitFailure(result.message, environmentReport?.platform);
-    showOutput(failure.title, `${failure.detail} Next: ${failure.next}`);
-    setActivity(failure.title, failure.detail, 0, false, "", "Error");
-    setJourneyStage("app", "error", failure.detail);
-    return false;
+
+  /* Which AI tools are on this machine, as a list of ids.
+
+     The one control the harness screens exist to answer. `installed=none`
+     is the empty machine and `installed=claude-cli,codex-cli` is a
+     machine with two, because "is it here" is not a boolean across a list
+     of six and a rail that pretends it is cannot reach the state where
+     the ready group has more than one row in it. */
+  facts.surfaces = previewInventory();
+  const installed = query.has("installed")
+    ? query.get("installed").split(",").filter((id) => id && id !== "none")
+    : query.get("harness") === "installed" ? ["claude-desktop"] : [];
+  for (const surface of facts.surfaces.surfaces) surface.installed = installed.includes(surface.id);
+  const wanted = query.get("pick");
+  facts.selectedSurfaceId = facts.surfaces.surfaces.some((surface) => surface.id === wanted)
+    ? wanted
+    : helpers.chooseAiSurface(facts.surfaces);
+  if (query.get("waiting") === "1") facts.waitingForSurfaceId = facts.selectedSurfaceId;
+
+  /* What each failure is about. `step` matters because the prerequisite
+     failure says a different true sentence for each tool and for a check
+     that never finished at all. */
+  /* The init note follows the row that failed, because a screen whose
+     failed row says "Dependencies installed" and whose note underneath
+     says "The app template would not download" is a screen contradicting
+     itself — and a preview that can produce one is a preview that will
+     be reviewed as a bug. In the real flow this comes from the CLI. */
+  const initFailures = {
+    workspace: { title: "The workspace would not connect", detail: "Nothing was created. The folder is untouched.", next: "Check the workspace is still active, then retry this step." },
+    folder: { title: "The folder could not be created", detail: "Nothing was written. Choose a location you can write to.", next: "Pick another location, then retry this step." },
+    template: { title: "The app template would not download", detail: "The folder was created and is empty. Nothing was left half-written.", next: "An EAI admin can grant access to the asset library, or you can retry once they have." },
+    dependencies: { title: "The app's packages would not install", detail: "The project files were created, so the folder is safe to reuse.", next: "Retry this step. If it fails again, open the folder and run npm install." },
+  };
+
+  facts.failureContext = {
+    prereq: { steps: (query.get("step") || "git").split(",").filter(Boolean) },
+    network: { host: "api.au.myenterprise.ai" },
+    init: initFailures[facts.runReached] || initFailures.template,
+  };
+
+  /* The two moments the sign-in screen has while nothing has failed and
+     nobody has pressed anything: the quiet fix-up running, and macOS
+     asking for a password. Both are states a reviewer has to see and
+     neither is reachable by waiting, because in a preview build there is
+     nothing to wait for. */
+  const busy = query.get("busy");
+  if (query.get("prepared") === "1" && state.screen === "start") {
+    facts.preparationStarted = true;
   }
-  completeMessage.textContent = result.demo
-    ? "Preview complete. The signed desktop app will run eai init in the selected folder."
-    : selectedCompanyAppKey
-      ? `The ${name} project is connected to your existing EAI app. Open its folder to start building.`
-      : `The ${name} app was created successfully. Open its folder to start building.`;
-  projectPath = result.project_path || null;
-  wizard.projectName = name;
-  createdProjectDirectory = result.project_directory || (directory.endsWith(`/${name}`) || directory.endsWith(`\\${name}`) ? directory : `${directory}/${name}`);
-  if (!projectPath) projectPath = createdProjectDirectory;
-  if (completeLocation) {
-    completeLocation.textContent = projectPath ? `Project folder: ${projectPath}` : "Your project folder is ready.";
-    completeLocation.hidden = !projectPath;
+  if (busy) {
+    facts.preparationStarted = state.screen === "start";
+    facts.prereqBusy = busy;
+    facts.prereqDetail = "";
+    facts.prereqPlan = ["git", "node", "eai-cli"];
+    facts.prereqCompleted = Math.max(0, facts.prereqPlan.indexOf(busy));
   }
-  if (openProjectButton) openProjectButton.hidden = !projectPath || demoMode;
-  setJourneyStage("app", "done", "The EAI app and its project files are ready.");
-  setJourneyStage("ai", "active", "Checking which AI workspaces can open this project.");
-  setStep(5);
-  setActivity("Setup complete", "Your EAI app and developer tools are ready.", 100, false);
-  showOutput("Setup complete.");
-  await loadAiSurfaces();
+  if (query.get("admin") === "1") {
+    facts.prereqBusy = facts.prereqBusy || "git";
+    facts.prereqDetail = {
+      macos: "Waiting for your approval before Apple's installer can run.",
+      windows: "Waiting for you to approve the Windows permission prompt.",
+      linux: "Waiting for you to approve the Linux system prompt.",
+    }[state.platform] || "Waiting for your approval.";
+    pendingAdminPassword = () => {};
+  }
+  if (query.get("signin") === "waiting") facts.signinWaiting = true;
+  if (query.get("signin") === "waiting-long") {
+    facts.signinWaiting = true;
+    facts.signinEscapeShown = true;
+  }
+  if (query.get("link") === "1") facts.signinUrl = "https://login.example.com/authorize?code=preview";
+
+  paint();
   return true;
 }
 
-function renderAiSurfaces() {
-  if (!aiSurfaceInventory || !aiSurfaceOptions) return;
-  aiSurfaceOptions.replaceChildren();
-  selectedAiSurfaceId = EAIWizard.chooseAiSurface(aiSurfaceInventory);
-  for (const surface of aiSurfaceInventory.surfaces) {
-    const row = document.createElement("label");
-    row.className = "surface-option";
-    const input = document.createElement("input");
-    input.type = "radio";
-    input.name = "ai-surface";
-    input.value = surface.id;
-    input.checked = surface.id === selectedAiSurfaceId;
-    input.addEventListener("change", () => {
-      selectedAiSurfaceId = surface.id;
-      updateAiSurfaceControls(surface);
-    });
-    const copy = document.createElement("span");
-    const name = document.createElement("strong");
-    name.textContent = aiSurfaceCopy(surface).label;
-    const detail = document.createElement("small");
-    detail.textContent = surface.installed
-      ? `${surface.provider} · Ready${aiSurfaceReadyDetail(surface)}`
-      : `${surface.provider} · Not installed`;
-    copy.append(name, detail);
-    const badge = document.createElement("span");
-    badge.className = "surface-badge";
-    const { element: harveyBall, recommendation } = createHarveyBall(surface);
-    const badgeText = document.createElement("span");
-    badgeText.textContent = recommendation.score === recommendation.maximum
-      ? "Recommended"
-      : surface.installed ? "Ready" : "Official download";
-    badge.append(harveyBall, badgeText);
-    row.append(input, copy, badge);
-    aiSurfaceOptions.append(row);
-  }
-  const selected = aiSurfaceInventory.surfaces.find((surface) => surface.id === selectedAiSurfaceId);
-  aiSurfaceField.hidden = false;
-  aiSurfaceConsent.hidden = false;
-  if (refreshAiButton) refreshAiButton.hidden = false;
-  startAiButton.hidden = false;
-  updateAiSurfaceControls(selected);
-  const readyCount = aiSurfaceInventory.surfaces.filter((surface) => surface.installed).length;
-  aiSurfaceStatus.innerHTML = readyCount
-    ? `<strong>${readyCount} AI workspace${readyCount === 1 ? " is" : "s are"} ready</strong><p>Choose one below. EAI will open it and explain its project support.</p>`
-    : "<strong>Choose an AI workspace</strong><p>Google Antigravity 2.0, GitHub Copilot, Claude, Codex, and Grok Build can work with your EAI project. Install one only if you need it.</p>";
-}
+async function start() {
+  renderDiagnostics();
+  if (applyDevAddress()) return;
 
-recommendationHelp?.addEventListener("click", () => recommendationDialog?.showModal());
-recommendationClose?.addEventListener("click", () => recommendationDialog?.close());
-recommendationDialog?.addEventListener("click", (event) => {
-  if (event.target === recommendationDialog) recommendationDialog.close();
-});
-
-async function loadAiSurfaces() {
-  if (!createdProjectDirectory) return false;
+  paint();
   try {
-    aiSurfaceInventory = await invoke("detect_ai_surfaces", { directory: createdProjectDirectory });
-    if (aiSurfaceInventory.demo) {
-      aiSurfaceInventory = {
-        preferredSurface: null,
-        recommendedSurface: "vscode-copilot",
-        surfaces: [
-          { id: "vscode-copilot", name: "GitHub Copilot in VS Code", provider: "GitHub", kind: "editor", launchSupport: "project-and-prompt", installed: false, recommended: true },
-          { id: "copilot-desktop", name: "GitHub Copilot app", provider: "GitHub", kind: "desktop", launchSupport: "manual-project", installed: false, recommended: false },
-          { id: "antigravity-desktop", name: "Google Antigravity 2.0", provider: "Google", kind: "desktop", launchSupport: "manual-project", installed: false, recommended: false },
-          { id: "claude-desktop", name: "Claude Desktop", provider: "Anthropic", kind: "desktop", launchSupport: "project-and-prompt", installed: false, recommended: false },
-          { id: "codex-desktop", name: "ChatGPT desktop (Codex)", provider: "OpenAI", kind: "desktop", launchSupport: "manual-project", installed: false, recommended: false },
-          { id: "grok-bot", name: "Grok Bot", provider: "xAI", kind: "desktop", launchSupport: "launch-only", installed: false, recommended: false },
-          { id: "copilot-cli", name: "GitHub Copilot CLI", provider: "GitHub", kind: "cli", launchSupport: "project-and-prompt", installed: false, recommended: false },
-          { id: "antigravity-cli", name: "Antigravity CLI (agy)", provider: "Google", kind: "cli", launchSupport: "project-only", installed: false, recommended: false },
-          { id: "claude-cli", name: "Claude Code", provider: "Anthropic", kind: "cli", launchSupport: "project-and-prompt", installed: false, recommended: false },
-          { id: "codex-cli", name: "Codex CLI", provider: "OpenAI", kind: "cli", launchSupport: "project-and-prompt", installed: false, recommended: false },
-          { id: "grok-cli", name: "Grok Build", provider: "xAI", kind: "cli", launchSupport: "project-and-prompt", installed: false, recommended: false },
-        ],
-      };
-    }
-    renderAiSurfaces();
-    const readyCount = aiSurfaceInventory.surfaces.filter((surface) => surface.installed).length;
-    setJourneyStage("ai", "active", readyCount ? `${readyCount} AI workspace${readyCount === 1 ? " is" : "s are"} ready to open.` : "Choose an AI workspace to install.");
-    return true;
-  } catch (error) {
-    aiSurfaceStatus.innerHTML = "<strong>AI workspace check needs attention</strong><p>You can close setup and run <code>eai start</code> from the project folder.</p>";
-    showOutput("Your app is ready, but AI workspace detection did not finish.", String(error));
-    setJourneyStage("ai", "error", "AI workspace detection did not finish. The app remains ready.");
-    return false;
+    const config = await invoke("get_e2e_configuration");
+    e2eConfig = config?.enabled ? config : null;
+  } catch {
+    e2eConfig = null;
   }
-}
 
-async function refreshAiSurfaces() {
-  if (!createdProjectDirectory || !refreshAiButton) return;
-  refreshAiButton.disabled = true;
-  setActivity("Checking AI workspaces", "Checking installed apps and commands. EAI does not read provider accounts or project files.", null, true, "", "Checking");
-  try {
-    const refreshed = await loadAiSurfaces();
-    if (refreshed) {
-      showOutput("AI workspace check complete.", "Choose Open or Get for the workspace you want to use.");
-      setActivity("AI workspace check complete", "The list above reflects the apps and commands currently available on this computer.", 100, false, "", "Ready");
-    }
-  } finally {
-    refreshAiButton.disabled = false;
-  }
-}
-
-async function startAiSurface() {
-  const surface = aiSurfaceInventory?.surfaces.find((item) => item.id === selectedAiSurfaceId);
-  if (!surface || !createdProjectDirectory) {
-    showOutput("Choose an AI workspace first.");
-    return;
-  }
-  startAiButton.disabled = true;
-  const copy = aiSurfaceCopy(surface);
-  setActivity(surface.installed ? `Opening ${copy.label}` : `Opening ${copy.label} download`, surface.installed ? copy.ready : copy.notInstalled, null, true, "", "Opening");
-  try {
-    if (!surface.installed) {
-      await invoke("install_ai_surface", { surfaceId: surface.id });
-      setActivity("Official download opened", copy.notInstalled, 100, false, "", "Ready");
-      showOutput(`The official ${surface.provider} page opened.`, "Install the selected workspace, return here, and choose Check again. EAI does not sign in to an AI provider for you.");
-      setJourneyStage("ai", "active", `The official ${surface.provider} download is open. Install it, then check again.`);
+  if (e2eConfig) {
+    facts.preparationStarted = true;
+    const ready = await runReadiness();
+    if (!ready) {
+      await writeE2eReceipt("prerequisites", "The required tools could not be installed.");
       return;
     }
-    const result = await invoke("start_ai_surface", { directory: createdProjectDirectory, surfaceId: surface.id });
-    setActivity(`${copy.label} opened`, copy.ready, 100, false, "", "Ready");
-    completeMessage.textContent = EAIWizard.aiSurfaceCompletionMessage(surface, copy.label);
-    startAiButton.textContent = `Open ${copy.label} again`;
-    showOutput(`${copy.label} opened.`, copy.ready);
-    const journeyDetail = surface.launchSupport === "launch-only"
-      ? `${copy.label} opened without a local-project handoff.`
-      : surface.launchSupport === "manual-project"
-        ? `${copy.label} opened; connect the project in the app.`
-        : ["project-and-prompt", "project-only"].includes(surface.launchSupport)
-          ? `${copy.label} opened with this project.`
-          : `${copy.label} opened; verify the project before continuing.`;
-    setJourneyStage("ai", "done", journeyDetail);
-  } catch (error) {
-    setJourneyStage("ai", "error", "The selected AI workspace could not be opened.");
-    setActivity("AI workspace could not start", "The selected AI workspace could not be opened. Your app remains ready.", 0, false, "", "Error");
-    showOutput("Your app is safe and complete.", `Run eai start from ${createdProjectDirectory} or try another workspace.`);
-  } finally {
-    startAiButton.disabled = false;
+    await runE2eFlow();
   }
 }
 
-async function runAction(action) {
-  if (action === "start") return startSetup();
-  if (action === "detect") return detect();
-  if (action === "install-all") return installPrerequisites();
-  if (action === "login") return runLogin();
-  if (action === "retry-workspaces") {
-    const retryingApps = Boolean(failedAppTenantId);
-    const ready = retryingApps
-      ? await loadCompanyApps(failedAppTenantId)
-      : await loadCompanyTenants();
-    if (ready) {
-      if (retryWorkspaces) {
-        retryWorkspaces.hidden = true;
-        retryWorkspaces.textContent = EAIWizard.retryActionLabel("app");
-      }
-      if (!EAIWizard.workspaceRetryCanContinue(retryingApps, companyTenants.length, selectedCompanyTenantId)) {
-        showOutput("Company workspaces are ready.", "Choose the company workspace that should own this app.");
-        setStep(4);
-        return;
-      }
-      setActivity("EAI is ready", "Continue setting up your app.", 100, false, "", "Ready");
-      showOutput("EAI is ready.", "Continue setting up your app.");
-      setStep(4);
-    }
-    return;
-  }
-  if (action === "signup") return runSignup();
-  if (action === "choose-folder") {
-    const dialog = window.__TAURI__?.dialog;
-    if (!dialog?.open) {
-      showOutput("Folder selection is available in the desktop installer.");
-      return;
-    }
-    try {
-      const selected = await dialog.open({ directory: true, multiple: false, title: "Choose the app folder" });
-      if (typeof selected === "string" && selected) {
-        document.querySelector("#project-directory").value = selected;
-        setActivity("Folder selected", "Your app will be created in this folder.", 100, false, "", "Ready");
-        showOutput("Folder selected.");
-      }
-    } catch (error) {
-      showOutput("The folder could not be selected.", String(error));
-      setActivity("Folder selection failed", "Choose a folder or enter its path, then try again.", 0, false, "", "Error");
-    }
-    return;
-  }
-  if (action === "select-company-tenant") {
-    selectedCompanyTenantId = companyTenantSelect?.value || null;
-    if (selectedCompanyTenantId) {
-      const tenant = companyTenants.find((item) => item.id === selectedCompanyTenantId);
-      if (!await loadCompanyApps(selectedCompanyTenantId)) return;
-      setActivity("Company workspace selected", `${tenant?.displayName || "Company workspace"} will own this app.`, 100, false, "", "Ready");
-    }
-    return;
-  }
-  if (action === "select-company-app") {
-    selectCompanyApp();
-    return;
-  }
-  if (action === "init") return runInit();
-  if (action === "start-ai") return startAiSurface();
-  if (action === "refresh-ai") return refreshAiSurfaces();
-  if (action === "open-project") {
-    if (!projectPath) return;
-    try {
-      await invoke("open_project", { path: projectPath });
-      setActivity("Project folder opened", "Your EAI app is ready in the file manager.", 100, false, "", "Ready");
-      showOutput("Project folder opened.");
-    } catch (error) {
-      showOutput("The project folder could not be opened.", String(error));
-      setActivity("Project folder could not open", "Use the folder location shown above to open it manually.", 100, false, "", "Error");
-    }
-    return;
-  }
-  if (action === "finish") showOutput("You can close this window.");
-}
-
-for (const button of document.querySelectorAll("[data-next]")) {
-  button.addEventListener("click", () => setStep(Number(button.dataset.next)));
-}
-for (const button of document.querySelectorAll("[data-back]")) {
-  button.addEventListener("click", () => setStep(Number(button.dataset.back)));
-}
-for (const button of document.querySelectorAll("[data-action]")) {
-  button.addEventListener("click", () => runAction(button.dataset.action));
-}
-companyTenantSelect?.addEventListener("change", () => runAction("select-company-tenant"));
-appSelection?.addEventListener("change", () => runAction("select-company-app"));
-
-renderJourneyStages();
-setStep(0);
-// The installer should make the first decision itself. The button remains as
-// an accessible fallback, but normal users only see the permission prompt when
-// a missing system component genuinely needs it.
-window.setTimeout(() => startSetup(), 250);
+start();

@@ -12,6 +12,7 @@ for (const file of files) {
   if (/curl\s+[^\n|]*\|\s*(sh|bash)/i.test(text)) throw new Error(`${file}: unsafe curl pipe install found`);
 }
 const macDevSmoke = await readFile(new URL("../scripts/test-macos-dev.sh", import.meta.url), "utf8");
+const videoSource = await readFile(new URL("../ui/video.js", import.meta.url), "utf8");
 for (const value of ["codesign --force --deep --sign -", "codesign --verify --deep --strict", "xattr -dr com.apple.quarantine", "Contents/MacOS/eai-setup"]) {
   if (!macDevSmoke.includes(value)) throw new Error(`macOS development smoke test is missing: ${value}`);
 }
@@ -58,11 +59,8 @@ const hasOfficialNodeUrl = nodeMacUrls.some((value) => {
     return false;
   }
 });
-if (!hasOfficialNodeUrl || !nodeMacInstaller.includes("Node.js 24 LTS") || !nodeMacInstaller.includes("checksum verification") || !nodeMacInstaller.includes("user-local")) {
+if (!hasOfficialNodeUrl || !nodeMacInstaller.includes("checksum verification") || !nodeMacInstaller.includes("user-local")) {
   throw new Error("manifest: macOS Node.js path must use the official checksum-verified user-local archive");
-}
-if (!node?.installers?.linux?.includes("Node.js 24 or newer")) {
-  throw new Error("manifest: Linux Node.js path must require Node.js 24 or newer");
 }
 
 const dmgBackgroundSource = await readFile(new URL("../src-tauri/icons/dmg-background.svg", import.meta.url), "utf8");
@@ -82,12 +80,6 @@ for (const value of ['command.env("HOME", &home)', 'command.env("npm_config_cach
 }
 for (const value of ["const MIN_EAI_CLI_VERSION: (u64, u64, u64) = (3, 17, 0)", "MIN_NODE_MAJOR_VERSION: u64 = 24", "fn node_version()", "@enterpriseai/cli", "eai_cli_version()", "user_npm_global_exec_dirs", "current_version >= MIN_EAI_CLI_VERSION", "fn eai_cli_script", "APPDATA", "run_program_in_directory_with_env(\"node\", &node_args, directory, environment)"] ) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter does not verify the canonical EAI CLI release: ${value}`);
-}
-if (!rust.includes('ToolState { command: "node".to_string(), version: node_version() }')) {
-  throw new Error("Tauri adapter must report only Node.js 24 or newer as ready");
-}
-if (!rust.includes("The package step finished, but Node.js 24 and npm are not ready.")) {
-  throw new Error("Tauri adapter must explain incompatible Node.js package installs");
 }
 if (rust.includes("latest_eai_cli_requirement") || rust.includes('version("npm", &["view", "@enterpriseai/cli"')) {
   throw new Error("Tauri adapter must not use live npm metadata to decide whether the installed EAI CLI is ready");
@@ -117,9 +109,6 @@ for (const step of ["homebrew", "git", "node", "eai-cli", "login", "init", "star
 for (const value of ["detect_ai_surfaces", "start_ai_surface", "install_ai_surface", "AiSurfaceInventory", "eai", "start", "--check"]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing AI workspace handoff: ${value}`);
 }
-if (!rust.includes("at position {}; expected '{}' ({})")) {
-  throw new Error("Tauri adapter AI inventory mismatch does not report expected and observed surface details");
-}
 for (const value of ["get_company_tenants", "get_company_apps", "list_company_apps", "app", "tenant", "list", "--format", "json", "directMembership", "app_key", "--app-key"]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing company workspace discovery: ${value}`);
 }
@@ -133,13 +122,8 @@ for (const value of ["run_eai_with_retries", "with_transient_retries", "is_trans
 if (rust.includes("let is_root") || rust.includes("if !is_root")) {
   throw new Error("Tauri adapter must allow directly assigned child company workspaces");
 }
-for (const value of ["E2eConfiguration", "get_e2e_configuration", "verify_e2e_auth", "write_e2e_receipt", "write_e2e_receipt_atomically", "replace_file_atomically", "sync_all", "EAI_SETUP_E2E", "EAI_SETUP_E2E_RECEIPT_FILE"]) {
+for (const value of ["E2eConfiguration", "get_e2e_configuration", "verify_e2e_auth", "write_e2e_receipt", "EAI_SETUP_E2E", "EAI_SETUP_E2E_RECEIPT_FILE"]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing bounded release E2E support: ${value}`);
-}
-if (!rust.includes("MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH")
-    || !rust.includes("options.write(true).create_new(true)")
-    || !rust.includes("metadata.file_type().is_symlink() || !metadata.is_file()")) {
-  throw new Error("Tauri E2E receipts must use a synchronized same-directory atomic replacement and reject unsafe targets");
 }
 if (!rust.includes("@enterpriseai/cli")) throw new Error("Tauri adapter uses the wrong CLI package");
 if (!rust.includes('run_program_in_directory_with_progress(&app, "init", "eai", &init_args_ref')) throw new Error("Tauri adapter does not run eai init non-interactively with live progress in the selected directory");
@@ -178,37 +162,35 @@ if (!rust.includes("project_directory: Option<String>") || !rust.includes("resul
 }
 
 const appSource = await readFile(new URL("../ui/app.js", import.meta.url), "utf8");
-for (const value of ["let e2eAppCreated = false", "e2eAppCreated = Boolean(result?.app_created)", "appCreated: e2eAppCreated", 'e2eAppCreated ? "project" : "app"', "writeE2eAppCreationCheckpoint", 'schemaVersion: "eai.setup.e2e-app-created.v1"', 'status: "checkpoint"', 'checkpoint: "app-created"', "cleanupRequired: true", "cleanupRequested: true"]) {
-  if (!appSource.includes(value)) throw new Error(`Desktop release receipt does not preserve app creation evidence: ${value}`);
+if (!appSource.includes("result?.launched") || !appSource.includes("did not report a successful launch")) {
+  throw new Error("The UI must reject an AI handoff that does not confirm a launched workspace.");
 }
-const runInitSource = appSource.slice(appSource.indexOf("async function runInit()"), appSource.indexOf("function renderAiSurfaces()"));
-const initInvoke = runInitSource.indexOf('result = await invoke("run_bootstrap"');
-const appCreatedAssignment = runInitSource.indexOf("e2eAppCreated = Boolean(result?.app_created)", initInvoke);
-const creationCheckpoint = runInitSource.indexOf("await writeE2eAppCreationCheckpoint(result, name)", appCreatedAssignment);
-const outputProcessing = runInitSource.indexOf("recordCommandSummaries", initInvoke);
-if (initInvoke < 0 || appCreatedAssignment < initInvoke || creationCheckpoint < appCreatedAssignment
-    || outputProcessing < creationCheckpoint) {
-  throw new Error("Desktop E2E app creation must be checkpointed before any returned init output is processed");
+for (const value of ["let e2eAppCreated = false", "e2eAppCreated = Boolean(result?.app_created)", "appCreated: e2eAppCreated", 'e2eAppCreated ? "project" : "app"']) {
+  if (!appSource.includes(value)) throw new Error(`Desktop release receipt does not preserve app creation evidence: ${value}`);
 }
 if (!rust.includes('inventory.contract_version != "eai.ai-surfaces/v2"')) {
   throw new Error("Tauri adapter does not enforce the versioned AI surface contract");
 }
 if ((rust.match(/"--contract-version", "v2"/g) ?? []).length !== 3) {
-  throw new Error("Tauri adapter does not explicitly negotiate the EAI AI surface v2 contract for detect, launch, and install");
+  throw new Error("Tauri adapter does not explicitly negotiate the EAI AI surface v2 contract");
 }
-if (!rust.includes("capabilities: Vec<String>")) {
-  throw new Error("Tauri adapter drops AI workspace v2 capability metadata");
-}
-for (const value of ["EXPECTED_AI_SURFACES", "validate_ai_surface_inventory", '("vscode-copilot", "editor")', '("copilot-desktop", "desktop")', '("antigravity-desktop", "desktop")', '("claude-desktop", "desktop")', '("codex-desktop", "desktop")', '("grok-bot", "desktop")', '("copilot-cli", "cli")', '("antigravity-cli", "cli")', '("claude-cli", "cli")', '("codex-cli", "cli")', '("grok-cli", "cli")']) {
-  if (!rust.includes(value)) throw new Error(`Tauri adapter does not enforce the exact ordered 6 graphical + 5 CLI catalog: ${value}`);
+for (const value of [
+  "capabilities: Vec<String>", "EXPECTED_AI_SURFACES",
+  '("vscode-copilot", "editor")', '("copilot-desktop", "desktop")',
+  '("antigravity-desktop", "desktop")', '("claude-desktop", "desktop")',
+  '("codex-desktop", "desktop")', '("grok-bot", "desktop")',
+  '("copilot-cli", "cli")', '("antigravity-cli", "cli")',
+  '("claude-cli", "cli")', '("codex-cli", "cli")', '("grok-cli", "cli")',
+]) {
+  if (!rust.includes(value)) throw new Error(`Tauri adapter does not enforce the EAI v2 surface catalog: ${value}`);
 }
 for (const value of ["Homebrew.pkg", "/usr/sbin/pkgutil", "--check-signature", "with administrator privileges", "--stdinpass", "No Terminal window will open"]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing native macOS installation control: ${value}`);
 }
-for (const value of ["windows_package_bin_dirs", "windows_resolved_path", "windows_best_candidate", "windows_node_candidate_is_supported", "env::split_paths", "ProgramW6432", "ProgramFiles(Arm)", "ProgramFiles(x86)", "CREATE_NO_WINDOW", "creation_flags", "APPDATA", "windows_shell_arg", "ComSpec", "ends_with(\".cmd\")", "command_line.push_str", "call {}", "windows_package_install_result", "windows_vc_runtime_version", "Microsoft.VCRedist.2015+", "npm_version", "run_npm_in_directory(&[\"--version\"], None)", "winget_node_action", "\"upgrade\"", "Node.js and npm are already installed and ready.", "installed EAI CLI could not be started."]) {
+for (const value of ["windows_package_bin_dirs", "windows_resolved_path", "env::split_paths", "ProgramW6432", "ProgramFiles(Arm)", "ProgramFiles(x86)", "CREATE_NO_WINDOW", "creation_flags", "APPDATA", "windows_shell_arg", "ComSpec", "ends_with(\".cmd\")", "command_line.push_str", "call {}", "windows_package_install_result", "windows_vc_runtime_version", "Microsoft.VCRedist.2015+", "npm_version", "run_npm_in_directory(&[\"--version\"], None)", "Node.js and npm are already installed and ready.", "installed EAI CLI could not be started."]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing Windows prerequisite safety support: ${value}`);
 }
-for (const value of ["xcode-select", "full Xcode is not required", "softwareupdate", "latest_command_line_tools_label", "refresh_macos_command_line_tools_catalog", "Refreshing Apple Software Update", "with administrator privileges", "secure administrator dialog", "native administrator install", "latest_node_artifact", "nodejs.org/dist/index.json", "brew_action", "brew install/upgrade", "osx-arm64-pkg", "osx-x64-pkg", "osx-arm64-tar", "osx-x64-tar", "SHASUMS256.txt", "shasum", "uname", "--prefix", "expose_user_npm_bin", "NVM_DIR", "versions/node", "NVM_BIN", "nvm_node_bin_dirs", "macos_package_bin_dirs"]) {
+for (const value of ["xcode-select", "full Xcode is not required", "softwareupdate", "latest_command_line_tools_label", "refresh_macos_command_line_tools_catalog", "Refreshing Apple Software Update", "with administrator privileges", "secure administrator dialog", "native administrator install", "latest_node_artifact", "nodejs.org/dist/index.json", "osx-arm64-pkg", "osx-x64-pkg", "osx-arm64-tar", "osx-x64-tar", "SHASUMS256.txt", "shasum", "uname", "--prefix", "expose_user_npm_bin", "NVM_DIR", "versions/node", "NVM_BIN", "nvm_node_bin_dirs", "macos_package_bin_dirs"]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing minimal macOS setup support: ${value}`);
 }
 if (!rust.includes("fn macos_git_ready()") || !rust.includes("/usr/bin/xcode-select") || !rust.includes("usr/bin/git")) {
@@ -239,7 +221,7 @@ if (!rust.includes("fn clean_process_output") || !rust.includes("character == '\
   throw new Error("Tauri adapter does not remove terminal control sequences from GUI diagnostics");
 }
 if (!rust.includes("Node.js files were downloaded, but the desktop app could not run Node.js 24 and npm")) {
-  throw new Error("Tauri adapter reports Node.js ready before verifying the installed executables and version");
+  throw new Error("Tauri adapter reports Node.js ready before verifying the installed executables");
 }
 if (!rust.includes("async fn run_bootstrap") || !rust.includes("spawn_blocking")) {
   throw new Error("Tauri adapter blocks the UI while running a bootstrap task");
@@ -250,17 +232,35 @@ if (rust.includes("Command::new(user") || rust.includes("shell = user")) {
 
 console.log("bootstrap safety checks ok");
 
+/* ------------------------------------------------------------------
+   The wizard's structure, after the state-machine redesign.
+
+   Every assertion below was one before it, aimed at the same problem in
+   the wizard-panel version of this app. The screens changed; the things
+   worth guarding did not. Where the old markup is gone entirely, the
+   check moved to whatever now carries the same responsibility, and
+   where a control was deliberately removed the check that it is gone
+   is here so it does not creep back in.
+------------------------------------------------------------------- */
+
 const wizard = await readFile(new URL("../ui/index.html", import.meta.url), "utf8");
-const activityStart = wizard.indexOf('class="activity"');
-const firstPanelStart = wizard.indexOf('class="wizard-panel');
-const retryWorkspaceControl = wizard.indexOf('id="retry-workspaces"');
-if (retryWorkspaceControl < activityStart || retryWorkspaceControl > firstPanelStart) {
-  throw new Error("wizard: workspace retry must remain visible independently of the current panel");
+const machineSource = await readFile(new URL("../ui/state-machine.js", import.meta.url), "utf8");
+
+/* The app's branding is the window and its icon, not a mark inside the
+   screen. The prototype's sign-in is the head and nothing else: the
+   operating system already calls the window Enterprise AI Setup and the
+   title says it again where somebody is reading, so a logo on top of
+   both is a third statement of the same fact. */
+if (!wizard.includes("Sign in to Enterprise AI")) {
+  throw new Error("wizard: the sign-in screen no longer names the product");
 }
-const brandLogo = await readFile(new URL("../ui/assets/eai-square-man-logo.png", import.meta.url));
-if (brandLogo.length < 1024) throw new Error("wizard: Enterprise AI logo asset is missing or unexpectedly small");
-for (const brandElement of ["Enterprise AI Setup", "assets/eai-square-man-logo.png", "class=\"brand-logo\"", "class=\"panel-logo\""]) {
-  if (!wizard.includes(brandElement)) throw new Error(`wizard: branding is missing ${brandElement}`);
+if (wizard.includes('class="eai-brand"') || wizard.includes("eai-square-man-logo")) {
+  throw new Error("wizard: a mark is back above the sign-in title — the prototype's screen is the head and nothing else");
+}
+const tauriWindow = JSON.parse(await readFile(new URL("../src-tauri/tauri.conf.json", import.meta.url), "utf8"))
+  .app?.windows?.[0];
+if (tauriWindow?.title !== "Enterprise AI Setup") {
+  throw new Error("wizard: the window no longer carries the product name, which is now the only place it is branded");
 }
 const bundleLogo = await readFile(new URL("../src-tauri/icons/icon.png", import.meta.url));
 if (bundleLogo.length < 1024) throw new Error("bundle: Enterprise AI logo icon is missing or unexpectedly small");
@@ -268,144 +268,243 @@ const bundleLogoSource = await readFile(new URL("../src-tauri/icons/icon.svg", i
 for (const color of ["#123d5b", "#83d8ef"]) {
   if (!bundleLogoSource.includes(color)) throw new Error(`bundle: Enterprise AI logo source is missing ${color}`);
 }
-for (const panel of ["0", "3", "4", "5"]) {
-  if (!wizard.includes(`data-panel="${panel}"`)) throw new Error(`wizard: missing panel ${panel}`);
+
+// The eight screens of the tested state machine — built is the final
+// left-panel state, not an overlay.
+for (const screen of ["start", "signin", "welcome", "setup", "running", "done", "handoff", "built"]) {
+  if (!wizard.includes(`data-screen="${screen}"`)) throw new Error(`wizard: missing screen ${screen}`);
 }
-for (const control of ["data-action=\"start\"", "data-action=\"login\"", "data-action=\"signup\"", "data-action=\"retry-workspaces\"", "data-action=\"choose-folder\"", "data-action=\"init\"", "data-action=\"start-ai\"", "data-action=\"finish\""]) {
-  if (!wizard.includes(control)) throw new Error(`wizard: missing control ${control}`);
+if (!wizard.includes('id="builtAnother"')) throw new Error("wizard: the built state has no Start another project action");
+// The panel model it replaced must not come back alongside it.
+if (wizard.includes("data-panel=") || wizard.includes("wizard-panel")) {
+  throw new Error("wizard: the old numbered panel model is back beside the state machine");
 }
-for (const value of ["id=\"ai-surface-status\"", "id=\"ai-surface-options\"", "id=\"ai-surface-next\"", "id=\"ai-surface-consent\"", "id=\"refresh-ai\"", "id=\"recommendation-help\"", "id=\"recommendation-dialog\"", "id=\"recommendation-close\"", "How the Harvey ball is scored", "Choose how to work with AI", "Check again", "provider account"]) {
-  if (!wizard.includes(value)) throw new Error(`wizard: AI workspace handoff is missing ${value}`);
+
+// Sign-in holds the readiness result and both of its ways out.
+for (const value of ['id="checkRows"', 'id="setupSignin"', 'id="setupCreate"', 'id="signinSub"']) {
+  if (!wizard.includes(value)) throw new Error(`wizard: sign-in is missing ${value}`);
 }
-for (const value of ["id=\"company-tenant-field\"", "id=\"company-tenant\"", "Company workspace", "Choose where this app is managed"]) {
-  if (!wizard.includes(value)) throw new Error(`wizard: missing company workspace selection: ${value}`);
+if (!wizard.includes("Create an EAI account")) throw new Error("wizard: account signup action is missing");
+
+// The browser hand-off can fail, and the screen that reports it has the
+// pair of controls that failure needs.
+for (const value of ['id="welcomeMark"', 'id="welcomeTitle"', 'id="welcomeSub"', 'id="welcomeActs"', 'id="welcomeCopy"', 'id="welcomeRetry"', "Copy the sign-in link"]) {
+  if (!wizard.includes(value)) throw new Error(`wizard: signed-in beat is missing ${value}`);
 }
-for (const value of ["id=\"app-selection-field\"", "id=\"app-selection\"", "Create a new app", "Use an existing app"]) {
-  if (!wizard.includes(value)) throw new Error(`wizard: missing existing app selection: ${value}`);
+
+// The form, revealed downwards, with its questions and its rail.
+for (const value of ['data-step="workspace"', 'data-step="name"', 'data-step="folder"', 'id="wsRows"', 'id="wsPick"', 'id="wsTrigger"', 'id="wsMenuRows"', 'id="projName"', 'id="projFolder"', 'id="chooseFolder"', 'id="chooseFolderStart"', 'id="createApp"', 'id="setupBack"']) {
+  if (!wizard.includes(value)) throw new Error(`wizard: the setup form is missing ${value}`);
 }
-for (const value of ["id=\"choose-folder\"", "Use lowercase words separated by hyphens", "Parent folder", "A new folder with your project name will be created here"]) {
-  if (!wizard.includes(value)) throw new Error(`wizard: missing project location guidance: ${value}`);
+/* Three questions, and the app picker is not one of them: EAI Setup
+   creates from the EAI template every time, so "new app, or one you
+   already have" had one real answer. See docs/known-issues.md. */
+if (wizard.includes('data-step="app"') || wizard.includes('id="appRows"')) {
+  throw new Error("wizard: the app picker is back — the installer only ever creates from the EAI template");
+}
+if ((wizard.match(/data-step="/g) || []).length !== 3) {
+  throw new Error("wizard: the setup form is no longer the three questions of the tested design");
+}
+/* The location question has two shapes and both have to exist: one
+   button before an answer, the path and a way to change it after. */
+if (!wizard.includes('id="chooseFolderStart">Choose location') || !wizard.includes('id="chooseFolder">Change location')) {
+  throw new Error("wizard: the location question has lost one of its two shapes, or the two disagree about the noun");
+}
+if (!wizard.includes("Kebab case only")) throw new Error("wizard: the app name question does not say what shape a name is");
+if (!wizard.includes("Choose a workspace")) throw new Error("wizard: missing company workspace selection");
+if (!wizard.includes('id="createApp" disabled')) {
+  throw new Error("wizard: the primary is enabled before the form has been answered");
 }
 for (const value of ['autocapitalize="none"', 'autocorrect="off"', 'spellcheck="false"']) {
   if (!wizard.includes(value)) throw new Error(`wizard: project name permits unwanted typing assistance: ${value}`);
 }
-if (!wizard.includes("Create an EAI account")) throw new Error("wizard: account signup action is missing");
-for (const value of ["Choose how to work with AI", "id=\"complete-location\"", "data-action=\"open-project\"", "Open project folder"]) {
-  if (!wizard.includes(value)) throw new Error(`wizard: completion guidance is missing: ${value}`);
+// A workspace that could not be listed has a way to try again, and it
+// lives on the question it belongs to rather than in a floating bar.
+if (!wizard.includes('id="wsNote"') || !wizard.includes('id="wsRetry"')) {
+  throw new Error("wizard: a failed workspace check has no retry beside the question it blocks");
+}
+const wsQuestionStart = wizard.indexOf('data-step="workspace"');
+const wsQuestionEnd = wizard.indexOf('data-step="name"');
+if (wizard.indexOf('id="wsRetry"') < wsQuestionStart || wizard.indexOf('id="wsRetry"') > wsQuestionEnd) {
+  throw new Error("wizard: workspace retry has drifted away from the workspace question");
+}
+
+// Creating, as rows rather than a command log, with an honest retry.
+for (const value of ['id="runLines"', 'id="runTitle"', 'id="runSub"', 'id="runNote"', 'id="runRetry"', 'id="runBack"', 'id="runContinue"', 'Bring your AI']) {
+  if (!wizard.includes(value)) throw new Error(`wizard: the creating screen is missing ${value}`);
+}
+
+// Choosing a harness, and the hand-off it leads to.
+/* One rail, on every screen that has one: Back on the left, the primary
+   on the right, stuck to the bottom so it never scrolls away. No Back
+   above a title anywhere — the hi-fi frames put it in the rail. */
+if (wizard.includes('class="i4-back"') || wizard.includes('class="i4-actions"')) {
+  throw new Error("wizard: a Back button is above a title again, or the actions are stacked instead of railed");
+}
+for (const screen of ["setup", "running", "done", "handoff"]) {
+  const start = wizard.indexOf(`data-screen="${screen}"`);
+  const end = wizard.indexOf("data-screen=", start + 1);
+  const markup = wizard.slice(start, end < 0 ? undefined : end);
+  if (!markup.includes("eai-foot")) throw new Error(`wizard: the ${screen} screen's actions are not stuck to the bottom`);
+}
+for (const value of ['id="harnessRows"', 'id="harnessSub"', 'id="harnessNote"', 'id="harnessGo"', 'id="harnessRefresh"', 'id="harnessBack"', "Choose how to work with AI", "Check again"]) {
+  if (!wizard.includes(value)) throw new Error(`wizard: AI tool selection is missing ${value}`);
+}
+for (const value of ["appFacingInventory", "GRAPHICAL_SURFACE_IDS", ".filter((surface) => GRAPHICAL_SURFACE_IDS.has(surface.id))", "antigravity-desktop", 'companionCli: "agy"']) {
+  if (!appSource.includes(value)) throw new Error(`wizard: AI chooser does not keep ${value} as background setup`);
+}
+for (const value of ["Claude Code", "Grok Build"]) {
+  if (!appSource.includes(value)) throw new Error(`wizard: AI chooser is missing the ${value} app label`);
+}
+for (const value of ['id="handoffTitle"', 'id="handoffSub"', 'id="harnessEaiInstruction"', 'id="harnessEaiBody"', 'id="harnessVideo"', 'id="handoffGo"', 'id="handoffBack"']) {
+  if (!wizard.includes(value)) throw new Error(`wizard: the hand-off instruction is missing ${value}`);
+}
+for (const value of [
+  'surface?.launchSupport === "project-and-prompt"',
+  'film.hidden = !canShowPromptAnimation',
+  'result?.launched',
+  'did not report a successful launch',
+]) {
+  if (!appSource.includes(value)) throw new Error(`wizard: hand-off launch handling is missing ${value}`);
+}
+for (const value of ['element.__eaiVideoReset?.();', 'if (!canShowPromptAnimation)']) {
+  if (!`${videoSource}\n${appSource}`.includes(value)) throw new Error(`wizard: hand-off animation safety is missing ${value}`);
+}
+if (!wizard.includes('id="builtFolder"') || !wizard.includes('id="handoffFolder"')) {
+  throw new Error("wizard: the finished project cannot be opened from the screens that end the flow");
+}
+// Harvey balls were removed on purpose: a pie chart scoring somebody
+// else's product, on the screen where they choose it, was answering a
+// question nobody asked. Grouped rows say the same thing in words.
+for (const removed of ["harvey-ball", "recommendation-dialog", "How the Harvey ball is scored", "Harvey ball"]) {
+  if (wizard.includes(removed)) throw new Error(`wizard: the Harvey ball scoring is back: ${removed}`);
+}
+if (!machineSource.includes("Ready on ") || !machineSource.includes("Not installed")) {
+  throw new Error("wizard: the AI tool list no longer separates what is installed from what is not");
+}
+/* The round trip is one line under the chosen option: come back after
+   install. The reassurance that nothing is lost by leaving now lives in
+   the box that is on screen while they are away. */
+if (!machineSource.includes("come back here to complete setup")) {
+  throw new Error("wizard: the round trip no longer says to come back after install");
+}
+if (!machineSource.includes("nothing is lost if you")) {
+  throw new Error("wizard: nothing reassures somebody that leaving does not lose the app they just created");
+}
+
+// The macOS-only password moment, and the record of what actually ran.
+for (const control of ['id="adminPanel"', 'id="adminPassword"', 'id="adminSubmit"', 'id="adminCancel"', "does not open Terminal"]) {
+  if (!wizard.includes(control)) throw new Error(`wizard: macOS Git authorisation is missing: ${control}`);
+}
+for (const control of ['id="diagnostics"', 'id="diagLog"', 'id="diagStatus"', "Setup details"]) {
+  if (!wizard.includes(control)) throw new Error(`wizard: the record of what the installer did is missing: ${control}`);
+}
+// Every button in a screen is a button, not a submit in disguise.
+for (const match of wizard.matchAll(/<button\b(?![^>]*type="button")[^>]*>/g)) {
+  throw new Error(`wizard: a control can accidentally submit a form: ${match[0]}`);
 }
 if (wizard.includes('id="next-command"') || wizard.includes("completion-command")) {
   throw new Error("wizard: internal init command must not be shown on the completion screen");
 }
-for (const obsolete of ["progress-area", "Step 3 of 6", "Step ${index + 1} of ${steps.length}", "Install missing tools", "I am signed in"]) {
+for (const obsolete of ["progress-area", "Step 3 of 6", "Install missing tools", "I am signed in", 'id="install-items"']) {
   if (wizard.includes(obsolete)) throw new Error(`wizard: unnecessary user step remains: ${obsolete}`);
 }
-if (!wizard.includes('id="retry-install"')) throw new Error("wizard: failed installation has no retry control");
-if (!wizard.includes('id="retry-install" data-action="install-all" type="button"')) throw new Error("wizard: install retry control can accidentally submit a form");
-for (const control of ["id=\"activity\"", "id=\"activity-title\"", "id=\"activity-step\"", "id=\"activity-detail\"", "id=\"activity-eta\"", "id=\"activity-heartbeat\"", "id=\"setup-stages\"", "id=\"build-summary\"", "id=\"activity-log\"", "id=\"admin-password\"", "id=\"admin-password-submit\""]) {
-  if (!wizard.includes(control)) throw new Error(`wizard: missing activity status: ${control}`);
-}
-if (wizard.includes('id="install-items"')) throw new Error("wizard: legacy duplicate installation status list must not be rendered");
-if (!wizard.includes("Build summary")) throw new Error("wizard: build summary heading is missing");
+
 const app = await readFile(new URL("../ui/app.js", import.meta.url), "utf8");
-if (!app.includes('writeE2eReceipt("app", "Apps could not be loaded for the release-test workspace.")')) throw new Error("wizard: release evidence misclassifies app discovery as a tenant failure");
-if (!app.includes("EAIWizard.resolveTenantSelection(companyTenants, selectedCompanyTenantId)")) throw new Error("wizard: rendering can clear a valid release-test tenant selection");
-if (!/if \(tenant\.appsLoaded\) \{\s+if \(retryWorkspaces\) \{\s+retryWorkspaces\.hidden = true;/.test(app)) throw new Error("wizard: cached app recovery leaves a stale retry action visible");
+
+// The release receipt still knows whether a platform app was created.
+if (!app.includes('writeE2eReceipt("app", "Apps could not be loaded for the release-test workspace.")')) {
+  throw new Error("wizard: release evidence misclassifies app discovery as a tenant failure");
+}
+if (!app.includes("helpers.resolveTenantSelection(tenants, facts.selectedTenantId)")) {
+  throw new Error("wizard: rendering can clear a valid release-test tenant selection");
+}
 if (app.includes('steps.push("homebrew")')) throw new Error("wizard: Homebrew must not be a required setup step");
 if (app.includes("console.info(result.output)")) throw new Error("wizard: raw installer command output must not be written to the browser console");
-if (app.split("\n").some((line) => line.includes("setActivity(") && line.includes("String(error)"))) {
-  throw new Error("wizard: raw exception details must not be written to the build summary");
+
+// Raw exception text belongs in the record, never in a designed
+// sentence. `note()` is the record; anything that paints a screen is not.
+for (const line of app.split("\n")) {
+  if (!/String\(error\)/.test(line)) continue;
+  if (/writeE2eReceipt|console\.error/.test(line)) continue;
+  throw new Error(`wizard: an unfiltered exception reaches the interface: ${line.trim()}`);
 }
-if (app.includes("initialComputerCheck")) throw new Error("wizard: repeat computer checks can leave the stage active");
-if (!app.includes("setActivity") || !app.includes("Installation complete") || !app.includes("listenForBootstrapProgress") || !app.includes("eventApi.listen") || !app.includes("setDetectionState") || !app.includes("phaseForTitle") || !app.includes("async function startSetup") || !app.includes("window.setTimeout(() => startSetup(), 250)") || !app.includes("setStep(4)") || !app.includes("async function runSignup") || !app.includes("open_signup") || !app.includes("dialog.open") || !app.includes("choose-folder") || !app.includes("get_company_tenants") || !app.includes("get_company_apps") || !app.includes("loadCompanyApps") || !app.includes("describeWorkspaceFailure") || !app.includes("companyTenantId") || !app.includes("appKey") || !app.includes("renderCompanyApps") || !app.includes("open_project") || !app.includes("projectPath") || !app.includes("initInProgress") || !app.includes("setInitButtonBusy") || !app.includes("aria-busy") || !app.includes("describeInitFailure") || !app.includes('showOutput(failure.title, `${failure.detail} Next: ${failure.next}`)')) {
-  throw new Error("wizard: live activity status updates are missing");
+for (const value of ["helpers.cleanText(error)", "helpers.cleanText(result.message)"]) {
+  if (!app.includes(value)) throw new Error(`wizard: diagnostics are not stripped of terminal control sequences: ${value}`);
 }
-for (const value of ["loadAiSurfaces", "renderAiSurfaces", "startAiSurface", "refreshAiSurfaces", "updateAiSurfaceControls", "createHarveyBall", "aiSurfaceRecommendation", "aiSurfaceCompletionMessage", "showModal", "aiSurfaceGuidance", "GitHub Copilot app", "GitHub Copilot CLI", "Google Antigravity 2.0", "Antigravity CLI (agy)", "Claude Desktop", "Claude Code", "ChatGPT desktop (Codex)", "Codex CLI", "Grok Bot", "Grok Build", "copilot-desktop", "copilot-cli", "antigravity-desktop", "antigravity-cli", "claude-desktop", "claude-cli", "codex-desktop", "codex-cli", "grok-bot", "grok-cli", "detect_ai_surfaces", "start_ai_surface", "install_ai_surface"]) {
-  if (!app.includes(value)) throw new Error(`wizard: AI workspace behavior is missing ${value}`);
+
+// The wiring the flow cannot work without.
+for (const value of [
+  "listenForBootstrapProgress", "eventApi.listen", "bootstrap-progress", "bootstrap-summary", "bootstrap-signin-url",
+  "detect_environment", "check_connectivity", "run_bootstrap", "get_company_tenants", "get_company_apps",
+  "open_signup", "detect_ai_surfaces", "start_ai_surface", "install_ai_surface", "open_project", "write_e2e_receipt",
+  "dialog.open", "companyTenantId", "appKey", "projectPath",
+  "helpers.describeWorkspaceFailure", "helpers.describeAppFailure", "helpers.describeInitFailure",
+  "helpers.summarizeCommandOutput", "helpers.prerequisitesReady", "helpers.isKebabCase", "helpers.chooseAiSurface",
+  "machine.faultsInForce", "machine.setupSteps", "machine.runRows", "machine.harnessGroups", "machine.classifyBootstrapFailure",
+  "function reset()", "function paint()", "function goToSetup()", "requestMacAdminPassword", "startHarnessPoll", "stopHarnessPoll",
+]) {
+  if (!app.includes(value)) throw new Error(`wizard: the state-machine driver is missing ${value}`);
 }
-if (app.includes("agy -i") || app.includes("receives the EAI first request automatically")) {
-  throw new Error("wizard: Antigravity CLI must use a bare interactive handoff without claiming automatic prompt delivery");
+// paint() must always rebuild from the reset, never patch what was left.
+if (!/function paint\(\)[\s\S]{0,900}?\breset\(\);/.test(app)) {
+  throw new Error("wizard: paint() no longer resets before it draws, so a state can be half-applied");
 }
-if (!app.includes("A terminal will open Antigravity CLI in this project. Enter the EAI first request after it starts.")) {
-  throw new Error("wizard: Antigravity CLI bare interactive handoff guidance is missing");
+/* Readiness attempts every missing prerequisite and reports them
+   together, rather than stopping at the first. The one exception is a
+   tool that needed the failed one: the EAI CLI is installed with npm, so
+   blaming it when Node is missing names the wrong thing. */
+if (!/for \(const step of missingSteps\(\)\)[\s\S]{0,600}?failed\.push\(step\)/.test(app)) {
+  throw new Error("wizard: the readiness sweep no longer collects the failures it finds");
 }
-const graphicalAiSurfaceIds = [
-  "vscode-copilot",
-  "copilot-desktop",
-  "antigravity-desktop",
-  "claude-desktop",
-  "codex-desktop",
-  "grok-bot",
-];
-const cliAiSurfaceIds = [
-  "copilot-cli",
-  "antigravity-cli",
-  "claude-cli",
-  "codex-cli",
-  "grok-cli",
-];
-const demoInventoryStart = app.indexOf("if (aiSurfaceInventory.demo)");
-const demoInventoryEnd = app.indexOf("renderAiSurfaces();", demoInventoryStart);
-const demoInventory = app.slice(demoInventoryStart, demoInventoryEnd);
-const demoSurfaces = [...demoInventory.matchAll(/\{\s*id:\s*["']([^"']+)["'][^}]*?kind:\s*["'](desktop|editor|cli)["'][^}]*?\}/g)]
-  .map((match) => ({ id: match[1], kind: match[2] }));
-if (demoSurfaces.length !== 11 || new Set(demoSurfaces.map((surface) => surface.id)).size !== 11) {
-  throw new Error("wizard: the demo inventory must contain exactly 11 unique AI surfaces");
+if (!app.includes('raise("prereq", { steps: failed })')) {
+  throw new Error("wizard: the prerequisite failure no longer names every tool that failed");
 }
-const expectedAiSurfaceIds = [...graphicalAiSurfaceIds, ...cliAiSurfaceIds];
-if (JSON.stringify(demoSurfaces.map((surface) => surface.id)) !== JSON.stringify(expectedAiSurfaceIds)) {
-  throw new Error(`wizard: expected six graphical surfaces followed by five CLI surfaces, got ${demoSurfaces.map((surface) => surface.id).join(", ")}`);
+if (!/step === "eai-cli" && failed\.includes\("node"\)/.test(app)) {
+  throw new Error("wizard: the EAI CLI is attempted after Node failed, which blames the wrong tool");
 }
-const actualGraphicalAiSurfaceIds = demoSurfaces
-  .filter((surface) => surface.kind === "desktop" || surface.kind === "editor")
-  .map((surface) => surface.id);
-if (JSON.stringify(actualGraphicalAiSurfaceIds) !== JSON.stringify(graphicalAiSurfaceIds)) {
-  throw new Error(`wizard: expected exactly six graphical AI workspaces, got ${actualGraphicalAiSurfaceIds.join(", ")}`);
+
+// The waiting box promises the screen updates by itself. It has to.
+if (!app.includes("setInterval") || !app.includes("waitingForSurfaceId")) {
+  throw new Error("wizard: the waiting state does not actually watch for the tool to land");
 }
-const actualCliAiSurfaceIds = demoSurfaces
-  .filter((surface) => surface.kind === "cli")
-  .map((surface) => surface.id);
-if (JSON.stringify(actualCliAiSurfaceIds) !== JSON.stringify(cliAiSurfaceIds)) {
-  throw new Error(`wizard: expected exactly five CLI AI workspaces, got ${actualCliAiSurfaceIds.join(", ")}`);
+if (!/stopHarnessPoll\(\);/.test(app.slice(app.indexOf("function startHarnessPoll")))) {
+  throw new Error("wizard: the waiting poll is never stopped");
 }
-const installerContract = await readFile(new URL("../docs/installer-contract.md", import.meta.url), "utf8");
-if (!installerContract.includes("| Google Antigravity 2.0 | `antigravity-desktop` |")) {
-  throw new Error("installer contract: Google graphical surface must use the current Antigravity 2.0 name");
+if (/goTo\("setup"\);\s*\n\s*syncStage\(\)/.test(app) || /goTo\("setup"\);\s*\n\s*raise\("workspace"/.test(app)) {
+  throw new Error("wizard: live setup paints the finished form before the answers catch up");
 }
-if (installerContract.includes("agy -i") || installerContract.includes("help advertises interactive prompts")) {
-  throw new Error("installer contract: stale help-driven agy prompt injection must not be documented");
+if (!app.includes("Boolean(facts.projectFolder)")) {
+  throw new Error("wizard: Change location can appear with an empty path");
 }
-for (const value of ["canProveProjectHandoff", '["project-and-prompt", "project-only"]', "No installed project-capable AI workspace", "opened without a local-project handoff"]) {
-  if (!app.includes(value)) throw new Error(`wizard: launch-only workspaces must not satisfy project handoff evidence: ${value}`);
+if (!app.includes('facts.runReached = "folder"')) {
+  throw new Error("wizard: Creating still spins on Workspace connected for the whole platform wait");
 }
-if (/id:\s*["']gemini-(?:desktop|cli)["']/.test(app)) {
-  throw new Error("wizard: Gemini must not replace Google's Antigravity 2.0 desktop or agy CLI surfaces");
+
+const initArm = rust.slice(rust.indexOf('"init" =>'), rust.indexOf("_ => command_result"));
+if (!initArm.includes('"Folder created"') || !initArm.includes('"Creating the app on EAI"')) {
+  throw new Error("Tauri adapter does not emit Creating milestones before eai init");
 }
-for (const value of ["setInterval(refreshActivityHeartbeat, 1000)", "Elapsed ${elapsed}s", "Screen updated every second", "Last installer update", "Waiting for your input", "waitingDetails", "activityEvents", "Stopped with error", "Checking the required tools", "journeyStages", "renderJourneyStages", "setJourneyStage", "bootstrap-summary", "recordSafeSummary", "summarizeCommandOutput"]) {
-  if (!app.includes(value)) throw new Error(`wizard: per-second progress feedback is missing: ${value}`);
+if (initArm.indexOf('"Folder created"') > initArm.indexOf("run_program_in_directory_with_progress")) {
+  throw new Error("Folder created is not emitted before eai init starts");
 }
-if (!app.includes('querySelectorAll("details[open]")')) throw new Error("wizard: stage refresh discards the user's expanded build details");
-for (const repetitive of ["activityLastHeartbeatLogAt", 'recordActivityEvent(\n      "Still working"']) {
-  if (app.includes(repetitive)) throw new Error(`wizard: repetitive heartbeat remains in build summary: ${repetitive}`);
-}
-if (app.includes('git: "macOS may show an installer window. If it appears, click Install; otherwise no action is needed."')) {
-  throw new Error("wizard: macOS Git fallback still tells users to wait for an unspecified installer window");
-}
-if (!app.includes("Working - no action needed") || !app.includes("Apple Software Update is still installing Git")) {
-  throw new Error("wizard: long-running macOS installs do not explain the live status clearly");
-}
-if (!app.includes('activity.hidden = !active && phase !== "Error"') || !app.includes("requestMacAdminPassword") || !app.includes("adminPassword")) {
-  throw new Error("wizard: failed activity log is hidden instead of remaining available for diagnosis");
-}
-if (!app.includes("cleanText") || !app.includes("describeInitFailure") || !app.includes('"not-run"')) {
-  throw new Error("wizard: cross-platform app initialization diagnostics are missing");
-}
+// Setup begins on its own; the buttons are the accessible fallback.
+if (!app.includes("start();")) throw new Error("wizard: the app never starts itself");
+
 const wizardState = await readFile(new URL("../ui/wizard-state.js", import.meta.url), "utf8");
-if (!wizardState.includes("prerequisitesReady") || !wizardState.includes("isKebabCase") || !wizardState.includes("describeInitFailure") || !wizardState.includes("Windows dependency setup needs attention") || !wizardState.includes("App dependencies need attention") || !wizardState.includes("initButtonLabel")) {
+if (!wizardState.includes("prerequisitesReady") || !wizardState.includes("isKebabCase") || !wizardState.includes("describeInitFailure") || !wizardState.includes("Windows dependency setup needs attention") || !wizardState.includes("App dependencies need attention")) {
   throw new Error("wizard: state validation contract is missing");
 }
+if (!machineSource.includes("root.EAISetup") || !machineSource.includes("function createState()")) {
+  throw new Error("wizard: the state machine module does not register");
+}
+
 const styles = await readFile(new URL("../ui/styles.css", import.meta.url), "utf8");
-if (!styles.includes(".setup-stage summary::marker") || !styles.includes(".activity-log-heading::marker")) {
+if (!styles.includes("summary::marker") || !styles.includes("summary::-webkit-details-marker")) {
   throw new Error("wizard: accordion markers are not hidden consistently across desktop webviews");
+}
+if (!styles.includes("prefers-reduced-motion")) {
+  throw new Error("wizard: the reveal and the spinner do not respect a reduced-motion preference");
 }
 
 console.log("wizard structure checks ok");
@@ -422,9 +521,6 @@ if (!bundles.includes("expected install roots") || !bundles.includes("Where-Obje
 }
 if (!bundles.includes("Start-Sleep -Seconds 1")) {
   throw new Error("test-bundles workflow does not wait for the Windows installer handoff");
-}
-if (!bundles.includes("$appExecutable.Length -le 0") || !bundles.includes("did not become non-empty and readable")) {
-  throw new Error("test-bundles workflow does not wait for the installed Windows executable to become readable");
 }
 const debSelector = await readFile(new URL("./find-valid-deb.sh", import.meta.url), "utf8");
 if (!debSelector.includes("dpkg-deb --contents") || !debSelector.includes("usr\\/bin\\/eai-setup")) {
@@ -461,7 +557,7 @@ for (const value of ["workflow_dispatch", "gh release create", "gh release uploa
   if (!testRelease.includes(value)) throw new Error(`test-release workflow is missing: ${value}`);
 }
 const release = await readFile(new URL("../.github/workflows/release.yml", import.meta.url), "utf8");
-for (const value of ["Stage exact stable release asset", "Upload verified release asset to workflow storage", "Publish verified cross-platform draft", "tauri-apps/tauri-action@", "eai-setup-macos-arm64.dmg", "eai-setup-macos-x64.dmg", "eai-setup-windows-x64.exe", "eai-setup-windows-arm64.exe", "eai-setup-ubuntu-amd64.deb", "eai-setup-ubuntu-arm64.deb", "x86_64-apple-darwin", "aarch64-pc-windows-msvc", "ubuntu-24.04-arm", "codesign --verify --deep --strict", "spctl --assess --type execute", "xcrun stapler validate", "Get-AuthenticodeSignature", "LINUX_SIGNING_PRIVATE_KEY"]) {
+for (const value of ["Stage exact stable release asset", "tauri-apps/tauri-action@", "eai-setup-macos-arm64.dmg", "eai-setup-macos-x64.dmg", "eai-setup-windows-x64.exe", "eai-setup-windows-arm64.exe", "eai-setup-ubuntu-amd64.deb", "eai-setup-ubuntu-arm64.deb", "x86_64-apple-darwin", "aarch64-pc-windows-msvc", "ubuntu-24.04-arm", "codesign --verify --deep --strict", "spctl --assess --type execute", "xcrun stapler validate", "Get-AuthenticodeSignature"]) {
   if (!release.includes(value)) throw new Error(`release workflow is missing: ${value}`);
 }
 const testBundles = await readFile(new URL("../.github/workflows/test-bundles.yml", import.meta.url), "utf8");

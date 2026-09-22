@@ -25,10 +25,10 @@ visible.
 | AUTH-05 | Sign in | Workspace discovery returns a temporary 502, 503, or 504 response | Setup retries the request, preserves the completed sign-in, and offers a workspace-only retry if the service remains unavailable. |
 | APP-01 | App | One company workspace is available | It is selected automatically and shown as the owner. |
 | APP-02 | App | Several company workspaces are available | The user chooses the owner explicitly before continuing. |
-| APP-03 | App | Selected workspace has no apps | The form offers creation of a new app. |
-| APP-04 | App | Selected workspace has existing apps | The user can choose an existing app or Create a new app. |
-| APP-05 | App | Workspace or app discovery fails | No initialization call is made; the user sees a retryable error. |
-| APP-06 | App | User administers many company workspaces | Setup loads the workspace list once and loads apps only for the selected workspace; one unrelated workspace cannot block the whole screen. |
+| APP-03 | App | Any workspace | The form always creates a new app from the EAI template; there is no app-type question. |
+| APP-04 | App | The workspace already has apps | They are not offered — the installer only creates from the template. Connecting to an existing app is CLI-only. See docs/known-issues.md KI-02. |
+| APP-05 | App | Workspace discovery fails | No initialization call is made; a temporary failure offers a retry beside the question, a missing-membership failure does not. |
+| APP-06 | App | User administers many company workspaces | The workspace question becomes a list; choosing one reveals the name question. No app list is fetched, so one unrelated workspace cannot block the screen. |
 | LOCATION-01 | Location | Enter a valid parent folder | The project folder will be created beneath that parent. |
 | LOCATION-02 | Location | Use Finder or File Explorer and cancel | The current folder value is unchanged and the user can continue. |
 | LOCATION-03 | Location | Select a parent folder whose name differs from the project | A new child folder with the project name is created. |
@@ -41,6 +41,7 @@ visible.
 | INIT-09 | Initialize | Windows Node/npm is installed in a user-managed or PATH-only location | The installer resolves the live Node and npm locations from the machine PATH, runs the npm entry point from that installation, and does not report that the EAI CLI needs an update when the CLI is already available. |
 | RELEASE-01 | Release gate | Run the published installer in a protected guest | The desktop application performs the real prerequisite, saved-auth, workspace, initialization, and AI-workspace handoff flow and writes a bounded receipt; an existing CLI alone cannot satisfy the gate. |
 | INIT-04 | Initialize | Template clone, manifest, or dependency install fails for another reason | The real failure remains visible, the project folder is described as safe to reuse when applicable, and retry is offered. |
+| INIT-10 | Initialize | Platform returns EXTERNAL_SERVICE_ERROR or "temporarily unavailable" while creating the app | The screen says EAI is temporarily unavailable, does not dump CLI recovery commands, marks the running create row rather than Workspace connected, and offers Retry this step. |
 | INIT-05 | Initialize | Initialization leaves a partial scaffold | Retry uses the supported CLI recovery path and does not silently claim success. |
 | INIT-06 | Initialize | Initialization completes | The project path is shown and the completion screen offers Open project folder. |
 | INIT-08 | Workspace | Signed-in user has a direct membership on a child company workspace | The workspace is selectable and app discovery is scoped to that workspace; root-only filtering is not applied. |
@@ -51,9 +52,55 @@ visible.
 | AI-03 | AI handoff | Choose an AI workspace download | Only the official provider page opens; no provider account or secret is collected. |
 | AI-04 | AI handoff | AI workspace start fails | The project remains safe and the user receives a command-free recovery explanation. |
 | AI-05 | AI handoff | Choose a launch-only desktop client | The app opens without claiming that the local project was handed off; diagnostic E2E does not accept it as project-handoff evidence. |
+| STATE-01 | Every screen | Walk the seven screens in order | Sign in, Signed in, Set up, Creating, Choose a harness, Hand-off and Built each appear once, in that order, with one visible at a time. |
+| STATE-02 | Sign in | A prerequisite failed and the EAI API is unreachable | Both rows appear in one list, chronologically, under "Two things are in the way"; the tick is not shown beside either. |
+| STATE-03 | Sign in | The network probe cannot run on this machine | Connectivity is treated as reachable and sign-in decides; the user is not sent to their VPN settings over a missing probe. |
+| STATE-04 | Sign in | A prerequisite install fails because the network is down | The screen reports the connection, not the prerequisite; the fix offered is the one that will work. |
+| STATE-19 | Every screen | Look at the bar across the top | Four stages, not seven screens; the current stage and preceding stages are filled, the rest are pale, and the bar is named for screen readers. |
+| STATE-20 | Every screen | A failure on the current screen | The current stage turns red and no later stage looks complete. |
+| STATE-21 | Every screen with actions | Content longer than the window | Back and the primary action stay visible while content scrolls under them. |
+| STATE-22 | Choose a harness, Hand-off | Any state | Back stays on the left of the bottom action rail. |
+| STATE-17 | Sign in | Two prerequisites both fail | Both are attempted, both are reported as rows in the same list, and the heading counts rows. Neither row claims nothing else is waiting on it. |
+| STATE-18 | Sign in | Node.js fails and the EAI CLI is also missing | The CLI is not attempted, because it is installed with npm; the failure names Node.js and does not blame the CLI. |
+| STATE-05 | Set up | Answer each question in turn | The next question appears under the answer with no Continue between them; Back and Create app are present from the first question. |
+| STATE-06 | Set up | Clear the app name after choosing a location | The location question closes again; Create app greys out. |
+| STATE-07 | Set up | The chosen name already exists in the chosen folder | The error is shown in the name field, on the form, not on the Creating screen. |
+| STATE-11 | Set up | The location has not been chosen yet | One button, at the left, reading Choose location. No path, no greyed text, and nothing that reads as an answer already in. |
+| STATE-12 | Set up | The location has been chosen | The path is shown, with Change location on the right of it. Both controls say "location", matching the question. |
+| STATE-13 | Set up | Any stage | The form is three questions — workspace, name, location. The app name is always editable. |
+| STATE-14 | Set up | The name has not been typed yet | The field is empty with ghost text, and the location question is not shown. Nothing on the screen is pre-answered. |
+| STATE-15 | Set up | Type an app name one character at a time | The location question appears on the first character and does not close again on a hyphen mid-word. Clearing the field closes it. |
+| STATE-16 | Set up | Type a name that is not kebab case | Create app stays disabled, and leaving the field says why. Typing again clears the message. |
+| STATE-08 | Set up | The account has no workspace | No workspace row is shown beside the failure, and every question below stays down. |
+| STATE-09 | Creating | Initialization fails partway | The row that was running is marked failed, the rows after it stay pending, no fifth row appears, and Retry this step is offered. |
+| STATE-10 | Built | The harness opened on the project | The success overlay lands over the hand-off and offers Open the project folder and Done. |
+| HARNESS-01 | Choose a harness | A supported tool is already installed | It is listed first under "Ready on this <device>", it is preselected, there is no alert, and the button reads Next. |
+| HARNESS-02 | Choose a harness | Nothing is installed | Only the "Not installed" group is drawn, and the chosen option opens into three numbered steps: their site, their account, come back. |
+| HARNESS-07 | Choose a harness | Any option is chosen | Its name is the primary colour and semibold; every option not chosen stays muted. |
+| HARNESS-09 | Choose a harness | Any state | No row says whether it is installed — the group heading above it already does. |
+| HARNESS-08 | Choose a harness | A not-installed option is chosen | The step numbers sit in the tile's column, 44px from the row's left edge, so the block reads as belonging to that row. |
+| HARNESS-03 | Choose a harness | Choose Get and leave for the vendor site | The waiting box appears, the alert is withdrawn, the button is disabled and reads Waiting for <tool>. |
+| HARNESS-04 | Choose a harness | The tool is installed while the waiting box is up | The screen updates by itself within a few seconds and the button becomes Next; the poll stops. |
+| HARNESS-06 | Choose a harness | Open an option in the list | The divider sits below the whole option, separating it from the next one. There is no line between an option's title and its own explanation, and none below the last option. |
+| HARNESS-05 | Choose a harness | Detection itself fails | The screen says the check failed and the app is safe; it does not read as though the app failed. |
+| PLATFORM-01 | Every screen | Run on Windows | No screen says Mac, Finder, xcode-select or Command Line Tools; the prerequisite failure names winget and the location question names File Explorer. |
+| PLATFORM-02 | Every screen | Run on Linux | No screen names a Mac or a PC; the prerequisite failure names the distribution package manager. |
+| PLATFORM-03 | Sign in | Run on Windows with the runtime missing | The readiness row counts five checks including Windows app support, and the failure names the tool that failed. |
+| PLATFORM-04 | Sign in | Run on Windows or Linux | The macOS password panel is never shown; the platform's own prompt is used. |
 
 ## Evidence rules
 
+- `npm run prototype` opens every screen and failure below in the real
+  app, at the real window size, with a rail to reach them. It is a review
+  tool and is not in the bundle. It cannot exercise anything that needs a
+  real machine — the macOS password prompt, a real login, a real init —
+  so it evidences wording and screen state, never behaviour.
+- `scripts/test-state-machine.mjs` covers every screen, every fault and every
+  platform wording without a browser, including the check that no Windows or
+  Linux sentence names a Mac.
+- `scripts/test-ui-contract.mjs` covers the coupling between the markup, the
+  driver and the stylesheet: every id the app reaches for, every screen the
+  machine declares, and every class it assigns at runtime.
 - `scripts/test-wizard.mjs` covers deterministic state, validation, labels, and
   error guidance.
 - `scripts/test-bootstrap.mjs` covers the desktop wiring contract, including
