@@ -425,8 +425,9 @@ wait_for_unauthenticated_portal_state() {
   for attempt in $(seq 1 30); do
     if portal_ready_state; then
       return 0
+    else
+      state=$?
     fi
-    state=$?
     if [[ "$state" == 1 ]]; then
       return 1
     fi
