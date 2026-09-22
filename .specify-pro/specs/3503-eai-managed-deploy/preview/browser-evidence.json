@@ -1,0 +1,51 @@
+{
+  "capturedAt": "2026-09-22T21:40:26.251Z",
+  "previewUrl": "http://127.0.0.1:43183/",
+  "browser": "Chromium 147.0.7727.15",
+  "sourceHead": "d638cd0e93156b6ca9af5705e68b66e19d32e6a1",
+  "sourceHashes": {
+    "ui/index.html": "3db36e41f32bac0eeddf44be356f67508f8e15c8209dd29e0ab3838b63f60b95",
+    "ui/styles.css": "af005bb1fd3ed88dc2c335db523c17b49024a5e37017ab3a6e7a7c9a89837648",
+    "ui/app.js": "1ebe0e40c249ca8266d38cc3a88b52c9e72014b9f1650d724fef8e055a1e9c31",
+    "ui/wizard-state.js": "d18967fdfae90f993d0029b348e31e03d169b93996f4765acc639243560cbc4d",
+    "src-tauri/src/main.rs": "e01a161db2c5e285eb28cbcebe167fdf5e26224dc0bf8a9522046e2f897b3d1a",
+    "scripts/preview-managed-deploy.mjs": "9bb7af429b6e3ce77dfae6a1c8da662b16540a76d201a52d10b9fd37e5651760"
+  },
+  "fixture": "Actual installer UI, controlled Tauri bridge; failure text extracted from Rust. No native install or cloud calls.",
+  "assertions": [
+    {
+      "viewport": {
+        "width": 900,
+        "height": 680
+      },
+      "exactRustFailureText": true,
+      "recoveryCommandVisible": true,
+      "noHorizontalOverflow": true,
+      "keyboardRetryWorks": true,
+      "retryClearsFailure": true,
+      "signInReached": true,
+      "nativeBootstrapCalls": 2,
+      "browserErrors": []
+    },
+    {
+      "viewport": {
+        "width": 720,
+        "height": 540
+      },
+      "exactRustFailureText": true,
+      "recoveryCommandVisible": true,
+      "noHorizontalOverflow": true,
+      "keyboardRetryWorks": true,
+      "retryClearsFailure": true,
+      "signInReached": true,
+      "nativeBootstrapCalls": 2,
+      "browserErrors": []
+    }
+  ],
+  "screenshots": [
+    ".specify-pro/specs/3503-eai-managed-deploy/preview/managed-deploy-incompatible-900x680.png",
+    ".specify-pro/specs/3503-eai-managed-deploy/preview/managed-deploy-recovered-900x680.png",
+    ".specify-pro/specs/3503-eai-managed-deploy/preview/managed-deploy-incompatible-720x540.png",
+    ".specify-pro/specs/3503-eai-managed-deploy/preview/managed-deploy-recovered-720x540.png"
+  ]
+}
