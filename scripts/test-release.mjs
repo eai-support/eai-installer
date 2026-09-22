@@ -36,6 +36,7 @@ const windowsPortalEvidenceFinalizer = path.join(root, "scripts", "finalize-wind
 const windowsDiagnosticCleanupPowerShell = path.join(root, "scripts", "windows-diagnostic-cleanup.ps1");
 const windowsDiagnosticCleanupTest = path.join(root, "scripts", "test-windows-diagnostic-cleanup.sh");
 const windowsDiagnosticCleanupGate = path.join(root, "scripts", "write-windows-diagnostic-cleanup-gate.mjs");
+const parallelsInput = path.join(root, "scripts", "parallels-input.mjs");
 const keychainE2eLauncher = path.join(root, "scripts", "run-release-e2e-from-keychain.sh");
 const keychainLoader = path.join(root, "scripts", "load-release-e2e-keychain.sh");
 const ubuntuGuestCore = path.join(root, "scripts", "ubuntu-guest-test-core.sh");
@@ -72,8 +73,13 @@ const windowsPortalEvidenceFinalizerSource = readSource(windowsPortalEvidenceFin
 const windowsDiagnosticCleanupPowerShellSource = readSource(windowsDiagnosticCleanupPowerShell);
 const keychainE2eLauncherSource = readSource(keychainE2eLauncher);
 const keychainLoaderSource = readSource(keychainLoader);
+const parallelsInputSource = readSource(parallelsInput);
 assert.match(keychainLoaderSource, /EAI_HARNESS_TENANT_ID/);
 assert.match(keychainLoaderSource, /find-generic-password/);
+assert.match(parallelsInputSource, /events\.push\(\{ key, event: "press", delay \}, \{ key, event: "release", delay \}\)/);
+assert.match(parallelsInputSource, /events\.push\(\{ key: KEY\.shift, event: "press", delay \}\)/);
+assert.match(parallelsInputSource, /events\.push\(\{ key: KEY\.shift, event: "release", delay \}\)/);
+assert.doesNotMatch(parallelsInputSource, /events\.push\(\{ key, delay \}\)/);
 assert.match(releaseShell, /source "\$ROOT\/scripts\/load-release-e2e-keychain[.]sh"/);
 assert.match(keychainE2eLauncherSource, /\/usr\/sbin\/ioreg -n Root -d1/);
 assert.match(keychainE2eLauncherSource, /"IOConsoleLocked" = Yes/);
@@ -1355,7 +1361,7 @@ assert.match(windowsLoginReadOnlyPowerShellSource, /is_parallels_exact_job_resul
 assert.match(windowsLoginReadOnlyPowerShellSource, /sleep 2/);
 assert.doesNotMatch(windowsLoginReadOnlyPowerShellSource, /input|Invoke-WindowsUiAction|Remove-Item|Start-Process/);
 assert.doesNotMatch(windowsLoginUiActionOnceSource, /for attempt|is_parallels_exact_job_result_failure/);
-assert.match(windowsLoginIdempotentUiSource, /edge-first-run\|focus-email\|focus-password/);
+assert.match(windowsLoginIdempotentUiSource, /edge-first-run\|dismiss-windows-activation\|focus-email\|focus-password/);
 assert.match(windowsLoginIdempotentUiSource, /for attempt in \$\(seq 1 3\); do/);
 assert.match(windowsLoginIdempotentUiSource, /is_parallels_exact_job_result_failure "\$output"/);
 assert.doesNotMatch(windowsLoginIdempotentUiSource, /invoke-next|invoke-sign-in|input type/);
@@ -1382,7 +1388,7 @@ const mandatoryFreshLoginSteps = [
   "reset_edge_profile",
   "wait_enterprise_portal_https",
   "launch_edge",
-  "if portal_ready_state",
+  "if wait_for_unauthenticated_portal_state",
   "run_ui_action_once invoke-public-email",
   "run_ui_action_once invoke-portal-microsoft",
   "run_idempotent_ui_action focus-email",
