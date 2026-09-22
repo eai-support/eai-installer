@@ -243,6 +243,17 @@ function Test-PortalReady {
     return $gettingStarted -and $allApps
 }
 
+function Test-MicrosoftAuthenticationRejected {
+    try {
+        Assert-EdgeLocation -ExpectedHost "enterpriseaiplatform.ciamlogin.com"
+    } catch {
+        return $false
+    }
+    return Test-ExactEdgeElement -Names @(
+        "We couldn't find an account with this email address or password."
+    ) -ControlType "Any"
+}
+
 function Dismiss-WindowsActivationNotice {
     $root = [System.Windows.Automation.AutomationElement]::RootElement
     $windowConditions = @(
@@ -1039,6 +1050,7 @@ function Invoke-WindowsUiAction {
             "invoke-sign-in",
             "invoke-edge-not-now",
             "invoke-ms-yes",
+            "probe-microsoft-authentication",
             "probe-portal-ready",
             "wait-portal-ready",
             "wait-platform-apps",
@@ -1122,6 +1134,13 @@ function Invoke-WindowsUiAction {
         }
         "invoke-ms-yes" {
             [void](Invoke-OptionalExactEdgeButton -Names @("Yes") -TimeoutSeconds $TimeoutSeconds -ExpectedHost "enterpriseaiplatform.ciamlogin.com")
+        }
+        "probe-microsoft-authentication" {
+            if (Test-MicrosoftAuthenticationRejected) {
+                [Console]::Out.WriteLine("EAI_MICROSOFT_AUTH_REJECTED")
+            } else {
+                [Console]::Out.WriteLine("EAI_MICROSOFT_AUTH_PENDING")
+            }
         }
         "probe-portal-ready" {
             if (Test-PortalReady) {

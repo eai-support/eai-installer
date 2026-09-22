@@ -177,7 +177,7 @@ run_ui_action_once() {
   local output=""
   local status=1
   case "$action" in
-    edge-first-run|dismiss-windows-activation|invoke-public-email|invoke-portal-microsoft|focus-email|invoke-next|focus-password|invoke-sign-in|invoke-edge-not-now|invoke-ms-yes|probe-portal-ready|wait-portal-ready)
+    edge-first-run|dismiss-windows-activation|invoke-public-email|invoke-portal-microsoft|focus-email|invoke-next|focus-password|invoke-sign-in|invoke-edge-not-now|invoke-ms-yes|probe-microsoft-authentication|probe-portal-ready|wait-portal-ready)
       ;;
     *)
       fail "Unsupported Windows UI action."
@@ -508,6 +508,25 @@ if [[ "$mode" != cli ]]; then
   run_ui_action_once invoke-sign-in 30 >/dev/null \
     || fail "Microsoft's Sign in action did not become available."
   printf 'MICROSOFT_PASSWORD_STAGE_SUBMITTED\n'
+
+  # Microsoft shows this exact public error on the approved identity host when
+  # the test account or password is rejected.  Detect it before the general
+  # portal-ready wait so the E2E receipt distinguishes an invalid credential
+  # from a redirect or installer failure.
+  for _ in $(seq 1 15); do
+    authentication_probe="$(run_ui_action_once probe-microsoft-authentication 5)" \
+      || fail "Microsoft authentication status could not be inspected safely."
+    if printf '%s\n' "$authentication_probe" | /usr/bin/tr -d '\r' \
+      | /usr/bin/grep -Fqx 'EAI_MICROSOFT_AUTH_REJECTED'; then
+      unset authentication_probe
+      fail "Microsoft rejected the configured release-test account credentials."
+    fi
+    unset authentication_probe
+    if portal_ready_state; then
+      break
+    fi
+    sleep 1
+  done
 
   run_ui_action_once invoke-edge-not-now 10 >/dev/null \
     || fail "The Edge password-save prompt could not be handled safely."
