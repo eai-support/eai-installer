@@ -877,7 +877,7 @@ contract but does not predict the result of the product's later `apt-get
 update`, refresh apt indexes itself, add a repository, install, upgrade, or
 repair those prerequisites. After the product runs, package ownership is proved,
 Node.js must be version 24 or newer, npm must be available with a parseable
-version, and the Ubuntu diagnostic contract requires EAI CLI `3.15.10` exactly
+version, and the Ubuntu diagnostic contract requires EAI CLI `3.17.0` exactly
 from both the executable and its package metadata.
 
 The approved Node.js 24 repository can supply npm from the installed `nodejs`
@@ -910,7 +910,7 @@ a cleanup obligation, not a claim that creation was already observed. The arm
 is written before product launch, so a guest crash or lost Parallels transport
 cannot leave an untracked exact-name orphan. While the product runs, the adapter
 queries only the exact `tenant-vertical-enrollment` key from inside the exact
-generated project. Both the checkpoint and final query encode the CLI 3.15.10
+generated project. Both the checkpoint and final query encode the CLI 3.17.0
 canonical scalar filter `{"verticalKey":"<exact-app-key>"}` and require its
 `{resources,totalDocs}` JSON envelope; an operator-shaped `equals` object is not
 accepted by the contract. A valid remote checkpoint binds one record ID hash,
@@ -1371,7 +1371,7 @@ eai app delete <app-key> --tenant-id <tenant-id> --confirm <app-key> \
 ```
 
 It accepts only the exact current `eai.app-deletion-receipt.v1` key and type
-contract exercised by EAI CLI 3.15.10: the app and tenant must match the
+contract exercised by EAI CLI 3.17.0: the app and tenant must match the
 protected inputs, status must be `deleted`, `verified` must be true, the
 64-character plan and ownership-manifest hashes must match, the exact
 `resourceAPI` cascade step must be verified with a positive integer deletion
@@ -1401,7 +1401,7 @@ only by a SHA-256 fingerprint:
   "tenantMatch": "verified",
   "tenantIdSha256": "64-character-sha256",
   "apiOriginSha256": "64-character-sha256",
-  "eaiVersion": "3.15.10-or-newer",
+  "eaiVersion": "3.17.0-or-newer",
   "planHash": "64-character-ownership-manifest-hash",
   "ownershipManifestHash": "same-64-character-ownership-manifest-hash",
   "deletedRecords": {
@@ -1445,7 +1445,7 @@ exception to verified deletion, and its report cannot be used as production
 release evidence.
 
 The adapter resolves one canonical executable EAI CLI, requires at least the
-`eai-cli` version pinned in `installer-manifest.json` (currently `3.15.10`), and
+`eai-cli` version pinned in `installer-manifest.json` (currently `3.17.0`), and
 binds every command to the approved PublicAPI origin. The adapter deliberately
 has no draft-enrollment deletion,
 generic Resource API mutation, admin-portal, or diagnostic fallback. A missing

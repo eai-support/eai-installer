@@ -45,8 +45,8 @@ if (node?.minimumVersion !== "24") {
   throw new Error("manifest: Node.js 24 must be the minimum supported runtime");
 }
 const eaiCli = manifest.prerequisites.find((item) => item.id === "eai-cli");
-if (eaiCli?.minimumVersion !== "3.15.10") {
-  throw new Error("manifest: EAI CLI minimum must include the current AI workspace catalog in 3.15.10");
+if (eaiCli?.minimumVersion !== "3.17.0") {
+  throw new Error("manifest: EAI CLI minimum must include the Configurator Plus handoff in 3.17.0");
 }
 const nodeMacInstaller = node?.installers?.macos ?? "";
 const nodeMacUrls = nodeMacInstaller.match(/https:\/\/[^\s]+/g) ?? [];
@@ -80,7 +80,7 @@ if ((rust.match(/env::var_os\("HOME"\)/g) ?? []).length !== 1 || rust.includes('
 for (const value of ['command.env("HOME", &home)', 'command.env("npm_config_cache", home.join(".eai-setup/npm-cache"))', 'command.env_remove("HOME")', 'command.env_remove("npm_config_cache")']) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter lets a GUI child process inherit an invalid home: ${value}`);
 }
-for (const value of ["MIN_EAI_CLI_VERSION", "MIN_NODE_MAJOR_VERSION: u64 = 24", "fn node_version()", "@enterpriseai/cli", "eai_cli_version()", "user_npm_global_exec_dirs", "current_version >= MIN_EAI_CLI_VERSION", "fn eai_cli_script", "APPDATA", "run_program_in_directory_with_env(\"node\", &node_args, directory, environment)"] ) {
+for (const value of ["const MIN_EAI_CLI_VERSION: (u64, u64, u64) = (3, 17, 0)", "MIN_NODE_MAJOR_VERSION: u64 = 24", "fn node_version()", "@enterpriseai/cli", "eai_cli_version()", "user_npm_global_exec_dirs", "current_version >= MIN_EAI_CLI_VERSION", "fn eai_cli_script", "APPDATA", "run_program_in_directory_with_env(\"node\", &node_args, directory, environment)"] ) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter does not verify the canonical EAI CLI release: ${value}`);
 }
 if (!rust.includes('ToolState { command: "node".to_string(), version: node_version() }')) {
