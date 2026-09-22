@@ -35,7 +35,7 @@ if (-not (Has-Command "node") -or -not (Has-Command "npm")) {
 }
 
 $nodeMajor = [int]((node -p "process.versions.node.split('.')[0]").Trim())
-if ($nodeMajor -lt 20) { throw "Node.js 20 or newer is required." }
+if ($nodeMajor -lt 24) { throw "Node.js 24 or newer is required." }
 
 if (-not (Has-Command "eai")) {
   Require-AutoInstall "EAI CLI"

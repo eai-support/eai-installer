@@ -23,14 +23,15 @@ the repository, for example `0.1.4`. It publishes an unsigned prerelease with
 the tag `eai-setup-test-v0.1.4` and six native assets for Windows, macOS, and
 Ubuntu.
 
-The supported command-line equivalent is:
+The supported command-line equivalent selects one diagnostic VM explicitly:
 
 ```bash
-./release.sh publish-test 0.3.5
+EAI_RELEASE_VMS=macos ./release.sh publish-test 0.3.5
 ```
 
 It dispatches the test-release workflow, waits for the public prerelease
-assets, downloads those assets, and runs the real guest E2E adapters. This is
+assets, downloads the selected asset, and runs its real guest E2E adapter. Run
+the remaining VMs separately only after manual cleanup is verified. This is
 the controlled validation path while production signing is unavailable. It
 does not create a customer release and uses the existing diagnostic cleanup
 mode until the V4 app-deprovision API is available.
@@ -45,14 +46,17 @@ version:
 ```
 
 It creates and pushes the matching tag. The release workflow validates that
-the tag and all source versions match, then requires the configured signing and
-notarization credentials. It builds the customer assets into a draft release;
+the tag and all source versions match, signs Windows with Microsoft Artifact
+Signing and Linux packages with the protected release GPG key, and builds the
+customer assets into a draft release. If Apple credentials are unavailable,
+the macOS assets are explicitly labelled unsigned;
 `release.sh` publishes that draft only after the exact assets pass the real
 guest E2E and cleanup gate.
 
 Complete [Signing and distribution setup](signing-and-distribution.md) before
-attempting a production release. Missing credentials are a deliberate release
-blocker, not a reason to bypass signing.
+attempting a production release. Missing Windows or Linux signing credentials
+remain deliberate release blockers; missing Apple credentials currently leave
+only the macOS assets unsigned and clearly labelled.
 
 ## End-to-end release gate
 
@@ -78,11 +82,10 @@ fix requires a new patch, because the release gate must test the exact
 published asset.
 
 For installer-only diagnosis while V4 app deletion is unavailable, use
-./release.sh diagnostic-e2e <version>. This runs the real published-asset VM
+EAI_RELEASE_VMS=<one-vm> ./release.sh diagnostic-e2e <version>. This runs the real published-asset VM
 workflow but does not delete the created test app, so it is never a release
 approval or a substitute for the live cleanup gate.
 
-If a tagged release is still required before V4 app deletion is available,
-use ./release.sh publish-diagnostic <version>. This is an explicit exception:
-it publishes only after the real guest workflow passes, but its cleanup
-evidence is unverified and the created test apps remain in the harness tenant.
+`./release.sh publish-diagnostic <version>` is deliberately disabled. An
+unverified diagnostic cleanup cannot authorize or strand a production `v*`
+tag; use the unsigned test-release path instead.

@@ -17,6 +17,39 @@
       .trim();
   }
 
+  function summarizeCommandOutput(value) {
+    const text = cleanText(value);
+    if (!text) return [];
+    const summaries = [];
+    const add = (message) => {
+      if (!summaries.includes(message)) summaries.push(message);
+    };
+    for (const line of text.split("\n")) {
+      if (/cloned from/i.test(line)) add("Downloaded the supported EAI app template.");
+      else if (/updated package\.json/i.test(line)) add("Updated the project settings.");
+      else if (/generated \.env\.local/i.test(line)) add("Created the local app configuration.");
+      else if (/created object types scaffold/i.test(line)) add("Prepared the app data model starter files.");
+      else if (/generated (agents|claude)\.md/i.test(line)) add("Prepared the AI workspace guidance.");
+      else if (/installed gofer assets/i.test(line)) add("Installed the EAI delivery guidance.");
+      else if (/initialized git repository/i.test(line)) add("Prepared local version control.");
+      else if (/\badded \d+ packages?\b|\bup to date\b/i.test(line)) add("Installed the required project packages.");
+      else if (/authenticated as/i.test(line)) add("Secure browser sign-in completed.");
+    }
+    return summaries;
+  }
+
+  function journeyStageForActivity(activeStep, title) {
+    const context = `${activeStep || ""} ${title || ""}`;
+    if (/ai workspace|copilot|antigravity|\bagy\b|claude|chatgpt|codex|grok/i.test(context)) return "ai";
+    if (/sign[ -]?in|login|signup|account/i.test(context)) return "signin";
+    if (/company workspace|\bapp\b|project|folder|tenant/i.test(context)) return "app";
+    if (/eai[ -]?cli/i.test(context)) return "eai-cli";
+    if (/node|npm/i.test(context)) return "node";
+    if (/git|command line tools/i.test(context)) return "git";
+    if (/computer|detect|required tools/i.test(context)) return "computer";
+    return null;
+  }
+
   function initButtonLabel(appKey, busy = false) {
     if (busy) return appKey ? "Initialising project..." : "Creating app...";
     return appKey ? "Use app and initialise project" : "Create and initialise app";
@@ -24,6 +57,34 @@
 
   function describeInitFailure(message, platform = "") {
     const cleanMessage = cleanText(message) || "The app could not be initialised.";
+    if (/no app named .* was found in the selected company workspace/i.test(cleanMessage)) {
+      return {
+        title: "Existing app could not be found",
+        detail: "The selected app is no longer available in this company workspace. No new platform app was created.",
+        next: "Choose Create a new app, or refresh the workspace list and select the existing app again.",
+      };
+    }
+    if (/more than one enrollment was returned for app/i.test(cleanMessage)) {
+      return {
+        title: "Existing app record needs attention",
+        detail: "EAI found more than one platform record for the selected app, so it stopped to avoid connecting this project to the wrong app. No new platform app was created.",
+        next: "Ask a company administrator to resolve the duplicate app record, then retry.",
+      };
+    }
+    if (/does not identify a runtime tenant/i.test(cleanMessage)) {
+      return {
+        title: "Existing app is not ready",
+        detail: "The selected app does not have a runtime workspace recorded, so EAI stopped before creating a project. No new platform app was created.",
+        next: "Choose Create a new app, or ask a company administrator to repair the selected app record before retrying.",
+      };
+    }
+    if (/app.*disabled|status[^\n]*disabled/i.test(cleanMessage)) {
+      return {
+        title: "Selected app is disabled",
+        detail: "The selected EAI app is disabled. EAI did not create a new app or change the existing app.",
+        next: "Choose a different active app, or ask a company administrator to enable this app before retrying.",
+      };
+    }
     if (/the app was created, but its dependencies could not be installed/i.test(cleanMessage)) {
       return {
         title: "App dependencies need attention",
@@ -41,8 +102,91 @@
     return {
       title: "App setup failed",
       detail: cleanMessage,
-      next: "Review Recent activity, correct the issue, then choose Try again.",
+      next: "Review Build summary, correct the issue, then choose Try again.",
     };
+  }
+
+  function describeWorkspaceFailure(message) {
+    const diagnostic = cleanText(message) || "Company workspaces could not be loaded.";
+    if (/\b(502|503|504)\b|bad gateway|service unavailable|gateway timeout|request_error|temporarily unavailable/i.test(diagnostic)) {
+      return {
+        title: "EAI is temporarily unavailable",
+        detail: "Your sign-in is complete. EAI could not load your company workspaces after several attempts.",
+        next: "Wait a moment, then choose Try workspace check again. You do not need to sign in again.",
+        diagnostic,
+        retryable: true,
+      };
+    }
+    if (/no active company workspaces|no company workspaces are available/i.test(diagnostic)) {
+      return {
+        title: "No company workspace is available",
+        detail: "Your account is signed in, but it cannot create an app until a company workspace is assigned.",
+        next: "Ask your company administrator to add you to a workspace, then try the workspace check again.",
+        diagnostic,
+        retryable: true,
+      };
+    }
+    if (/\b(401|token expired|not authenticated|sign-in)\b/i.test(diagnostic)) {
+      return {
+        title: "Sign-in needs refreshing",
+        detail: "EAI could not confirm the current browser sign-in.",
+        next: "Choose Sign in with browser, then continue setup.",
+        diagnostic,
+        retryable: false,
+      };
+    }
+    return {
+      title: "Company workspaces need attention",
+      detail: "EAI could not confirm where this app should be created.",
+      next: "Review Build summary, then try the workspace check again.",
+      diagnostic,
+      retryable: true,
+    };
+  }
+
+  function describeAppFailure(message) {
+    const diagnostic = cleanText(message) || "Apps could not be loaded.";
+    if (/\b(502|503|504)\b|bad gateway|service unavailable|gateway timeout|request_error|temporarily unavailable/i.test(diagnostic)) {
+      return {
+        title: "EAI is temporarily unavailable",
+        detail: "Your sign-in is complete and your company workspace is ready. EAI could not load the apps after several attempts.",
+        next: "Wait a moment, then choose Try again.",
+        diagnostic,
+        retryable: true,
+      };
+    }
+    if (/\b(401|token expired|not authenticated|sign-in)\b/i.test(diagnostic)) {
+      return {
+        title: "Sign-in needs refreshing",
+        detail: "EAI could not confirm the current browser sign-in while loading apps.",
+        next: "Return to sign-in and refresh your session.",
+        diagnostic,
+        retryable: false,
+      };
+    }
+    return {
+      title: "Apps need attention",
+      detail: "EAI could not load the apps for this company workspace.",
+      next: "Review Build summary, then choose Try again.",
+      diagnostic,
+      retryable: true,
+    };
+  }
+
+  function retryActionLabel(scope) {
+    return scope === "workspace" ? "Try workspace check again" : "Try again";
+  }
+
+  function workspaceRetryCanContinue(retryingApps, tenantCount, selectedTenantId) {
+    return Boolean(retryingApps || Number(tenantCount) === 1 || selectedTenantId);
+  }
+
+  function resolveTenantSelection(tenants, selectedTenantId) {
+    if (!Array.isArray(tenants) || tenants.length === 0) return null;
+    if (selectedTenantId && tenants.some((tenant) => tenant.id === selectedTenantId)) {
+      return selectedTenantId;
+    }
+    return tenants.length === 1 ? tenants[0].id : null;
   }
 
   function createState() {
@@ -52,7 +196,9 @@
   function prerequisitesReady(report, demo = false) {
     if (demo) return true;
     if (!report) return false;
-    return ["git", "node", "npm", "eai"].every((command) => report.tools.some((tool) => tool.command === command && tool.version));
+    const required = ["git", "node", "npm", "eai"];
+    if (report.platform === "windows") required.push("windows-runtime");
+    return required.every((command) => report.tools.some((tool) => tool.command === command && tool.version));
   }
 
   function chooseAiSurface(inventory) {
@@ -63,15 +209,67 @@
     return inventory.surfaces.find((surface) => surface.installed)?.id || inventory.surfaces[0]?.id || null;
   }
 
+  const aiSurfaceRecommendationScores = Object.freeze({
+    "vscode-copilot": 4,
+    "copilot-cli": 3,
+    "copilot-desktop": 2,
+    "antigravity-desktop": 2,
+    "antigravity-cli": 3,
+    "claude-desktop": 4,
+    "claude-cli": 3,
+    "codex-desktop": 3,
+    "codex-cli": 3,
+    "grok-bot": 1,
+    "grok-cli": 3,
+  });
+
+  function aiSurfaceRecommendation(surfaceOrId) {
+    const surfaceId = typeof surfaceOrId === "string" ? surfaceOrId : surfaceOrId?.id;
+    const launchSupportScores = {
+      "project-and-prompt": 4,
+      "project-only": 3,
+      "manual-project": 2,
+      "launch-only": 1,
+    };
+    const catalogScore = aiSurfaceRecommendationScores[surfaceId] ?? 0;
+    const score = typeof surfaceOrId === "object" && surfaceOrId
+      ? Math.min(catalogScore, launchSupportScores[surfaceOrId.launchSupport] ?? catalogScore)
+      : catalogScore;
+    const labels = ["Not scored", "Basic handoff", "Supported", "Strong fit", "Best fit"];
+    return { score, maximum: 4, label: labels[score] };
+  }
+
+  function aiSurfaceCompletionMessage(surface, label) {
+    if (surface?.launchSupport === "launch-only") {
+      return `${label} is open. Complete its sign-in step to use the app; this did not hand off the local project.`;
+    }
+    if (surface?.launchSupport === "manual-project") {
+      return `${label} is open. Complete sign-in and choose this project folder to start building.`;
+    }
+    if (["project-and-prompt", "project-only"].includes(surface?.launchSupport)) {
+      return `${label} is open with this project. Complete sign-in if requested to start building.`;
+    }
+    return `${label} is open, but its project handoff mode is unknown. Confirm the project before you start building.`;
+  }
+
   root.EAIWizard = {
     clampStep,
     cleanText,
     createState,
+    describeAppFailure,
     describeInitFailure,
+    describeWorkspaceFailure,
     initButtonLabel,
     isKebabCase,
     prerequisitesReady,
     chooseAiSurface,
+    aiSurfaceCompletionMessage,
+    aiSurfaceRecommendation,
+    retryActionLabel,
+    resolveTenantSelection,
+    summarizeCommandOutput,
+    journeyStageForActivity,
+    workspaceRetryCanContinue,
     stepCount,
   };
 })(typeof window === "undefined" ? globalThis : window);

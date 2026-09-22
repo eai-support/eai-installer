@@ -1,6 +1,6 @@
 [package]
 name = "eai-setup"
-version = "0.3.12"
+version = "0.3.23"
 description = "EAI Setup desktop bootstrapper"
 authors = ["Enterprise AI Group"]
 edition = "2021"
@@ -16,3 +16,6 @@ serde_json = "1"
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 uuid = { version = "1", features = ["v4"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

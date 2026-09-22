@@ -12,10 +12,12 @@ const activityTrack = document.querySelector(".activity-track");
 const activityPhase = document.querySelector("#activity-phase");
 const activityEta = document.querySelector("#activity-eta");
 const activityHeartbeat = document.querySelector("#activity-heartbeat");
-const installItems = document.querySelector("#install-items");
+const activityStep = document.querySelector("#activity-step");
+const setupStages = document.querySelector("#setup-stages");
 const activityLog = document.querySelector("#activity-log");
 const activityLogStatus = document.querySelector("#activity-log-status");
 const retryInstall = document.querySelector("#retry-install");
+const retryWorkspaces = document.querySelector("#retry-workspaces");
 const adminPasswordPanel = document.querySelector("#admin-password-panel");
 const adminPasswordInput = document.querySelector("#admin-password");
 const adminPasswordSubmit = document.querySelector("#admin-password-submit");
@@ -33,6 +35,9 @@ const aiSurfaceNext = document.querySelector("#ai-surface-next");
 const aiSurfaceConsent = document.querySelector("#ai-surface-consent");
 const refreshAiButton = document.querySelector("#refresh-ai");
 const startAiButton = document.querySelector("#start-ai");
+const recommendationHelp = document.querySelector("#recommendation-help");
+const recommendationDialog = document.querySelector("#recommendation-dialog");
+const recommendationClose = document.querySelector("#recommendation-close");
 
 const wizard = EAIWizard.createState();
 let environmentReport = null;
@@ -42,26 +47,41 @@ let activeBootstrapStep = null;
 let activityTicker = null;
 let activityStartedAt = 0;
 let activityLastUpdateAt = 0;
-let activityLastHeartbeatLogAt = 0;
 let pendingAdminPassword = null;
 let companyTenants = [];
 let selectedCompanyTenantId = null;
 let selectedCompanyAppKey = null;
+let failedAppTenantId = null;
 let createdProjectDirectory = null;
 let aiSurfaceInventory = null;
 let selectedAiSurfaceId = null;
 let projectPath = null;
 let initInProgress = false;
 let e2eConfig = null;
+let e2eAppCreated = false;
 const activityEvents = [];
+const activitySummaryKeys = new Set();
 
 const stepLabels = {
   git: "Git",
-  node: "Node.js and npm",
+  node: "Node.js 24 and npm",
   "eai-cli": "EAI CLI",
 };
 
 const prerequisiteSteps = ["git", "node", "eai-cli"];
+
+const journeyStages = [
+  { id: "computer", label: "Check computer", waiting: "Waiting to check this computer." },
+  { id: "git", label: "Prepare Git", waiting: "Waiting for the computer check." },
+  { id: "node", label: "Prepare Node.js 24 and npm", waiting: "Waiting for Git." },
+  { id: "eai-cli", label: "Prepare EAI CLI", waiting: "Waiting for Node.js 24 and npm." },
+  { id: "signin", label: "Sign in", waiting: "Waiting for the required tools." },
+  { id: "app", label: "Create app", waiting: "Waiting for sign-in." },
+  { id: "ai", label: "Open AI workspace", waiting: "Waiting for the app." },
+];
+
+const journeyState = new Map(journeyStages.map((stage) => [stage.id, { state: "pending", detail: stage.waiting }]));
+let currentJourneyStageId = "computer";
 
 const stepEstimates = {
   git: 45,
@@ -72,7 +92,7 @@ const stepEstimates = {
 const aiSurfaceGuidance = {
   "copilot-desktop": {
     label: "GitHub Copilot app",
-    ready: "GitHub Copilot will open. Sign in to GitHub if asked, choose Add local repositories, and select the project folder shown above.",
+    ready: "GitHub Copilot will open this project when Copilot CLI is also ready. Otherwise sign in to GitHub if asked, choose Add local repositories, and select the project folder shown above.",
     notInstalled: "Download GitHub Copilot from GitHub. After installing it, return here and select Check again.",
   },
   "copilot-cli": {
@@ -85,7 +105,133 @@ const aiSurfaceGuidance = {
     ready: "VS Code will open this project. Sign in to GitHub in VS Code if asked, then open Copilot Chat.",
     notInstalled: "Install VS Code and the GitHub Copilot extension from the official page. Return here and select Check again.",
   },
+  "antigravity-desktop": {
+    label: "Google Antigravity 2.0",
+    ready: "Google Antigravity 2.0 will open. Choose New Project, add the project folder shown above, and use the repository EAI skill.",
+    notInstalled: "Download Google Antigravity 2.0. The desktop app and agy CLI are separate installs; after installing the desktop app, return here and select Check again.",
+  },
+  "antigravity-cli": {
+    label: "Antigravity CLI (agy)",
+    ready: "A terminal will open Antigravity CLI in this project. Enter the EAI first request after it starts. Complete Google sign-in or folder trust if Antigravity asks.",
+    notInstalled: "Install the agy CLI from Google's Antigravity page. This is separate from the desktop app; after installing it, return here and select Check again.",
+  },
+  "claude-desktop": {
+    label: "Claude Desktop",
+    ready: "Claude Desktop will open a Code session for this project when its deep link is available. Confirm the folder if asked.",
+    notInstalled: "Download Claude Desktop from Anthropic. After installing it, return here and select Check again.",
+  },
+  "claude-cli": {
+    label: "Claude Code",
+    ready: "A terminal will open in this project. Current Claude Code releases receive the EAI first request automatically; otherwise enter it after startup. Complete Anthropic sign-in or folder trust if asked.",
+    notInstalled: "Install Claude Code from Anthropic's official setup page. After installing it, return here and select Check again.",
+  },
+  "codex-desktop": {
+    label: "ChatGPT desktop (Codex)",
+    ready: "ChatGPT will open this project in Codex when the Codex CLI launcher is available. Otherwise choose the project and Codex in the app.",
+    notInstalled: "Download the ChatGPT desktop app from OpenAI. After installing it, return here and select Check again.",
+  },
+  "codex-cli": {
+    label: "Codex CLI",
+    ready: "A terminal will open in this project with the EAI first request. Complete OpenAI sign-in or folder trust if asked.",
+    notInstalled: "Install Codex CLI from OpenAI's official page. After installing it, return here and select Check again.",
+  },
+  "grok-bot": {
+    label: "Grok Bot",
+    ready: "Grok Bot will open for cloud Bot chat, review, and approvals. It does not automatically open this local project; choose Grok Build for local coding.",
+    notInstalled: "Download Grok Bot for macOS, Windows, or Linux from xAI's official page. It is a cloud Bot desktop client, not the Grok Build CLI; after installing it, return here and select Check again.",
+  },
+  "grok-cli": {
+    label: "Grok Build",
+    ready: "A terminal will open in this project. Current Grok Build releases receive the EAI first request as the documented interactive prompt; otherwise enter it after startup. Complete xAI sign-in or folder trust if asked.",
+    notInstalled: "Install Grok Build from xAI's official page. After installing it, return here and select Check again.",
+  },
 };
+
+function journeyStatusLabel(state) {
+  return { pending: "Waiting", active: "In progress", done: "Ready", error: "Needs attention" }[state] || "Waiting";
+}
+
+function renderJourneyStages() {
+  if (!setupStages) return;
+  const openStages = new Set(
+    [...setupStages.querySelectorAll("details[open]")].map((details) => details.dataset.stage),
+  );
+  setupStages.replaceChildren();
+  for (const [index, stage] of journeyStages.entries()) {
+    const value = journeyState.get(stage.id);
+    const details = document.createElement("details");
+    details.className = "setup-stage";
+    details.dataset.stage = stage.id;
+    details.dataset.state = value.state;
+    details.open = openStages.has(stage.id)
+      || (stage.id === currentJourneyStageId && ["active", "error"].includes(value.state));
+    const summary = document.createElement("summary");
+    const number = document.createElement("span");
+    number.className = "setup-stage-number";
+    number.textContent = String(index + 1);
+    const name = document.createElement("span");
+    name.className = "setup-stage-name";
+    name.textContent = stage.label;
+    const status = document.createElement("span");
+    status.className = "setup-stage-status";
+    status.textContent = journeyStatusLabel(value.state);
+    const detail = document.createElement("p");
+    detail.className = "setup-stage-detail";
+    detail.textContent = value.detail;
+    summary.append(number, name, status);
+    details.append(summary, detail);
+    setupStages.append(details);
+  }
+  const currentIndex = Math.max(0, journeyStages.findIndex((stage) => stage.id === currentJourneyStageId));
+  if (activityStep) activityStep.textContent = `Step ${currentIndex + 1} of ${journeyStages.length}`;
+}
+
+function setJourneyStage(stageId, state, detail) {
+  if (!journeyState.has(stageId)) return;
+  if (["active", "error"].includes(state)) {
+    const targetIndex = journeyStages.findIndex((stage) => stage.id === stageId);
+    for (const [otherId, otherValue] of journeyState.entries()) {
+      if (otherId === stageId || otherValue.state !== "active") continue;
+      const otherIndex = journeyStages.findIndex((stage) => stage.id === otherId);
+      journeyState.set(otherId, {
+        ...otherValue,
+        state: otherIndex < targetIndex ? "done" : "pending",
+      });
+    }
+  }
+  const current = journeyState.get(stageId);
+  journeyState.set(stageId, { state: state || current.state, detail: detail || current.detail });
+  if (["active", "error"].includes(state)) currentJourneyStageId = stageId;
+  renderJourneyStages();
+}
+
+function journeyStageForActivity(title) {
+  return EAIWizard.journeyStageForActivity(activeBootstrapStep, title);
+}
+
+function syncJourneyActivity(title, detail, active, phase) {
+  const stageId = journeyStageForActivity(title);
+  if (!stageId) return;
+  if (phase === "Error") setJourneyStage(stageId, "error", detail);
+  else if (active) setJourneyStage(stageId, "active", detail);
+  else setJourneyStage(stageId, null, detail);
+}
+
+function recordSafeSummary(step, detail) {
+  const summaryKey = `${step}:${detail}`;
+  if (activitySummaryKeys.has(summaryKey)) return;
+  activitySummaryKeys.add(summaryKey);
+  const stageId = step === "init" ? "app" : step === "login" ? "signin" : step;
+  const label = journeyStages.find((stage) => stage.id === stageId)?.label || stepLabels[step] || "Setup";
+  recordActivityEvent(label, detail, "Update");
+  if (journeyState.has(stageId)) setJourneyStage(stageId, null, detail);
+}
+
+function recordCommandSummaries(step, commandOutput) {
+  for (const detail of EAIWizard.summarizeCommandOutput(commandOutput)) {
+    recordSafeSummary(step, detail);
+  }
+}
 
 function aiSurfaceCopy(surface) {
   return aiSurfaceGuidance[surface?.id] || {
@@ -93,6 +239,13 @@ function aiSurfaceCopy(surface) {
     ready: `${surface?.name || "The AI workspace"} will open with this project. Follow its sign-in or project selection prompts.`,
     notInstalled: `Open the official ${surface?.provider || "provider"} page, install ${surface?.name || "the workspace"}, then return here and select Check again.`,
   };
+}
+
+function aiSurfaceReadyDetail(surface) {
+  if (surface?.launchSupport === "launch-only") return "; opens the app only";
+  if (surface?.launchSupport === "manual-project") return "; connect the project when it opens";
+  if (["project-and-prompt", "project-only"].includes(surface?.launchSupport)) return "; opens this project";
+  return "; verify the project after opening";
 }
 
 function updateAiSurfaceControls(surface) {
@@ -107,6 +260,20 @@ function updateAiSurfaceControls(surface) {
     aiSurfaceNext.hidden = false;
     aiSurfaceNext.textContent = surface.installed ? copy.ready : copy.notInstalled;
   }
+}
+
+function createHarveyBall(surface) {
+  const recommendation = EAIWizard.aiSurfaceRecommendation(surface);
+  const wrapper = document.createElement("span");
+  wrapper.className = "harvey-ball-label";
+  wrapper.setAttribute("aria-label", `Recommendation: ${recommendation.score} of ${recommendation.maximum}, ${recommendation.label}`);
+  wrapper.title = `${recommendation.label}: ${recommendation.score} of ${recommendation.maximum}`;
+  const ball = document.createElement("span");
+  ball.className = "harvey-ball";
+  ball.style.setProperty("--recommendation-score", recommendation.score);
+  ball.setAttribute("aria-hidden", "true");
+  wrapper.append(ball);
+  return { element: wrapper, recommendation };
 }
 
 function formatEta(seconds) {
@@ -162,6 +329,7 @@ function setActivity(title, detail, progress = null, active = true, eta = "", ph
   activity.classList.toggle("complete", progress === 100);
   activity.classList.toggle("error", phase === "Error");
   if (activityLogStatus) activityLogStatus.textContent = phase === "Error" ? "Stopped with error" : active ? "Live updates" : progress === 100 ? "Complete" : "Stopped";
+  syncJourneyActivity(title, detail, active, phase);
   recordActivityEvent(title, detail, phase);
   if (progress === null) {
     activityTrack.removeAttribute("aria-valuenow");
@@ -194,20 +362,8 @@ function refreshActivityHeartbeat() {
     ? `Elapsed ${elapsed}s · Screen updated every second · Waiting for your input`
     : `Elapsed ${elapsed}s · Screen updated every second · Last installer update ${updateAge}`;
   if (waitingForAdmin) {
-    if (elapsed >= 5 && elapsed - activityLastHeartbeatLogAt >= 5) {
-      activityLastHeartbeatLogAt = elapsed;
-      recordActivityEvent("Action needed", "Enter your Mac login password to authorize the Git installation. It is used once and never saved.", "Waiting");
-    }
     activityPhase.textContent = "Action needed";
     return;
-  }
-  if (elapsed >= 5 && elapsed - activityLastHeartbeatLogAt >= 5) {
-    activityLastHeartbeatLogAt = elapsed;
-    recordActivityEvent(
-      "Still working",
-      `${activityTitle.textContent}: ${activityDetail.textContent} (${elapsed}s elapsed; the installer is still being checked)`,
-      "In progress",
-    );
   }
   if (sinceUpdate >= 10 && !activity.classList.contains("complete") && activeBootstrapStep) {
     if (activeBootstrapStep === "git" && /installing git/i.test(activityTitle.textContent)) {
@@ -224,7 +380,6 @@ function startActivityHeartbeat(step) {
   activeBootstrapStep = step;
   activityStartedAt = Date.now();
   activityLastUpdateAt = activityStartedAt;
-  activityLastHeartbeatLogAt = 0;
   refreshActivityHeartbeat();
   activityTicker = setInterval(refreshActivityHeartbeat, 1000);
 }
@@ -266,39 +421,18 @@ function requestMacAdminPassword() {
   });
 }
 
-function renderInstallItems(steps) {
-  installItems.replaceChildren();
-  for (const step of steps) {
-    const item = document.createElement("li");
-    item.className = "install-item";
-    item.dataset.step = step;
-    item.dataset.state = "pending";
-    const name = document.createElement("span");
-    name.textContent = stepLabels[step] || step;
-    const detail = document.createElement("span");
-    detail.className = "install-item-detail";
-    detail.textContent = "Waiting";
-    item.append(name, detail);
-    installItems.append(item);
-  }
-  installItems.hidden = steps.length === 0;
-}
-
-function setInstallItemState(step, state, detailText) {
-  const item = installItems.querySelector(`[data-step="${step}"]`);
-  if (!item) return;
-  item.dataset.state = state;
-  item.lastElementChild.textContent = detailText;
-}
-
 function setDetectionState(report) {
   const tools = new Map(report.tools.map((tool) => [tool.command, tool]));
   const gitReady = Boolean(tools.get("git")?.version);
-  const nodeReady = Boolean(tools.get("node")?.version && tools.get("npm")?.version);
+  const nodeReady = Boolean(
+    tools.get("node")?.version &&
+    tools.get("npm")?.version &&
+    (report.platform !== "windows" || tools.get("windows-runtime")?.version),
+  );
   const eaiReady = Boolean(tools.get("eai")?.version);
-  setInstallItemState("git", gitReady ? "done" : "pending", gitReady ? tools.get("git").version : "Not installed");
-  setInstallItemState("node", nodeReady ? "done" : "pending", nodeReady ? `Node ${tools.get("node").version} / npm ready` : "Not installed");
-  setInstallItemState("eai-cli", eaiReady ? "done" : "pending", eaiReady ? tools.get("eai").version : "Not installed");
+  setJourneyStage("git", gitReady ? "done" : "pending", gitReady ? "Git is already ready." : "Git needs to be installed.");
+  setJourneyStage("node", nodeReady ? "done" : "pending", nodeReady ? "Node.js 24, npm, and required app support are ready." : "Node.js 24, npm, or required app support needs to be installed.");
+  setJourneyStage("eai-cli", eaiReady ? "done" : "pending", eaiReady ? "The EAI CLI is already ready." : "The EAI CLI needs to be installed.");
 }
 
 function phaseForTitle(title) {
@@ -316,8 +450,13 @@ async function listenForBootstrapProgress() {
   window.__eaiBootstrapProgressListener = await eventApi.listen("bootstrap-progress", ({ payload }) => {
     if (!activeBootstrapStep || payload.step !== activeBootstrapStep) return;
     setActivity(payload.title, payload.detail, payload.progress ?? null, true, formatEta(payload.estimatedSeconds), phaseForTitle(payload.title));
-    setInstallItemState(payload.step, /ready|complete/i.test(payload.title) ? "done" : "active", phaseForTitle(payload.title));
   });
+  if (!window.__eaiBootstrapSummaryListener) {
+    window.__eaiBootstrapSummaryListener = await eventApi.listen("bootstrap-summary", ({ payload }) => {
+      if (!payload?.detail) return;
+      recordSafeSummary(payload.step, payload.detail);
+    });
+  }
 }
 
 function showOutput(message, detail = "") {
@@ -365,14 +504,14 @@ function showPreviewState() {
 }
 
 async function detect() {
-  renderInstallItems(prerequisiteSteps);
-  for (const step of prerequisiteSteps) setInstallItemState(step, "active", "Checking");
+  setJourneyStage("computer", "active", "Checking this computer and the required tools.");
   setActivity("Checking this computer", "Checking the required tools.", null, true, "", "Checking");
   startActivityHeartbeat("detect");
   try {
     const report = await invoke("detect_environment");
     if (report.demo) {
       showPreviewState();
+      setJourneyStage("computer", "done", "Computer check complete. Preview mode made no changes.");
       setActivity("Computer check complete", "Preview mode is ready. No changes were made.", 100, false);
       return true;
     }
@@ -380,19 +519,24 @@ async function detect() {
     environmentReport = report;
     setToolState(report);
     setDetectionState(report);
+    setJourneyStage("computer", "done", `${report.platform} check complete.`);
     setActivity("Computer check complete", `${report.platform} is ready. Missing items are shown below.`, 100, false, "", "Complete");
     return true;
   } catch (error) {
     showOutput("Could not inspect this computer.", String(error));
     if (retryInstall) retryInstall.hidden = false;
-    setActivity("Computer check failed", `The computer check could not finish: ${String(error)}`, 0, false, "", "Error");
+    setJourneyStage("computer", "error", "The computer check could not finish.");
+    setActivity("Computer check failed", "The computer check could not finish. Review the guidance below and try again.", 0, false, "", "Error");
     return false;
   } finally {
     stopActivityHeartbeat();
+    if (activeBootstrapStep === "detect") activeBootstrapStep = null;
   }
 }
 
 async function runBootstrapStep(step) {
+  const journeyStep = step === "login" ? "signin" : step;
+  if (journeyState.has(journeyStep)) setJourneyStage(journeyStep, "active", `${stepLabels[step] || "Secure sign-in"} is in progress.`);
   activeBootstrapStep = step;
   await listenForBootstrapProgress();
   startActivityHeartbeat(step);
@@ -402,30 +546,37 @@ async function runBootstrapStep(step) {
     if (step === "git" && environmentReport?.platform === "macos" && !adminPassword) {
       showOutput("Mac approval was cancelled. No tools were changed.", "Next: enter the Mac password and allow installation to retry.");
       setActivity("Git setup cancelled", "No changes were made. Enter the Mac password to retry the Apple Command Line Tools installation.", 0, false, "", "Error");
+      setJourneyStage("git", "error", "Git installation approval was cancelled.");
       return false;
     }
     result = await invoke("run_bootstrap", { step, projectName: null, directory: null, adminPassword, companyTenantId: null });
   } catch (error) {
     showOutput("This setup step could not start.", String(error));
-    setActivity(`${stepLabels[step] || step} setup failed`, `The step could not finish: ${String(error)}`, 0, false, "", "Error");
+    setActivity(`${stepLabels[step] || step} setup failed`, "The step could not finish. Review the guidance below and try again.", 0, false, "", "Error");
+    if (journeyState.has(journeyStep)) setJourneyStage(journeyStep, "error", "This step could not finish.");
     return false;
   } finally {
     stopActivityHeartbeat();
     activeBootstrapStep = null;
   }
-  if (result.output) console.info(result.output);
+  if (result.output) {
+    recordCommandSummaries(step, result.output);
+  }
   if (!result.ok && !result.demo) {
     const message = result.message || "This setup step failed.";
     showOutput(message, result.command ? `Next: ${result.command}` : "");
     setActivity(`${stepLabels[step] || step} setup failed`, message, 0, false, "", "Error");
+    if (journeyState.has(journeyStep)) setJourneyStage(journeyStep, "error", message);
     return false;
   }
+  if (journeyState.has(journeyStep)) setJourneyStage(journeyStep, "done", result.message || `${stepLabels[step] || "This step"} is ready.`);
   return true;
 }
 
 async function installPrerequisites() {
   if (demoMode) {
     showOutput("Preview only: no changes were made to this computer.");
+    for (const step of prerequisiteSteps) setJourneyStage(step, "done", `${stepLabels[step]} will be prepared by the signed installer.`);
     setActivity("Preview only", "The signed desktop app will install only what is missing.", 100, false);
     return true;
   }
@@ -434,29 +585,31 @@ async function installPrerequisites() {
   const toolMap = new Map(environmentReport.tools.map((tool) => [tool.command, tool]));
   const steps = [];
   if (!toolMap.get("git")?.version) steps.push("git");
-  if (!toolMap.get("node")?.version || !toolMap.get("npm")?.version) steps.push("node");
+  if (
+    !toolMap.get("node")?.version ||
+    !toolMap.get("npm")?.version ||
+    (environmentReport.platform === "windows" && !toolMap.get("windows-runtime")?.version)
+  ) steps.push("node");
   if (!toolMap.get("eai")?.version) steps.push("eai-cli");
   if (!steps.length) {
-    installItems.hidden = true;
     wizard.prerequisitesReady = true;
     if (retryInstall) retryInstall.hidden = true;
     showOutput("All prerequisites are ready.");
-    setActivity("Everything is ready", "Git, Node.js, npm, and the EAI CLI are already installed.", 100, false);
+    setActivity("Everything is ready", "Git, Node.js 24, npm, required app support, and the EAI CLI are ready.", 100, false);
+    for (const step of prerequisiteSteps) setJourneyStage(step, "done", `${stepLabels[step]} is ready.`);
     return true;
   }
-  renderInstallItems(steps);
   setActivity("Preparing installation", `${steps.length} prerequisite${steps.length === 1 ? "" : "s"} need attention.`, 0, true, "Preparing");
   for (const [index, step] of steps.entries()) {
     const name = stepLabels[step] || step;
     const start = Math.round((index / steps.length) * 100);
-    setInstallItemState(step, "active", "Starting");
+    setJourneyStage(step, "active", `Installing ${name}.`);
     setActivity(`Installing ${name}`, "Downloading and installing only what is missing. The live status below will show each installer action.", start, true, formatEta(stepEstimates[step]));
     if (!await runBootstrapStep(step)) {
-      setInstallItemState(step, "failed", "Needs attention");
       if (retryInstall) retryInstall.hidden = false;
       return false;
     }
-    setInstallItemState(step, "done", "Ready");
+    setJourneyStage(step, "done", `${name} is ready.`);
     await detect();
     setActivity(`${name} installed`, "Continuing setup.", Math.round(((index + 1) / steps.length) * 100), true, formatEta(Math.max(0, steps.slice(index + 1).reduce((total, item) => total + stepEstimates[item], 0))));
   }
@@ -468,7 +621,7 @@ async function installPrerequisites() {
   } else {
     if (retryInstall) retryInstall.hidden = false;
     showOutput("Some prerequisites still need attention. Try again.");
-    setActivity("Installation needs attention", "Retry the installation step after reviewing the recent activity.", 0, false, "", "Error");
+    setActivity("Installation needs attention", "Review Build summary, then retry the installation step.", 0, false, "", "Error");
     return false;
   }
 }
@@ -498,7 +651,7 @@ async function startSetup() {
 
 async function writeE2eReceipt(failedCheck, message) {
   if (!e2eConfig?.receiptFile) return;
-  const checkOrder = ["prerequisites", "authentication", "tenant", "app", "project"];
+  const checkOrder = ["prerequisites", "authentication", "tenant", "app", "project", "aiHandoff"];
   const failedIndex = failedCheck ? checkOrder.indexOf(failedCheck) : -1;
   const checks = Object.fromEntries(checkOrder.map((check, index) => [
     check,
@@ -508,15 +661,46 @@ async function writeE2eReceipt(failedCheck, message) {
     await invoke("write_e2e_receipt", {
       receiptFile: e2eConfig.receiptFile,
       receipt: {
+        schemaVersion: "eai.setup.e2e-receipt.v1",
         status: failedCheck ? "failed" : "passed",
         message,
         checks,
-        appCreated: checks.app === "passed",
+        appName: e2eConfig.projectName || null,
+        appCreated: e2eAppCreated,
       },
     });
   } catch (error) {
     console.error("Could not write the E2E receipt", error);
   }
+}
+
+async function writeE2eAppCreationCheckpoint(result, appName) {
+  if (!e2eConfig?.receiptFile || result?.app_created !== true) return;
+  if (!e2eConfig.projectName || e2eConfig.projectName !== appName) {
+    throw new Error("The E2E app-creation checkpoint is not bound to the configured test app.");
+  }
+  await invoke("write_e2e_receipt", {
+    receiptFile: e2eConfig.receiptFile,
+    receipt: {
+      schemaVersion: "eai.setup.e2e-app-created.v1",
+      status: "checkpoint",
+      checkpoint: "app-created",
+      message: "The exact release-test app was created; project and AI handoff checks are still pending.",
+      checks: {
+        prerequisites: "passed",
+        authentication: "passed",
+        tenant: "passed",
+        app: "passed",
+        project: "not-run",
+        aiHandoff: "not-run",
+      },
+      appName,
+      appCreated: true,
+      cleanupRequired: true,
+      cleanupRequested: true,
+      recordedAt: new Date().toISOString(),
+    },
+  });
 }
 
 async function runE2eFlow() {
@@ -542,45 +726,66 @@ async function runE2eFlow() {
     return;
   }
   selectedCompanyTenantId = requestedTenant;
-  selectedCompanyAppKey = e2eConfig.appKey || null;
   renderCompanyTenants();
+  if (!await loadCompanyApps(requestedTenant)) {
+    await writeE2eReceipt("app", "Apps could not be loaded for the release-test workspace.");
+    return;
+  }
+  selectedCompanyAppKey = e2eConfig.appKey || null;
+  if (appSelection && selectedCompanyAppKey) appSelection.value = selectedCompanyAppKey;
   if (projectNameInput) projectNameInput.value = e2eConfig.projectName || "eai-release-test";
   const directoryInput = document.querySelector("#project-directory");
   if (directoryInput) directoryInput.value = e2eConfig.directory || "";
   setStep(4);
   const completed = await runInit();
   if (!completed) {
-    await writeE2eReceipt("app", "The EAI app could not be initialised by the desktop bootstrap path.");
+    await writeE2eReceipt(e2eAppCreated ? "project" : "app", "The EAI app could not be initialised by the desktop bootstrap path.");
+    return;
+  }
+  const canProveProjectHandoff = (item) => item?.installed
+    && ["project-and-prompt", "project-only"].includes(item.launchSupport);
+  const surface = aiSurfaceInventory?.surfaces?.find((item) => item.id === selectedAiSurfaceId && canProveProjectHandoff(item))
+    || aiSurfaceInventory?.surfaces?.find(canProveProjectHandoff);
+  if (!surface) {
+    await writeE2eReceipt("aiHandoff", "No installed project-capable AI workspace was available for the release-test handoff.");
+    return;
+  }
+  try {
+    await invoke("start_ai_surface", { directory: createdProjectDirectory, surfaceId: surface.id });
+  } catch (error) {
+    await writeE2eReceipt("aiHandoff", `The AI workspace could not be opened: ${String(error)}`);
     return;
   }
   await writeE2eReceipt(null, "The published installer completed its desktop bootstrap path.");
 }
 
 async function runLogin() {
+  setJourneyStage("signin", "active", "Opening secure browser sign-in.");
   setActivity("Opening secure sign-in", "Your browser will handle EAI authentication. The installer does not see your password.", null);
   const result = await runBootstrapStep("login");
   if (result) {
     showOutput(demoMode ? "Preview only: the signed app will open browser sign-in." : "Browser sign-in completed.");
     if (demoMode || await loadCompanyTenants()) {
+      setJourneyStage("signin", "done", "Secure browser sign-in is complete.");
       setActivity("Sign-in complete", "Your company workspaces are ready. Continue to app setup.", 100, false, "Ready");
       setStep(4);
     }
   } else {
-    setActivity("Sign-in needs attention", "Complete browser sign-in, then try again. See recent activity for the last result.", 0, false, "", "Error");
+    setJourneyStage("signin", "error", "Browser sign-in did not complete.");
+    setActivity("Sign-in needs attention", "Complete browser sign-in, then try again. Build summary shows the last result.", 0, false, "", "Error");
   }
 }
 
 function renderCompanyTenants() {
   if (!companyTenantField || !companyTenantSelect) return;
+  selectedCompanyTenantId = EAIWizard.resolveTenantSelection(companyTenants, selectedCompanyTenantId);
   companyTenantSelect.replaceChildren();
   if (companyTenants.length === 1) {
-    selectedCompanyTenantId = companyTenants[0].id;
     companyTenantField.hidden = true;
-    renderCompanyApps();
+    if (appSelectionField) appSelectionField.hidden = true;
     return;
   }
 
-  selectedCompanyTenantId = companyTenants.find((tenant) => tenant.active)?.id || null;
   const placeholder = document.createElement("option");
   placeholder.value = "";
   placeholder.textContent = "Choose a company workspace";
@@ -595,7 +800,7 @@ function renderCompanyTenants() {
     companyTenantSelect.append(option);
   }
   companyTenantField.hidden = false;
-  renderCompanyApps();
+  if (appSelectionField) appSelectionField.hidden = true;
 }
 
 function selectedCompanyTenant() {
@@ -635,6 +840,44 @@ function renderCompanyApps() {
   setInitButtonBusy(false);
 }
 
+async function loadCompanyApps(tenantId) {
+  if (!tenantId) return true;
+  const tenant = companyTenants.find((item) => item.id === tenantId);
+  if (!tenant) return false;
+  if (tenant.appsLoaded) {
+    if (retryWorkspaces) {
+      retryWorkspaces.hidden = true;
+      retryWorkspaces.textContent = EAIWizard.retryActionLabel("app");
+    }
+    renderCompanyApps();
+    return true;
+  }
+  setActivity("Checking apps", `Loading apps for ${tenant.displayName}.`, null, true, "", "Checking");
+  setJourneyStage("app", "active", "Checking the apps available in the selected company workspace.");
+  try {
+    tenant.apps = await invoke("get_company_apps", { tenantId });
+    tenant.appsLoaded = true;
+    failedAppTenantId = null;
+    if (retryWorkspaces) {
+      retryWorkspaces.hidden = true;
+      retryWorkspaces.textContent = EAIWizard.retryActionLabel("app");
+    }
+    renderCompanyApps();
+    recordActivityEvent("Apps ready", `Apps for ${tenant.displayName} are ready.`, "Ready");
+    return true;
+  } catch (error) {
+    failedAppTenantId = tenantId;
+    const failure = EAIWizard.describeAppFailure(error);
+    showOutput(failure.title, `${failure.detail} ${failure.next} Diagnostic: ${failure.diagnostic}`);
+    setActivity(failure.title, `${failure.detail} ${failure.next}`, 0, false, "", "Error");
+    if (retryWorkspaces) {
+      retryWorkspaces.textContent = EAIWizard.retryActionLabel("app");
+      retryWorkspaces.hidden = !failure.retryable;
+    }
+    return false;
+  }
+}
+
 function selectCompanyApp() {
   selectedCompanyAppKey = appSelection?.value || null;
   if (selectedCompanyAppKey) {
@@ -664,7 +907,10 @@ function selectCompanyApp() {
 
 async function loadCompanyTenants() {
   if (demoMode) return true;
+  failedAppTenantId = null;
+  if (retryWorkspaces) retryWorkspaces.hidden = true;
   setActivity("Checking company workspaces", "Finding where your new app can be created.", null, true, "", "Checking");
+  setJourneyStage("app", "active", "Finding where the new app can be created.");
   try {
     companyTenants = await invoke("get_company_tenants");
     if (!Array.isArray(companyTenants) || companyTenants.length === 0) {
@@ -672,6 +918,7 @@ async function loadCompanyTenants() {
     }
     renderCompanyTenants();
     if (companyTenants.length === 1) {
+      if (!await loadCompanyApps(selectedCompanyTenantId)) return false;
       recordActivityEvent("Workspace ready", `Using ${companyTenants[0].displayName} for this app.`, "Ready");
       return true;
     }
@@ -679,8 +926,13 @@ async function loadCompanyTenants() {
     setActivity("Choose a company workspace", "Select the company workspace that should own this app, then continue.", 100, false, "", "Waiting");
     return true;
   } catch (error) {
-    showOutput("Company workspaces could not be loaded.", String(error));
-    setActivity("Company workspaces need attention", "The app cannot be created until a company workspace is available. Try signing in again.", 0, false, "", "Error");
+    const failure = EAIWizard.describeWorkspaceFailure(error);
+    showOutput(failure.title, `${failure.detail} ${failure.next} Diagnostic: ${failure.diagnostic}`);
+    setActivity(failure.title, `${failure.detail} ${failure.next}`, 0, false, "", "Error");
+    if (retryWorkspaces) {
+      retryWorkspaces.textContent = EAIWizard.retryActionLabel("workspace");
+      retryWorkspaces.hidden = !failure.retryable;
+    }
     return false;
   }
 }
@@ -724,15 +976,20 @@ async function runInit() {
   }
   initInProgress = true;
   setInitButtonBusy(true);
+  setJourneyStage("app", "active", `Creating ${name} and preparing its project files.`);
   setActivity("Creating your EAI app", `Initialising ${name} and fetching the supported Gofer assets.`, null);
+  await listenForBootstrapProgress();
   startActivityHeartbeat("init");
   let result;
   try {
     result = await invoke("run_bootstrap", { step: "init", projectName: name, directory: directory || null, companyTenantId: selectedCompanyTenantId, appKey: selectedCompanyAppKey });
+    e2eAppCreated = Boolean(result?.app_created);
+    await writeE2eAppCreationCheckpoint(result, name);
   } catch (error) {
     const failure = EAIWizard.describeInitFailure(error, environmentReport?.platform);
     showOutput(failure.title, `${failure.detail} Next: ${failure.next}`);
     setActivity(failure.title, failure.detail, 0, false, "", "Error");
+    setJourneyStage("app", "error", failure.detail);
     return false;
   } finally {
     stopActivityHeartbeat();
@@ -740,10 +997,18 @@ async function runInit() {
     initInProgress = false;
     setInitButtonBusy(false);
   }
+  if (result?.output) {
+    recordCommandSummaries("init", result.output);
+  }
+  if (result?.project_directory) {
+    createdProjectDirectory = result.project_directory;
+    projectPath = result.project_path || result.project_directory;
+  }
   if (!result.ok && !result.demo) {
     const failure = EAIWizard.describeInitFailure(result.message, environmentReport?.platform);
-    showOutput(failure.title, `Next: ${failure.next}`);
+    showOutput(failure.title, `${failure.detail} Next: ${failure.next}`);
     setActivity(failure.title, failure.detail, 0, false, "", "Error");
+    setJourneyStage("app", "error", failure.detail);
     return false;
   }
   completeMessage.textContent = result.demo
@@ -760,6 +1025,8 @@ async function runInit() {
     completeLocation.hidden = !projectPath;
   }
   if (openProjectButton) openProjectButton.hidden = !projectPath || demoMode;
+  setJourneyStage("app", "done", "The EAI app and its project files are ready.");
+  setJourneyStage("ai", "active", "Checking which AI workspaces can open this project.");
   setStep(5);
   setActivity("Setup complete", "Your EAI app and developer tools are ready.", 100, false);
   showOutput("Setup complete.");
@@ -788,12 +1055,17 @@ function renderAiSurfaces() {
     name.textContent = aiSurfaceCopy(surface).label;
     const detail = document.createElement("small");
     detail.textContent = surface.installed
-      ? `${surface.provider} · Ready${surface.launchSupport === "manual-project" ? "; connect the project when it opens" : "; opens this project"}`
+      ? `${surface.provider} · Ready${aiSurfaceReadyDetail(surface)}`
       : `${surface.provider} · Not installed`;
     copy.append(name, detail);
     const badge = document.createElement("span");
     badge.className = "surface-badge";
-    badge.textContent = surface.recommended ? "Recommended" : surface.installed ? "Ready" : "Official download";
+    const { element: harveyBall, recommendation } = createHarveyBall(surface);
+    const badgeText = document.createElement("span");
+    badgeText.textContent = recommendation.score === recommendation.maximum
+      ? "Recommended"
+      : surface.installed ? "Ready" : "Official download";
+    badge.append(harveyBall, badgeText);
     row.append(input, copy, badge);
     aiSurfaceOptions.append(row);
   }
@@ -805,9 +1077,15 @@ function renderAiSurfaces() {
   updateAiSurfaceControls(selected);
   const readyCount = aiSurfaceInventory.surfaces.filter((surface) => surface.installed).length;
   aiSurfaceStatus.innerHTML = readyCount
-    ? `<strong>${readyCount} AI workspace${readyCount === 1 ? " is" : "s are"} ready</strong><p>Choose one below. EAI will open the project and explain the next step.</p>`
-    : "<strong>Choose an AI workspace</strong><p>GitHub Copilot, Claude, Codex, and Grok can work with your EAI project. Install one only if you need it.</p>";
+    ? `<strong>${readyCount} AI workspace${readyCount === 1 ? " is" : "s are"} ready</strong><p>Choose one below. EAI will open it and explain its project support.</p>`
+    : "<strong>Choose an AI workspace</strong><p>Google Antigravity 2.0, GitHub Copilot, Claude, Codex, and Grok Build can work with your EAI project. Install one only if you need it.</p>";
 }
+
+recommendationHelp?.addEventListener("click", () => recommendationDialog?.showModal());
+recommendationClose?.addEventListener("click", () => recommendationDialog?.close());
+recommendationDialog?.addEventListener("click", (event) => {
+  if (event.target === recommendationDialog) recommendationDialog.close();
+});
 
 async function loadAiSurfaces() {
   if (!createdProjectDirectory) return false;
@@ -818,20 +1096,28 @@ async function loadAiSurfaces() {
         preferredSurface: null,
         recommendedSurface: "vscode-copilot",
         surfaces: [
-          { id: "vscode-copilot", name: "GitHub Copilot in VS Code", provider: "GitHub", launchSupport: "project-and-prompt", installed: false, recommended: true },
-          { id: "copilot-cli", name: "GitHub Copilot CLI", provider: "GitHub", launchSupport: "project-and-prompt", installed: false, recommended: false },
-          { id: "copilot-desktop", name: "GitHub Copilot app", provider: "GitHub", launchSupport: "manual-project", installed: false, recommended: false },
-          { id: "claude-desktop", name: "Claude Desktop", provider: "Anthropic", launchSupport: "manual-project", installed: false, recommended: false },
-          { id: "codex-desktop", name: "Codex Desktop", provider: "OpenAI", launchSupport: "project-only", installed: false, recommended: false },
-          { id: "grok-cli", name: "Grok Build", provider: "xAI", launchSupport: "project-and-prompt", installed: false, recommended: false },
+          { id: "vscode-copilot", name: "GitHub Copilot in VS Code", provider: "GitHub", kind: "editor", launchSupport: "project-and-prompt", installed: false, recommended: true },
+          { id: "copilot-desktop", name: "GitHub Copilot app", provider: "GitHub", kind: "desktop", launchSupport: "manual-project", installed: false, recommended: false },
+          { id: "antigravity-desktop", name: "Google Antigravity 2.0", provider: "Google", kind: "desktop", launchSupport: "manual-project", installed: false, recommended: false },
+          { id: "claude-desktop", name: "Claude Desktop", provider: "Anthropic", kind: "desktop", launchSupport: "project-and-prompt", installed: false, recommended: false },
+          { id: "codex-desktop", name: "ChatGPT desktop (Codex)", provider: "OpenAI", kind: "desktop", launchSupport: "manual-project", installed: false, recommended: false },
+          { id: "grok-bot", name: "Grok Bot", provider: "xAI", kind: "desktop", launchSupport: "launch-only", installed: false, recommended: false },
+          { id: "copilot-cli", name: "GitHub Copilot CLI", provider: "GitHub", kind: "cli", launchSupport: "project-and-prompt", installed: false, recommended: false },
+          { id: "antigravity-cli", name: "Antigravity CLI (agy)", provider: "Google", kind: "cli", launchSupport: "project-only", installed: false, recommended: false },
+          { id: "claude-cli", name: "Claude Code", provider: "Anthropic", kind: "cli", launchSupport: "project-and-prompt", installed: false, recommended: false },
+          { id: "codex-cli", name: "Codex CLI", provider: "OpenAI", kind: "cli", launchSupport: "project-and-prompt", installed: false, recommended: false },
+          { id: "grok-cli", name: "Grok Build", provider: "xAI", kind: "cli", launchSupport: "project-and-prompt", installed: false, recommended: false },
         ],
       };
     }
     renderAiSurfaces();
+    const readyCount = aiSurfaceInventory.surfaces.filter((surface) => surface.installed).length;
+    setJourneyStage("ai", "active", readyCount ? `${readyCount} AI workspace${readyCount === 1 ? " is" : "s are"} ready to open.` : "Choose an AI workspace to install.");
     return true;
   } catch (error) {
     aiSurfaceStatus.innerHTML = "<strong>AI workspace check needs attention</strong><p>You can close setup and run <code>eai start</code> from the project folder.</p>";
     showOutput("Your app is ready, but AI workspace detection did not finish.", String(error));
+    setJourneyStage("ai", "error", "AI workspace detection did not finish. The app remains ready.");
     return false;
   }
 }
@@ -865,15 +1151,25 @@ async function startAiSurface() {
       await invoke("install_ai_surface", { surfaceId: surface.id });
       setActivity("Official download opened", copy.notInstalled, 100, false, "", "Ready");
       showOutput(`The official ${surface.provider} page opened.`, "Install the selected workspace, return here, and choose Check again. EAI does not sign in to an AI provider for you.");
+      setJourneyStage("ai", "active", `The official ${surface.provider} download is open. Install it, then check again.`);
       return;
     }
     const result = await invoke("start_ai_surface", { directory: createdProjectDirectory, surfaceId: surface.id });
     setActivity(`${copy.label} opened`, copy.ready, 100, false, "", "Ready");
-    completeMessage.textContent = `${copy.label} is open. Complete its sign-in or project connection step to start building.`;
+    completeMessage.textContent = EAIWizard.aiSurfaceCompletionMessage(surface, copy.label);
     startAiButton.textContent = `Open ${copy.label} again`;
     showOutput(`${copy.label} opened.`, copy.ready);
+    const journeyDetail = surface.launchSupport === "launch-only"
+      ? `${copy.label} opened without a local-project handoff.`
+      : surface.launchSupport === "manual-project"
+        ? `${copy.label} opened; connect the project in the app.`
+        : ["project-and-prompt", "project-only"].includes(surface.launchSupport)
+          ? `${copy.label} opened with this project.`
+          : `${copy.label} opened; verify the project before continuing.`;
+    setJourneyStage("ai", "done", journeyDetail);
   } catch (error) {
-    setActivity("AI workspace could not start", String(error), 0, false, "", "Error");
+    setJourneyStage("ai", "error", "The selected AI workspace could not be opened.");
+    setActivity("AI workspace could not start", "The selected AI workspace could not be opened. Your app remains ready.", 0, false, "", "Error");
     showOutput("Your app is safe and complete.", `Run eai start from ${createdProjectDirectory} or try another workspace.`);
   } finally {
     startAiButton.disabled = false;
@@ -885,6 +1181,27 @@ async function runAction(action) {
   if (action === "detect") return detect();
   if (action === "install-all") return installPrerequisites();
   if (action === "login") return runLogin();
+  if (action === "retry-workspaces") {
+    const retryingApps = Boolean(failedAppTenantId);
+    const ready = retryingApps
+      ? await loadCompanyApps(failedAppTenantId)
+      : await loadCompanyTenants();
+    if (ready) {
+      if (retryWorkspaces) {
+        retryWorkspaces.hidden = true;
+        retryWorkspaces.textContent = EAIWizard.retryActionLabel("app");
+      }
+      if (!EAIWizard.workspaceRetryCanContinue(retryingApps, companyTenants.length, selectedCompanyTenantId)) {
+        showOutput("Company workspaces are ready.", "Choose the company workspace that should own this app.");
+        setStep(4);
+        return;
+      }
+      setActivity("EAI is ready", "Continue setting up your app.", 100, false, "", "Ready");
+      showOutput("EAI is ready.", "Continue setting up your app.");
+      setStep(4);
+    }
+    return;
+  }
   if (action === "signup") return runSignup();
   if (action === "choose-folder") {
     const dialog = window.__TAURI__?.dialog;
@@ -907,9 +1224,9 @@ async function runAction(action) {
   }
   if (action === "select-company-tenant") {
     selectedCompanyTenantId = companyTenantSelect?.value || null;
-    renderCompanyApps();
     if (selectedCompanyTenantId) {
       const tenant = companyTenants.find((item) => item.id === selectedCompanyTenantId);
+      if (!await loadCompanyApps(selectedCompanyTenantId)) return;
       setActivity("Company workspace selected", `${tenant?.displayName || "Company workspace"} will own this app.`, 100, false, "", "Ready");
     }
     return;
@@ -948,6 +1265,7 @@ for (const button of document.querySelectorAll("[data-action]")) {
 companyTenantSelect?.addEventListener("change", () => runAction("select-company-tenant"));
 appSelection?.addEventListener("change", () => runAction("select-company-app"));
 
+renderJourneyStages();
 setStep(0);
 // The installer should make the first decision itself. The button remains as
 // an accessible fallback, but normal users only see the permission prompt when
