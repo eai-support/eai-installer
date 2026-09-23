@@ -1030,13 +1030,17 @@ assert.match(windowsFocusSource, /Microsoft[.]WindowsTerminal_/);
 assert.match(windowsFocusSource, /ShowWindowAsync\(\$terminal[.]MainWindowHandle, 6\)/);
 assert.match(windowsFocusSource, /SetForegroundWindow\(\$window\)/);
 assert.match(windowsFocusSource, /GetForegroundWindow\(\) -ne \$window/);
-assert.match(windowsFocusSource, /grep -Fqx 'EAI_SETUP_RECEIPT_BOUND_WINDOW_READY'/);
+assert.match(windowsFocusSource, /grep -Fqx "\$expected_receipt"/);
 assert.match(windowsFocusSource, /Add-Type -AssemblyName UIAutomationClient/);
 assert.match(windowsFocusSource, /UI Automation action is not approved/);
 assert.match(windowsFocusSource, /InvokePattern\]::Pattern/);
 assert.match(windowsFocusSource, /\[string\]::Join\('[.]', \$element[.]GetRuntimeId\(\)\)/);
 assert.match(windowsFocusSource, /\$uniqueMatches\[\$runtimeKey\] = \$element/);
+assert.match(windowsFocusSource, /AutomationIdProperty, 'setupStart'/);
+assert.match(windowsFocusSource, /EAI_SETUP_RECEIPT_BOUND_BUTTON_INVOKED/);
+assert.match(windowsFocusSource, /EAI_SETUP_RECEIPT_BOUND_BUTTON_READY/);
 assert.match(windowsGuestAdapterSource, /invoke_receipt_bound_eai_setup_button\(\)/);
+assert.match(windowsGuestAdapterSource, /for probe in \$\(seq 1 30\); do/);
 assert.doesNotMatch(windowsFocusSource, /Stop-Process|[.]Kill\(|CloseMainWindow|Remove-Item/);
 assert.ok(
   windowsScreenHasSource.indexOf("focus_receipt_bound_eai_setup_window")

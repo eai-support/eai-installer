@@ -379,6 +379,9 @@ $conditions = @(
     [System.Windows.Automation.AutomationElement]::NameProperty, $buttonName
   ),
   [System.Windows.Automation.PropertyCondition]::new(
+    [System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'setupStart'
+  ),
+  [System.Windows.Automation.PropertyCondition]::new(
     [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
     [System.Windows.Automation.ControlType]::Button
   )
@@ -414,8 +417,16 @@ $process.Dispose()
 [Console]::Out.WriteLine('EAI_SETUP_RECEIPT_BOUND_BUTTON_READY')
 POWERSHELL
   )" || return 1
+  local expected_receipt='EAI_SETUP_RECEIPT_BOUND_WINDOW_READY'
+  if [[ -n "$button_name" ]]; then
+    if [[ "$invoke_button" == 1 ]]; then
+      expected_receipt='EAI_SETUP_RECEIPT_BOUND_BUTTON_INVOKED'
+    else
+      expected_receipt='EAI_SETUP_RECEIPT_BOUND_BUTTON_READY'
+    fi
+  fi
   if printf '%s\n' "$output" | /usr/bin/tr -d '\r' \
-    | /usr/bin/grep -Fqx 'EAI_SETUP_RECEIPT_BOUND_WINDOW_READY'; then
+    | /usr/bin/grep -Fqx "$expected_receipt"; then
     printf '%s\n' "$output"
     return 0
   fi
@@ -424,10 +435,17 @@ POWERSHELL
 
 invoke_receipt_bound_eai_setup_button() {
   local button_name="$1"
-  local output=""
-  output="$(focus_receipt_bound_eai_setup_window "$button_name" 1)" || return 1
-  printf '%s\n' "$output" | /usr/bin/tr -d '\r' \
-    | /usr/bin/grep -Fqx 'EAI_SETUP_RECEIPT_BOUND_BUTTON_INVOKED'
+  local probe=0
+  # Probe until the exact app-owned primary control has settled. A probe never
+  # invokes UI and a failed probe is therefore safe to retry.
+  for probe in $(seq 1 30); do
+    if focus_receipt_bound_eai_setup_window "$button_name" 0 >/dev/null; then
+      focus_receipt_bound_eai_setup_window "$button_name" 1 >/dev/null
+      return $?
+    fi
+    sleep 1
+  done
+  return 1
 }
 
 screen_has() {
