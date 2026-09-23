@@ -6045,11 +6045,16 @@ while (( SECONDS < prerequisite_deadline )); do
     [[ "$liveness_failures" -lt 5 ]] || guest_test_fail "The released Windows app exited before prerequisite installation completed."
   fi
   versions="$(guest_versions_json || true)"
-  if [[ -n "$versions" ]] \
-    && versions_satisfy_contract "$versions" \
-    && screen_has "This Windows PC is ready"; then
-    ready_reads=$((ready_reads + 1))
-    [[ "$ready_reads" -ge 2 ]] && break
+  if [[ -n "$versions" ]] && versions_satisfy_contract "$versions"; then
+    # The consent monitor has covered the privileged prerequisite period.
+    # Stop it before using the same capture path for readiness. Concurrent
+    # captures can starve OCR even when the completed UI is visibly present.
+    stop_prerequisite_uac_watcher \
+      || guest_test_fail "The Windows unexpected-consent-UI watcher did not close cleanly."
+    if screen_has "This Windows PC is ready"; then
+      ready_reads=$((ready_reads + 1))
+      [[ "$ready_reads" -ge 2 ]] && break
+    fi
   else
     ready_reads=0
   fi
@@ -6060,13 +6065,6 @@ while (( SECONDS < prerequisite_deadline )); do
   sleep 5
 done
 [[ "$ready_reads" -ge 2 ]] || guest_test_fail "The Windows installer did not reach stable prerequisite readiness within 20 minutes."
-
-# The visual consent monitor uses the same host screen-capture path as the
-# completion assertion below.  It has protected the actual prerequisite work;
-# stop it once readiness is proven so the final UI transition is observed by a
-# single deterministic reader.
-stop_prerequisite_uac_watcher \
-  || guest_test_fail "The Windows unexpected-consent-UI watcher did not close cleanly."
 
 stage normal-welcome-continue
 # The readiness pass reuses the same DOM button that previously received
