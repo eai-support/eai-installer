@@ -8,7 +8,7 @@ windows_hidden_bounded_prlctl() {
   local prlctl_bin=""
   local prlctl_pid=""
   local watchdog_pid=""
-  local status=0
+  local prlctl_exit_status=0
   shift
   [[ "$timeout_seconds" =~ ^[1-9][0-9]*$ ]] || return 2
   prlctl_bin="${EAI_PARALLELS_PRLCTL:-/Applications/Parallels Desktop.app/Contents/MacOS/prlctl}"
@@ -26,13 +26,13 @@ windows_hidden_bounded_prlctl() {
   ) </dev/null >/dev/null 2>&1 &
   watchdog_pid=$!
   if wait "$prlctl_pid"; then
-    status=0
+    prlctl_exit_status=0
   else
-    status=$?
+    prlctl_exit_status=$?
   fi
   kill "$watchdog_pid" 2>/dev/null || true
   wait "$watchdog_pid" 2>/dev/null || true
-  return "$status"
+  return "$prlctl_exit_status"
 }
 
 windows_hidden_is_transient_parallels_result_failure() {
