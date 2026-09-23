@@ -13,7 +13,7 @@ source "$ROOT/scripts/windows-readonly-powershell.sh"
 source "$ROOT/scripts/windows-hidden-current-user.sh"
 
 vm_name="${EAI_WINDOWS_VM_NAME:-Windows 11}"
-snapshot_id="${EAI_WINDOWS_SNAPSHOT_ID:-48921a89-eb72-430e-b4bf-a7b70d8bfaab}"
+snapshot_id="${EAI_WINDOWS_SNAPSHOT_ID:-30c9542d-f67b-4541-b4be-ca5e83d35b55}"
 if [[ "${1:-}" == "--preflight" ]]; then
   [[ "$#" -eq 1 ]] || guest_test_fail "The Windows adapter preflight accepts no additional arguments."
   exec "$ROOT/scripts/vm-adapter-preflight.sh" windows "$vm_name" "$snapshot_id"

@@ -507,7 +507,7 @@ assert.doesNotMatch(guestTestLibrarySource, /vm === "ubuntu" \|\| aiHandoffScree
 
 assert.match(runnerSource, /windows: "eai-setup-windows-arm64[.]exe"/);
 assert.match(windowsGuestAdapterSource, /vm_name="\$\{EAI_WINDOWS_VM_NAME:-Windows 11\}"/);
-assert.match(windowsGuestAdapterSource, /snapshot_id="\$\{EAI_WINDOWS_SNAPSHOT_ID:-48921a89-eb72-430e-b4bf-a7b70d8bfaab\}"/);
+assert.match(windowsGuestAdapterSource, /snapshot_id="\$\{EAI_WINDOWS_SNAPSHOT_ID:-30c9542d-f67b-4541-b4be-ca5e83d35b55\}"/);
 assert.match(windowsGuestAdapterSource, /guest_user="\$\{EAI_WINDOWS_GUEST_USER:-eai-douglasross\}"/);
 assert.match(windowsGuestAdapterSource, /login-windows-guest[.]sh/);
 assert.match(windowsGuestAdapterSource, /for baseline_attempt in 1 2 3; do[\s\S]*The Windows clean-snapshot preflight returned no guest data/);
