@@ -677,7 +677,8 @@ guest_ps_run() {
       printf '%s\n' "$output"
       return 0
     fi
-    if is_parallels_session_open_failure "$output"; then
+    if is_parallels_session_open_failure "$output" \
+      || is_parallels_ambiguous_launch_result_failure "$status" "$output"; then
       if [[ "$attempt" -ge "$max_attempts" ]]; then
         break
       fi
@@ -716,7 +717,8 @@ guest_ps() {
       printf '%s\n' "$output"
       return 0
     fi
-    if is_parallels_session_open_failure "$output"; then
+    if is_parallels_session_open_failure "$output" \
+      || is_parallels_ambiguous_launch_result_failure "$status" "$output"; then
       if [[ "$attempt" -ge "$max_attempts" ]]; then
         break
       fi
@@ -760,7 +762,8 @@ guest_system_ps_run() {
       printf '%s\n' "$output"
       return 0
     fi
-    if is_parallels_session_open_failure "$output"; then
+    if is_parallels_session_open_failure "$output" \
+      || is_parallels_ambiguous_launch_result_failure "$status" "$output"; then
       [[ "$attempt" -lt "$max_attempts" ]] || break
       sleep 2
       continue
@@ -790,7 +793,8 @@ guest_system_ps() {
       printf '%s\n' "$output"
       return 0
     fi
-    if is_parallels_session_open_failure "$output"; then
+    if is_parallels_session_open_failure "$output" \
+      || is_parallels_ambiguous_launch_result_failure "$status" "$output"; then
       [[ "$attempt" -lt 5 ]] || break
       sleep 2
       continue

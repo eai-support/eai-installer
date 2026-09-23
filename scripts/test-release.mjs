@@ -632,6 +632,8 @@ assert.match(windowsPayloadPowerShellSource, /printf '%s\\n' "\$script" \| windo
 assert.doesNotMatch(windowsPayloadPowerShellSource, /EncodedCommand|local encoded=|printf '%s' "\$stdin_payload" \| prlctl/);
 assert.match(windowsStreamedPowerShellSource, /printf '%s\\n' "\$script" \| windows_hidden_current_user_ps "\$vm_name" ""/);
 assert.doesNotMatch(windowsStreamedPowerShellSource, /EncodedCommand/);
+assert.match(windowsSystemPayloadPowerShellSource, /is_parallels_ambiguous_launch_result_failure "\$status" "\$output"/);
+assert.match(windowsSystemPowerShellSource, /is_parallels_ambiguous_launch_result_failure "\$status" "\$output"/);
 assert.match(windowsHiddenCurrentUserSource, /payload="\$\(printf '%s' "\$stdin_payload" \| \/usr\/bin\/base64 \| \/usr\/bin\/tr -d '\\n'\)"/);
 assert.match(windowsHiddenCurrentUserSource, /\[Console\]::SetIn\(\[IO[.]StringReader\]::new\(\$__eaiInput\)\)/);
 assert.match(windowsHiddenCurrentUserSource, /windows_hidden_bounded_prlctl "\$wscript_timeout_seconds" exec "\$vm_name" --current-user wscript[.]exe "\$vbs_path"/);
