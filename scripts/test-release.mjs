@@ -2114,6 +2114,7 @@ assert.match(vmAdapterPreflightSource, /"\$prlctl_bin" list "\$vm_name" --info/)
 assert.match(vmAdapterPreflightSource, /"\$prlctl_bin" snapshot-list "\$vm_name"/);
 assert.match(windowsNormalLaunchSection, /launch_guest_app_detached normal "" "\$executable_hash"/);
 assert.match(windowsNormalLaunchSection, /validate_guest_app_launch "\$guest_normal_pid"/);
+assert.match(windowsGuestAdapterSource, /AllowSetForegroundWindow\(\[uint32\]::MaxValue\)/);
 assert.match(windowsNormalLaunchSection, /cleanup_detached_guest_app normal/);
 assert.doesNotMatch(windowsNormalLaunchSection, /EAI_SETUP_E2E(?:_|\s*=)/);
 assert.match(windowsNormalLaunchSection, /versions_satisfy_contract "\$versions"/);
