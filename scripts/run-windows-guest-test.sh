@@ -68,7 +68,11 @@ uac_policy_run_binding=""
 
 stage() {
   phase="$1"
-  printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$phase"
+  local timestamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  printf '%s %s\n' "$timestamp" "$phase"
+  if [[ -n "${EAI_VM_RESULT_FILE:-}" ]]; then
+    printf '%s\n' "$timestamp $phase" >"$(dirname "$EAI_VM_RESULT_FILE")/windows-stage.txt"
+  fi
 }
 
 input() {
@@ -6355,8 +6359,10 @@ for _ in $(seq 1 30); do
 done
 [[ "$lets_go_visible" == 1 ]] \
   || guest_test_fail "The released Windows app did not show Let’s go after prerequisite readiness."
+stage normal-welcome-continue-ready
 invoke_receipt_bound_eai_setup_button "Let’s go" \
   || guest_test_fail "The receipt-bound Let’s go action could not be invoked."
+stage normal-signin-wait
 signin_visible=0
 for _ in $(seq 1 30); do
   if screen_has "Sign in with browser"; then
