@@ -6020,6 +6020,7 @@ done
 
 stage normal-welcome-start
 welcome_started=0
+welcome_advanced=0
 for _ in $(seq 1 30); do
   if screen_has "Get started"; then
     # screen_has proves the receipt-bound EAI Setup window is foregrounded
@@ -6033,6 +6034,20 @@ for _ in $(seq 1 30); do
 done
 [[ "$welcome_started" == 1 ]] \
   || guest_test_fail "The released Windows app did not show its Get started welcome action."
+
+# A successful send-key event only proves that Parallels accepted the input.
+# Require the receipt-bound UI to leave the welcome state before accepting the
+# prerequisite loop; otherwise an unfocused button can turn into a misleading
+# twenty-minute readiness timeout.
+for _ in $(seq 1 30); do
+  if screen_has "Checking this Windows PC"; then
+    welcome_advanced=1
+    break
+  fi
+  sleep 1
+done
+[[ "$welcome_advanced" == 1 ]] \
+  || guest_test_fail "The released Windows app did not begin its device check after Get started."
 
 stage prerequisite-install
 versions=""
