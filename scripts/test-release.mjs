@@ -511,7 +511,8 @@ assert.match(windowsGuestAdapterSource, /snapshot_id="\$\{EAI_WINDOWS_SNAPSHOT_I
 assert.match(windowsGuestAdapterSource, /guest_user="\$\{EAI_WINDOWS_GUEST_USER:-eai-douglasross\}"/);
 assert.match(windowsGuestAdapterSource, /login-windows-guest[.]sh/);
 assert.match(windowsGuestAdapterSource, /for baseline_attempt in 1 2 3; do[\s\S]*The Windows clean-snapshot preflight returned no guest data/);
-assert.match(windowsGuestAdapterSource, /stage normal-welcome-continue[\s\S]*screen_has "Let's go"[\s\S]*input key enter[\s\S]*If a platform WebView cleared the retained button focus[\s\S]*input key tab/);
+assert.match(windowsGuestAdapterSource, /stage normal-welcome-continue[\s\S]*screen_has "Let's go"[\s\S]*invoke_receipt_bound_eai_setup_button "Let's go"/);
+assert.match(windowsGuestAdapterSource, /Get started[\s\S]*invoke_receipt_bound_eai_setup_button "Get started"/);
 assert.match(windowsGuestAdapterSource, /for portal_login_attempt in 1 2 3; do/);
 assert.match(windowsGuestAdapterSource, /WINDOWS_PORTAL_LOGIN_RETRY attempt=%s/);
 assert.match(windowsGuestAdapterSource, /Microsoft rejected the configured release-test account credentials[.][\s\S]*break/);
@@ -1029,7 +1030,11 @@ assert.match(windowsFocusSource, /Microsoft[.]WindowsTerminal_/);
 assert.match(windowsFocusSource, /ShowWindowAsync\(\$terminal[.]MainWindowHandle, 6\)/);
 assert.match(windowsFocusSource, /SetForegroundWindow\(\$window\)/);
 assert.match(windowsFocusSource, /GetForegroundWindow\(\) -ne \$window/);
-assert.match(windowsFocusSource, /grep -Fqx 'EAI_SETUP_RECEIPT_BOUND_WINDOW_FOCUSED'/);
+assert.match(windowsFocusSource, /grep -Fqx 'EAI_SETUP_RECEIPT_BOUND_WINDOW_READY'/);
+assert.match(windowsFocusSource, /Add-Type -AssemblyName UIAutomationClient/);
+assert.match(windowsFocusSource, /UI Automation action is not approved/);
+assert.match(windowsFocusSource, /InvokePattern\]::Pattern/);
+assert.match(windowsGuestAdapterSource, /invoke_receipt_bound_eai_setup_button\(\)/);
 assert.doesNotMatch(windowsFocusSource, /Stop-Process|[.]Kill\(|CloseMainWindow|Remove-Item/);
 assert.ok(
   windowsScreenHasSource.indexOf("focus_receipt_bound_eai_setup_window")
@@ -2122,7 +2127,8 @@ assert.match(windowsNormalLaunchSection, /versions_satisfy_contract "\$versions"
 assert.match(windowsNormalLaunchSection, /screen_has "Get started"/);
 assert.match(windowsNormalLaunchSection, /screen_has "This Windows PC is ready"/);
 assert.match(windowsNormalLaunchSection, /screen_has "Sign in with browser"/);
-assert.match(windowsNormalLaunchSection, /input key tab[\s\S]*input key enter/);
+assert.match(windowsNormalLaunchSection, /invoke_receipt_bound_eai_setup_button "Get started"/);
+assert.match(windowsNormalLaunchSection, /invoke_receipt_bound_eai_setup_button "Let's go"/);
 assert.doesNotMatch(windowsNormalLaunchSection, /Prerequisites installed successfully/);
 assert.doesNotMatch(windowsNormalLaunchSection, /Sign in to EAI/);
 const windowsVersionsReadyGate = windowsNormalLaunchSection.indexOf('versions_satisfy_contract "$versions"');
