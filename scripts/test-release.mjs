@@ -1297,7 +1297,7 @@ assert.match(windowsHiddenCurrentUserSource, /-InputFormat Text -OutputFormat Te
 assert.match(windowsHiddenCurrentUserSource, /stage_base="\$\{base\}[.]tmp"/);
 assert.match(windowsHiddenCurrentUserSource, /Move-Item -LiteralPath '\$stage_base' -Destination '\$base' -ErrorAction Stop/);
 assert.match(windowsHiddenCurrentUserSource, /EAI_HIDDEN_WORKER_STAGED/);
-assert.match(windowsHiddenCurrentUserSource, /if ! windows_hidden_bounded_prlctl 600 exec "\$vm_name" --current-user wscript[.]exe/);
+assert.match(windowsHiddenCurrentUserSource, /for attempt in 1 2 3; do[\s\S]*windows_hidden_bounded_prlctl 600 exec "\$vm_name" --current-user wscript[.]exe[\s\S]*type "\$status_path"/);
 assert.doesNotMatch(
   windowsHiddenCurrentUserSource,
   /windows_hidden_bounded_prlctl 600 exec "\$vm_name" --current-user wscript[.]exe[^\n]*\|\| true/,

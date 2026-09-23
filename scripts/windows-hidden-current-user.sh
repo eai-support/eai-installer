@@ -152,7 +152,26 @@ windows_hidden_current_user_ps() {
     return 3
   fi
 
-  if ! windows_hidden_bounded_prlctl 600 exec "$vm_name" --current-user wscript.exe "$vbs_path" >/dev/null 2>&1; then
+  local wscript_status=1
+  for attempt in 1 2 3; do
+    if windows_hidden_bounded_prlctl 600 exec "$vm_name" --current-user wscript.exe "$vbs_path" >/dev/null 2>&1; then
+      wscript_status=0
+      break
+    fi
+    # Guest control can lose the synchronous WScript completion result even
+    # though the already-staged hidden worker continues and writes its status.
+    # Trust that receipt when it appears; otherwise retry only this exact
+    # hidden WScript invocation a bounded number of times.
+    status_text="$(windows_hidden_bounded_prlctl 5 exec "$vm_name" cmd.exe /D /Q /C type "$status_path" 2>/dev/null | /usr/bin/tr -d '\r\n' || true)"
+    if [[ "$status_text" =~ ^-?[0-9]+$ ]]; then
+      wscript_status=0
+      break
+    fi
+    if [[ "$attempt" -lt 3 ]]; then
+      sleep 2
+    fi
+  done
+  if [[ "$wscript_status" != 0 ]]; then
     printf '%s\n' "Remove-Item -LiteralPath '$base' -Recurse -Force -ErrorAction SilentlyContinue" \
       | windows_hidden_bounded_prlctl 10 exec "$vm_name" powershell.exe -NoLogo -NoProfile -NonInteractive \
         -InputFormat Text -OutputFormat Text -Command - >/dev/null 2>&1 || true
