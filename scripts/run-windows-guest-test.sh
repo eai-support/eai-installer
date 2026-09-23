@@ -305,7 +305,7 @@ public static class EaiReleaseWindowFocus {
   [DllImport("user32.dll")] public static extern IntPtr SetFocus(IntPtr window);
   [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
   [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
-  [DllImport("user32.dll")] public static extern uint GetCurrentThreadId();
+  [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
   [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint sourceThread, uint targetThread, bool attach);
   [DllImport("user32.dll")] public static extern bool AllowSetForegroundWindow(uint processId);
 }
