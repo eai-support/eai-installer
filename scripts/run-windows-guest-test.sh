@@ -366,10 +366,6 @@ if ([string]::IsNullOrEmpty($buttonName)) {
   [Console]::Out.WriteLine('EAI_SETUP_RECEIPT_BOUND_WINDOW_READY')
   return
 }
-$validButtonName = $buttonName -in @('Get started', 'Let’s go')
-if (-not $validButtonName -or $invokeButton -notin @('0', '1')) {
-  throw 'The EAI Setup UI Automation action is not approved.'
-}
 Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
 $windowElement = [System.Windows.Automation.AutomationElement]::FromHandle($window)
@@ -400,6 +396,10 @@ if ($buttonName.StartsWith('__eai_text__:')) {
   $process.Dispose()
   [Console]::Out.WriteLine('EAI_SETUP_RECEIPT_BOUND_TEXT_READY')
   return
+}
+$validButtonName = $buttonName -in @('Get started', 'Let’s go')
+if (-not $validButtonName -or $invokeButton -notin @('0', '1')) {
+  throw 'The EAI Setup UI Automation action is not approved.'
 }
 $conditions = @(
   [System.Windows.Automation.PropertyCondition]::new(
