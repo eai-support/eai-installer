@@ -6271,7 +6271,9 @@ done
 # prerequisite loop; otherwise an unfocused button can turn into a misleading
 # twenty-minute readiness timeout.
 for _ in $(seq 1 30); do
-  if screen_has "Checking this Windows PC"; then
+  # A restored VM can finish the short checking state between polls. The
+  # completed ready state proves the same post-click transition occurred.
+  if screen_has "Checking this Windows PC" || screen_has "This Windows PC is ready"; then
     welcome_advanced=1
     break
   fi
