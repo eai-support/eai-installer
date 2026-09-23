@@ -374,6 +374,31 @@ $windowElement = [System.Windows.Automation.AutomationElement]::FromHandle($wind
 if ($null -eq $windowElement -or [int]$windowElement.Current.ProcessId -ne $process.Id) {
   throw 'The EAI Setup UI Automation window is not bound to the exact live process.'
 }
+if ($buttonName.StartsWith('__eai_text__:')) {
+  $expectedText = $buttonName.Substring('__eai_text__:'.Length)
+  $approvedTexts = @(
+    'Get started',
+    'Checking this Windows PC',
+    'This Windows PC is ready',
+    "Let's go",
+    'Sign in with browser'
+  )
+  if ($invokeButton -ne '0' -or $expectedText -notin $approvedTexts) {
+    throw 'The EAI Setup UI text probe is not approved.'
+  }
+  $textElement = $windowElement.FindFirst(
+    [System.Windows.Automation.TreeScope]::Descendants,
+    [System.Windows.Automation.PropertyCondition]::new(
+      [System.Windows.Automation.AutomationElement]::NameProperty, $expectedText
+    )
+  )
+  if ($null -eq $textElement -or $textElement.Current.IsOffscreen) {
+    throw 'The receipt-bound EAI Setup window did not expose its approved visible text.'
+  }
+  $process.Dispose()
+  [Console]::Out.WriteLine('EAI_SETUP_RECEIPT_BOUND_TEXT_READY')
+  return
+}
 $conditions = @(
   [System.Windows.Automation.PropertyCondition]::new(
     [System.Windows.Automation.AutomationElement]::NameProperty, $buttonName
@@ -416,7 +441,9 @@ $process.Dispose()
 POWERSHELL
   )" || return 1
   local expected_receipt='EAI_SETUP_RECEIPT_BOUND_WINDOW_READY'
-  if [[ -n "$button_name" ]]; then
+  if [[ "$button_name" == __eai_text__:* ]]; then
+    expected_receipt='EAI_SETUP_RECEIPT_BOUND_TEXT_READY'
+  elif [[ -n "$button_name" ]]; then
     if [[ "$invoke_button" == 1 ]]; then
       expected_receipt='EAI_SETUP_RECEIPT_BOUND_BUTTON_INVOKED'
     else
@@ -450,6 +477,13 @@ screen_has() {
   local pattern="$1"
   local screenshot="$work_dir/screen.png"
   local status=2
+  # The Windows VM can be in Parallels Coherence, where a VM-console capture
+  # omits the visible extracted app window. Prefer the receipt-bound UI tree
+  # for the installer’s approved flow text, and retain image OCR as fallback
+  # for all other evidence (including unexpected UAC dialogs).
+  if focus_receipt_bound_eai_setup_window "__eai_text__:${pattern}" 0 >/dev/null 2>&1; then
+    return 0
+  fi
   focus_receipt_bound_eai_setup_window || return 1
   if prlctl capture "$vm_name" --file "$screenshot" >/dev/null 2>&1; then
     set +e

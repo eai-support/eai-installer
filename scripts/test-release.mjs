@@ -1037,6 +1037,9 @@ assert.match(windowsFocusSource, /InvokePattern\]::Pattern/);
 assert.match(windowsFocusSource, /FindFirst\(/);
 assert.match(windowsFocusSource, /\[string\]::Join\('[.]', \$match[.]GetRuntimeId\(\)\)/);
 assert.match(windowsFocusSource, /AutomationIdProperty, 'setupStart'/);
+assert.match(windowsFocusSource, /EAI_SETUP_RECEIPT_BOUND_TEXT_READY/);
+assert.match(windowsFocusSource, /The EAI Setup UI text probe is not approved/);
+assert.match(windowsFocusSource, /'Checking this Windows PC'/);
 assert.match(windowsFocusSource, /EAI_SETUP_RECEIPT_BOUND_BUTTON_INVOKED/);
 assert.match(windowsFocusSource, /EAI_SETUP_RECEIPT_BOUND_BUTTON_READY/);
 assert.match(windowsGuestAdapterSource, /invoke_receipt_bound_eai_setup_button\(\)/);
@@ -1046,6 +1049,7 @@ assert.ok(
   windowsScreenHasSource.indexOf("focus_receipt_bound_eai_setup_window")
     < windowsScreenHasSource.indexOf('prlctl capture "$vm_name"'),
 );
+assert.match(windowsScreenHasSource, /__eai_text__:\$\{pattern\}/);
 assert.match(windowsDetachedValidationSource, /eai-windows-detached-app-launch\/v5/);
 assert.match(windowsDetachedValidationSource, /launchMechanism -cne 'local-win32-process-create'/);
 assert.match(windowsDetachedValidationSource, /localWmiCall -ne \$true/);
