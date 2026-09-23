@@ -11,7 +11,7 @@ windows_hidden_bounded_prlctl() {
   local status=0
   shift
   [[ "$timeout_seconds" =~ ^[1-9][0-9]*$ ]] || return 2
-  prlctl_bin="$(command -v prlctl 2>/dev/null || true)"
+  prlctl_bin="${EAI_PARALLELS_PRLCTL:-/Applications/Parallels Desktop.app/Contents/MacOS/prlctl}"
   [[ -n "$prlctl_bin" ]] || return 127
   # An asynchronous command gets /dev/null as stdin when job control is off
   # unless an explicit redirection is present. Preserve the caller's pipeline:

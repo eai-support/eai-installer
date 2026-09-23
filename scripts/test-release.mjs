@@ -2102,9 +2102,12 @@ const windowsNormalLaunchSection = windowsGuestAdapterSource.slice(windowsNormal
 assert.match(guestTestLibrarySource, /EAI_PARALLELS_PRLCTL='\/Applications\/Parallels Desktop[.]app\/Contents\/MacOS\/prlctl'/);
 assert.match(guestTestLibrarySource, /PATH="\$\(dirname "\$EAI_PARALLELS_PRLCTL"\):\$PATH"/);
 assert.match(guestTestLibrarySource, /export PATH EAI_PARALLELS_PRLCTL/);
+assert.match(guestTestLibrarySource, /prlctl\(\) \{[\s\S]*"\$EAI_PARALLELS_PRLCTL" "\$@"/);
 assert.match(parallelsInputSource, /process[.]env[.]EAI_PARALLELS_PRLCTL/);
 assert.match(parallelsInputSource, /spawnSync\(prlctl, \["status", vm\]/);
 assert.match(parallelsInputSource, /spawnSync\(prlctl, \["send-key-event", vm, "--json"\]/);
+assert.match(windowsGuestLoginSource, /source "\$ROOT\/scripts\/guest-test-lib[.]sh"/);
+assert.match(windowsHiddenCurrentUserSource, /prlctl_bin="\$\{EAI_PARALLELS_PRLCTL:-\/Applications\/Parallels Desktop[.]app\/Contents\/MacOS\/prlctl\}"/);
 assert.match(vmAdapterPreflightSource, /prlctl_bin='\/Applications\/Parallels Desktop[.]app\/Contents\/MacOS\/prlctl'/);
 assert.match(vmAdapterPreflightSource, /codesign --verify --deep --strict "\$prlctl_bin"/);
 assert.match(vmAdapterPreflightSource, /"\$prlctl_bin" list "\$vm_name" --info/);
