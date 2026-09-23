@@ -6285,6 +6285,8 @@ liveness_failures=0
 prerequisite_deadline=$((SECONDS + 1200))
 prerequisite_progress_at=$SECONDS
 while (( SECONDS < prerequisite_deadline )); do
+  prerequisites_satisfied=0
+  readiness_visible=0
   if ! prerequisite_uac_watcher_alive; then
     # A real consent signature writes the failure marker above. A Parallels
     # guest-control result loss does not. Keep testing the installer in that
@@ -6306,12 +6308,14 @@ while (( SECONDS < prerequisite_deadline )); do
   fi
   versions="$(guest_versions_json || true)"
   if [[ -n "$versions" ]] && versions_satisfy_contract "$versions"; then
+    prerequisites_satisfied=1
     # The consent monitor has covered the privileged prerequisite period.
     # Stop it before using the same capture path for readiness. Concurrent
     # captures can starve OCR even when the completed UI is visibly present.
     stop_prerequisite_uac_watcher \
       || guest_test_fail "The Windows unexpected-consent-UI watcher did not close cleanly."
     if screen_has "This Windows PC is ready"; then
+      readiness_visible=1
       ready_reads=$((ready_reads + 1))
       [[ "$ready_reads" -ge 2 ]] && break
     fi
@@ -6319,7 +6323,9 @@ while (( SECONDS < prerequisite_deadline )); do
     ready_reads=0
   fi
   if (( SECONDS - prerequisite_progress_at >= 60 )); then
-    printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" prerequisite-install-still-running
+    printf '%s prerequisite-install-still-running prerequisites=%s readiness=%s versions=%s\n' \
+      "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$prerequisites_satisfied" "$readiness_visible" \
+      "${versions:-missing}"
     prerequisite_progress_at=$SECONDS
   fi
   sleep 5
