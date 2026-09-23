@@ -254,7 +254,10 @@ focus_receipt_bound_eai_setup_window() {
     '__eai_text__:Sign in with browser') button_selector='eai-text-signin' ;;
     *) return 1 ;;
   esac
-  output="$(guest_ps_run "$guest_normal_pid"$'\n'"$guest_normal_launch_receipt"$'\n'"$guest_executable_file"$'\n'"$expected_hash"$'\n'"$button_selector"$'\n'"$invoke_button"$'\n' 2 <<'POWERSHELL'
+  # UI probes must not inherit the long timeout used for installer and project
+  # operations. A lost Parallels completion result must return to the bounded
+  # outer retry before the visible application becomes stale.
+  output="$(EAI_WINDOWS_HIDDEN_CURRENT_USER_TIMEOUT_SECONDS=30 guest_ps_run "$guest_normal_pid"$'\n'"$guest_normal_launch_receipt"$'\n'"$guest_executable_file"$'\n'"$expected_hash"$'\n'"$button_selector"$'\n'"$invoke_button"$'\n' 2 <<'POWERSHELL'
 $ErrorActionPreference = 'Stop'
 
 function ConvertTo-ComparableAppPath([string]$path) {
