@@ -3,6 +3,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=scripts/guest-test-lib.sh
+source "$ROOT/scripts/guest-test-lib.sh"
 # shellcheck source=scripts/windows-hidden-current-user.sh
 source "$ROOT/scripts/windows-hidden-current-user.sh"
 vm_name="${EAI_WINDOWS_VM_NAME:-Windows 11}"

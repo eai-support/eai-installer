@@ -12,6 +12,13 @@ readonly EAI_PARALLELS_PRLCTL='/Applications/Parallels Desktop.app/Contents/MacO
 PATH="$(dirname "$EAI_PARALLELS_PRLCTL"):$PATH"
 export PATH EAI_PARALLELS_PRLCTL
 
+# Do not let a bare command name reach the host command launcher. On this
+# macOS host it can stage `prlctl` in a temporary directory, which violates
+# Apple's launch constraints even though the original bundle is signed.
+prlctl() {
+  "$EAI_PARALLELS_PRLCTL" "$@"
+}
+
 guest_test_fail() {
   printf 'Guest release test failed: %s\n' "$*" >&2
   exit 1
