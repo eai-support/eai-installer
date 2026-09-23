@@ -6243,9 +6243,6 @@ arm_temporary_admin_consent_suppression \
 stage uac-admin-consent-suppression-armed
 
 stage normal-app-launch
-start_prerequisite_uac_watcher
-prerequisite_uac_watcher_alive \
-  || guest_test_fail "The exact-window Windows unexpected-consent-UI watcher did not start."
 launch_guest_app_detached normal "" "$executable_hash" \
   || guest_test_fail "Explorer did not complete the bounded detached normal-app launch."
 validate_guest_app_launch "$guest_normal_pid" "$guest_normal_launch_receipt" "$guest_normal_launch_arm" \
@@ -6264,7 +6261,6 @@ while (( SECONDS < normal_start_deadline )); do
     [[ "$process_state" == 1 ]] \
       || guest_test_fail "The read-only normal-app liveness check could not determine process state."
   fi
-  prerequisite_uac_watcher_alive || break
   sleep 1
 done
 [[ "$normal_started" == 1 ]] || guest_test_fail "The normal released Windows app process did not start."
@@ -6276,6 +6272,11 @@ for _ in $(seq 1 30); do
   if screen_has "Get started"; then
     # Use the exact process-bound UI Automation element instead of depending
     # on Parallels granting a guest-control process foreground ownership.
+    # The watcher captures the VM at a high frequency. Arm it only immediately
+    # before privileged preparation begins, after the WebView has rendered.
+    start_prerequisite_uac_watcher
+    prerequisite_uac_watcher_alive \
+      || guest_test_fail "The exact-window Windows unexpected-consent-UI watcher did not start."
     invoke_receipt_bound_eai_setup_button "Get started" \
       || guest_test_fail "The receipt-bound Get started action could not be invoked."
     welcome_started=1

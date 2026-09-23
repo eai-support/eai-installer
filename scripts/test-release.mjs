@@ -2319,10 +2319,13 @@ assert.match(windowsNormalLaunchSection, /while \(\( SECONDS < prerequisite_dead
 assert.doesNotMatch(windowsNormalLaunchSection, /for attempt in \$\(seq 1 240\)/);
 const windowsUacWatcherLaunch = windowsNormalLaunchSection.indexOf("start_prerequisite_uac_watcher");
 const windowsFirstNormalLivenessProbe = windowsNormalLaunchSection.indexOf('guest_process_alive "$guest_normal_pid"');
+const windowsGetStartedVisible = windowsNormalLaunchSection.indexOf('screen_has "Get started"');
+const windowsGetStartedInvoke = windowsNormalLaunchSection.indexOf('invoke_receipt_bound_eai_setup_button "Get started"');
 const windowsPrerequisiteLoop = windowsNormalLaunchSection.indexOf("stage prerequisite-install");
 const windowsUacWatcherStop = windowsNormalLaunchSection.indexOf("stop_prerequisite_uac_watcher");
 assert.ok(windowsUacWatcherLaunch >= 0 && windowsUacWatcherLaunch < windowsPrerequisiteLoop);
-assert.ok(windowsUacWatcherLaunch < windowsFirstNormalLivenessProbe);
+assert.ok(windowsUacWatcherLaunch > windowsFirstNormalLivenessProbe);
+assert.ok(windowsUacWatcherLaunch > windowsGetStartedVisible && windowsUacWatcherLaunch < windowsGetStartedInvoke);
 assert.ok(windowsUacWatcherStop > windowsPrerequisiteLoop);
 assert.match(windowsCleanupSection, /stop_prerequisite_uac_watcher/);
 assert.match(windowsCleanupSection, /restore_admin_consent_prompt/);
