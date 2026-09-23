@@ -768,7 +768,7 @@ assert.match(windowsDetachedLaunchSource, /\$wmiStartup[.]WinstationDesktop = 'w
 assert.match(windowsDetachedLaunchSource, /\$wmiStartup[.]EnvironmentVariables = \$startupEnvironmentValues/);
 assert.match(windowsDetachedLaunchSource, /\[wmiclass\]'\\\\[.]\\root\\cimv2:Win32_Process'/);
 assert.match(windowsDetachedLaunchSource, /\$wmiResult = \$wmiProcessClass[.]Create\(\$commandLine, \$workingDirectory, \$wmiStartup\)/);
-assert.match(windowsDetachedLaunchSource, /\$creationFlags = \[uint32\]1536/);
+assert.match(windowsDetachedLaunchSource, /\$creationFlags = \[uint32\]16778752/);
 assert.match(windowsDetachedLaunchSource, /\$commandLine = '"' \+ \$executable \+ '"'/);
 assert.match(
   windowsDetachedLaunchSource,
@@ -840,7 +840,7 @@ assert.match(windowsDetachedLaunchSource, /providerBrokeredJobEscape = \$true/);
 assert.match(windowsDetachedLaunchSource, /bootstrapInJob = \$bootstrapInJob/);
 assert.match(windowsDetachedLaunchSource, /childInJob = \$childInJob/);
 assert.match(windowsDetachedLaunchSource, /childJobStateObserved = \$true/);
-assert.match(windowsDetachedLaunchSource, /childJobAbsenceRequired = \$false/);
+assert.match(windowsDetachedLaunchSource, /childJobAbsenceRequired = \$true/);
 assert.match(windowsDetachedLaunchSource, /protectedValuesInGlobalEnvironment = \$false/);
 assert.match(windowsDetachedLaunchSource, /processOnlyStartupEnvironment = \$true/);
 assert.match(windowsDetachedLaunchSource, /explicitChildEnvironmentBlock = \$true/);
@@ -1087,8 +1087,8 @@ assert.match(windowsDetachedValidationSource, /localWmiCall -ne \$true/);
 assert.match(windowsDetachedValidationSource, /providerBrokeredJobEscape -ne \$true/);
 assert.match(windowsDetachedValidationSource, /bootstrapInJob -ne \$true/);
 assert.match(windowsDetachedValidationSource, /childInJob -isnot \[bool\]/);
-assert.match(windowsDetachedValidationSource, /childJobAbsenceRequired -ne \$false/);
-assert.match(windowsDetachedValidationSource, /creationFlags -ne 1536/);
+assert.match(windowsDetachedValidationSource, /childJobAbsenceRequired -ne \$true/);
+assert.match(windowsDetachedValidationSource, /creationFlags -ne 16778752/);
 assert.match(windowsDetachedValidationSource, /e2eEnvironmentVariableCount -ne 0/);
 assert.match(windowsDetachedValidationSource, /e2eEnvironmentVariableCount -ne 5/);
 assert.match(windowsDetachedValidationSource, /\$liveChildInJob -ne \[bool\]\$receipt[.]childInJob/);
@@ -1152,8 +1152,8 @@ assert.match(windowsDetachedCleanupSource, /launchMechanism -cne 'local-win32-pr
 assert.match(windowsDetachedCleanupSource, /invalid WMI environment contract/);
 assert.match(windowsDetachedCleanupSource, /bootstrapInJob -ne \$true/);
 assert.match(windowsDetachedCleanupSource, /childInJob -isnot \[bool\]/);
-assert.match(windowsDetachedCleanupSource, /childJobAbsenceRequired -ne \$false/);
-assert.match(windowsDetachedCleanupSource, /creationFlags -ne 1536/);
+assert.match(windowsDetachedCleanupSource, /childJobAbsenceRequired -ne \$true/);
+assert.match(windowsDetachedCleanupSource, /creationFlags -ne 16778752/);
 assert.match(windowsDetachedCleanupSource, /Cleanup refuses a bootstrap outside this run hash\/owner binding/);
 const windowsAmbiguousArmQuarantineStart = windowsDetachedCleanupSource.indexOf(
   "if ($null -ne $arm -and $null -eq $receipt)",

@@ -4126,7 +4126,7 @@ try {
   $startupEnvironment = New-WmiStartupEnvironment $Mode $tenantId $projectName
   $startupEnvironmentValues = [string[]]$startupEnvironment.Values
   $e2eEnvironmentVariableCount = [int]$startupEnvironment.E2eVariableCount
-  $creationFlags = [uint32]1536
+  $creationFlags = [uint32]16778752
   $childInJob = $false
   $processEvidence = $null
   $processStartedAt = $null
@@ -4222,7 +4222,7 @@ try {
       bootstrapInJob = $bootstrapInJob
       childJobStateObserved = $true
       childInJob = $childInJob
-      childJobAbsenceRequired = $false
+      childJobAbsenceRequired = $true
       canonicalExecutableOnlyCommandLine = $true
       quotedExecutableCommandLine = $true
       startupInfoUsesStdHandles = $false
@@ -4495,10 +4495,10 @@ if ($receipt.schemaVersion -cne 'eai-windows-detached-app-launch/v5' -or $receip
     $receipt.processOnlyStartupEnvironment -ne $true -or
     $receipt.inheritedE2EEnvironmentVariablesStripped -ne $true -or
     $receipt.bootstrapInJob -ne $true -or $receipt.childJobStateObserved -ne $true -or
-    $receipt.childInJob -isnot [bool] -or $receipt.childJobAbsenceRequired -ne $false -or
+    $receipt.childInJob -isnot [bool] -or $receipt.childInJob -ne $false -or $receipt.childJobAbsenceRequired -ne $true -or
     $receipt.canonicalExecutableOnlyCommandLine -ne $true -or
     $receipt.quotedExecutableCommandLine -ne $true -or $receipt.startupInfoUsesStdHandles -ne $false -or
-    $receipt.desktop -cne 'winsta0\default' -or [int64]$receipt.creationFlags -ne 1536 -or
+    $receipt.desktop -cne 'winsta0\default' -or [int64]$receipt.creationFlags -ne 16778752 -or
     $receipt.emptyApplicationArguments -ne $true -or $receipt.executableSha256 -cne $expectedHash -or
     $processId -cnotmatch '^[1-9][0-9]*$' -or [int]$processId -ne [int]$receipt.processId -or
     $receipt.processSessionId -le 0 -or $receipt.providerProcessId -le 0 -or
@@ -4830,11 +4830,11 @@ function Read-BoundLaunchState() {
         $receiptValue.processOnlyStartupEnvironment -ne $true -or
         $receiptValue.inheritedE2EEnvironmentVariablesStripped -ne $true -or
         $receiptValue.bootstrapInJob -ne $true -or $receiptValue.childJobStateObserved -ne $true -or
-        $receiptValue.childInJob -isnot [bool] -or $receiptValue.childJobAbsenceRequired -ne $false -or
+        $receiptValue.childInJob -isnot [bool] -or $receiptValue.childInJob -ne $false -or $receiptValue.childJobAbsenceRequired -ne $true -or
         $receiptValue.canonicalExecutableOnlyCommandLine -ne $true -or
         $receiptValue.quotedExecutableCommandLine -ne $true -or
         $receiptValue.startupInfoUsesStdHandles -ne $false -or $receiptValue.desktop -cne 'winsta0\default' -or
-        [int64]$receiptValue.creationFlags -ne 1536 -or
+        [int64]$receiptValue.creationFlags -ne 16778752 -or
         $receiptValue.processSessionId -le 0 -or $receiptValue.bootstrapProcessSessionId -le 0 -or
         $receiptValue.processOwnerSid -cne $expectedUserSid.Value -or $receiptValue.processId -le 0 -or
         $receiptValue.providerProcessId -le 0) {
