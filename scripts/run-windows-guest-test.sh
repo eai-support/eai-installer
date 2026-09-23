@@ -5568,6 +5568,8 @@ rm -f "$work_dir/windows-console-preflight.png"
 stage host-console-visible
 
 stage clean-snapshot-preflight
+baseline_json=""
+for baseline_attempt in 1 2 3; do
 baseline_json="$(guest_ps <<'POWERSHELL' | tr -d '\r' | tail -n 1
 $os = Get-CimInstance Win32_OperatingSystem
 $windowsIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -5730,6 +5732,11 @@ $uacPolicyItem = Get-Item -LiteralPath $uacPolicyPath -ErrorAction Stop
 } | ConvertTo-Json -Compress
 POWERSHELL
 )"
+  [[ -n "$baseline_json" ]] && break
+  sleep 2
+done
+[[ -n "$baseline_json" ]] \
+  || guest_test_fail "The Windows clean-snapshot preflight returned no guest data."
 EAI_WINDOWS_BASELINE="$baseline_json" EAI_WINDOWS_EXPECTED_USER="$guest_user" node --input-type=module <<'NODE'
 const value = JSON.parse(process.env.EAI_WINDOWS_BASELINE);
 const expectedUser = process.env.EAI_WINDOWS_EXPECTED_USER.toLowerCase();

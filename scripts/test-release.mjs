@@ -510,6 +510,7 @@ assert.match(windowsGuestAdapterSource, /vm_name="\$\{EAI_WINDOWS_VM_NAME:-Windo
 assert.match(windowsGuestAdapterSource, /snapshot_id="\$\{EAI_WINDOWS_SNAPSHOT_ID:-48921a89-eb72-430e-b4bf-a7b70d8bfaab\}"/);
 assert.match(windowsGuestAdapterSource, /guest_user="\$\{EAI_WINDOWS_GUEST_USER:-eai-douglasross\}"/);
 assert.match(windowsGuestAdapterSource, /login-windows-guest[.]sh/);
+assert.match(windowsGuestAdapterSource, /for baseline_attempt in 1 2 3; do[\s\S]*The Windows clean-snapshot preflight returned no guest data/);
 assert.match(windowsGuestAdapterSource, /stage normal-welcome-continue[\s\S]*screen_has "Let's go"[\s\S]*input key enter[\s\S]*If a platform WebView cleared the retained button focus[\s\S]*input key tab/);
 assert.match(windowsGuestAdapterSource, /for portal_login_attempt in 1 2 3; do/);
 assert.match(windowsGuestAdapterSource, /WINDOWS_PORTAL_LOGIN_RETRY attempt=%s/);
