@@ -291,8 +291,9 @@ outside this diagnostic installer gate.
 ### Test Windows clean-snapshot and login baseline
 
 The controlled Windows guest is named `Windows 11`, its release-test user is
-`eai-douglasross`, and its approved snapshot is `7-9-2026-clean`
-(`{48921a89-eb72-430e-b4bf-a7b70d8bfaab}`). The adapter first validates its
+`eai-douglasross`, and its approved snapshot is `e2e-tools-27.0.2-no-vscode-2026-09-23`
+(`{a508b018-1cb6-4479-8a91-8e936256eda7}`). It contains Parallels Tools
+`27.0.2-58673`, which matches the host and no installer-managed surface. The adapter first validates its
 runtime inputs and the host Keychain item's account metadata. It then restores
 that exact snapshot disk with `--skip-resume` and performs a normal boot; it
 never resumes the snapshot's saved memory image. This avoids carrying a stale

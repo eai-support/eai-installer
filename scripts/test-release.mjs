@@ -507,7 +507,7 @@ assert.doesNotMatch(guestTestLibrarySource, /vm === "ubuntu" \|\| aiHandoffScree
 
 assert.match(runnerSource, /windows: "eai-setup-windows-arm64[.]exe"/);
 assert.match(windowsGuestAdapterSource, /vm_name="\$\{EAI_WINDOWS_VM_NAME:-Windows 11\}"/);
-assert.match(windowsGuestAdapterSource, /snapshot_id="\$\{EAI_WINDOWS_SNAPSHOT_ID:-48921a89-eb72-430e-b4bf-a7b70d8bfaab\}"/);
+assert.match(windowsGuestAdapterSource, /snapshot_id="\$\{EAI_WINDOWS_SNAPSHOT_ID:-a508b018-1cb6-4479-8a91-8e936256eda7\}"/);
 assert.match(windowsGuestAdapterSource, /guest_user="\$\{EAI_WINDOWS_GUEST_USER:-eai-douglasross\}"/);
 assert.match(windowsGuestAdapterSource, /login-windows-guest[.]sh/);
 assert.match(windowsGuestAdapterSource, /for baseline_attempt in 1 2 3; do[\s\S]*The Windows clean-snapshot preflight returned no guest data/);
@@ -2254,7 +2254,7 @@ assert.ok(windowsUacWatcherStart >= 0 && windowsUacWatcherEnd > windowsUacWatche
 const windowsUacWatcherSource = windowsGuestAdapterSource.slice(windowsUacWatcherStart, windowsUacWatcherEnd);
 assert.match(windowsUacWatcherSource, /unexpected_prerequisite_uac_visible/);
 assert.match(windowsUacWatcherSource, /prerequisite-uac-watcher[.]failed/);
-assert.match(windowsUacWatcherSource, /consent-ui-monitor-infrastructure-failed/);
+assert.match(windowsUacWatcherSource, /consent-ui-monitor-capture-unavailable/);
 assert.match(windowsUacWatcherSource, /kill -0 "\$uac_watcher_pid"/);
 assert.match(windowsUacWatcherSource, /sanitize_log_file[\s\S]*windows-prerequisite-uac-watcher[.]log/);
 assert.match(windowsUacWatcherSource, /eai-windows-uac-consent-ui-monitor\/v1/);

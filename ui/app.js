@@ -477,6 +477,10 @@ const PAINT = {
       button.disabled = false;
       button.hidden = false;
       startPanel.classList.add("ready-to-go");
+      // Readiness temporarily hides this primary control. Restore focus when
+      // it returns so keyboard users can continue without tabbing through
+      // footer links and the expandable setup details.
+      requestAnimationFrame(() => button.focus());
     }
   },
 
