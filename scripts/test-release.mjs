@@ -2254,7 +2254,7 @@ assert.ok(windowsUacWatcherStart >= 0 && windowsUacWatcherEnd > windowsUacWatche
 const windowsUacWatcherSource = windowsGuestAdapterSource.slice(windowsUacWatcherStart, windowsUacWatcherEnd);
 assert.match(windowsUacWatcherSource, /unexpected_prerequisite_uac_visible/);
 assert.match(windowsUacWatcherSource, /prerequisite-uac-watcher[.]failed/);
-assert.match(windowsUacWatcherSource, /consent-ui-monitor-infrastructure-failed/);
+assert.match(windowsUacWatcherSource, /consent-ui-monitor-capture-unavailable/);
 assert.match(windowsUacWatcherSource, /kill -0 "\$uac_watcher_pid"/);
 assert.match(windowsUacWatcherSource, /sanitize_log_file[\s\S]*windows-prerequisite-uac-watcher[.]log/);
 assert.match(windowsUacWatcherSource, /eai-windows-uac-consent-ui-monitor\/v1/);

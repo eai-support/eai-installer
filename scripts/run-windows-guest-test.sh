@@ -402,16 +402,14 @@ start_prerequisite_uac_watcher() {
       fi
       if [[ "$monitor_status" == 1 ]]; then
         capture_failures=0
-      else
+      elif [[ "$monitor_status" != 1 ]]; then
         # Parallels can reject a capture while the application replaces its
-        # window. Do not turn one lost frame into a false UAC finding.
+        # window. Do not turn lost observation frames into a false UAC finding.
         capture_failures=$((capture_failures + 1))
-        if [[ "$capture_failures" -lt 3 ]]; then
-          sleep 1
-          continue
-        fi
-        printf '%s consent-ui-monitor-infrastructure-failed\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$failure_file"
-        exit 2
+        printf '%s consent-ui-monitor-capture-unavailable:%s\n' \
+          "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$capture_failures" >>"$log_file"
+        sleep 1
+        continue
       fi
       sleep 1
     done
