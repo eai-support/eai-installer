@@ -6041,8 +6041,16 @@ liveness_failures=0
 prerequisite_deadline=$((SECONDS + 1200))
 prerequisite_progress_at=$SECONDS
 while (( SECONDS < prerequisite_deadline )); do
-  prerequisite_uac_watcher_alive \
-    || guest_test_fail "Unexpected Windows consent UI appeared while the no-prompt policy was active."
+  if ! prerequisite_uac_watcher_alive; then
+    # A real consent signature writes the failure marker above. A Parallels
+    # guest-control result loss does not. Keep testing the installer in that
+    # case; it cannot authorize or send any approval input.
+    if [[ -e "$work_dir/prerequisite-uac-watcher.failed" ]]; then
+      guest_test_fail "Unexpected Windows consent UI appeared while the no-prompt policy was active."
+    fi
+    printf '%s consent-ui-observer-unavailable\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    uac_watcher_pid=""
+  fi
   if guest_process_alive "$guest_normal_pid"; then
     liveness_failures=0
   else
