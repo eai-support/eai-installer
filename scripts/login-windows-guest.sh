@@ -529,6 +529,13 @@ POWERSHELL
     sleep 1
   done
 
+  # Edge's native credential-save flyout is not part of the web accessibility
+  # tree. It can cover the approved Microsoft "Stay signed in?" page after a
+  # successful password submission. Escape is sent only after the identity
+  # host has accepted the submission and the bounded post-submit probe has
+  # completed; it dismisses that optional browser flyout without changing the
+  # Microsoft account or the portal session.
+  input key escape
   run_ui_action_once invoke-edge-not-now 10 >/dev/null \
     || fail "The Edge password-save prompt could not be handled safely."
   run_ui_action_once invoke-ms-yes 45 >/dev/null \

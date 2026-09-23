@@ -456,6 +456,12 @@ justifies treating the identity-provider result as a credential failure. An
 input-path mismatch is a harness defect: fix it and rerun from the clean
 snapshot before trying the account again.
 
+After a successful Microsoft password submission, Edge can show its native
+**Save your password?** flyout above Microsoft's **Stay signed in?** page. The
+guest helper dismisses only that optional browser flyout with Escape, then uses
+the approved accessibility action for the Microsoft prompt. Do not replace this
+with host GUI typing or an unbounded click.
+
 The clean snapshot intentionally has no AI workspace. Once the preflight has
 proved that absence, `scripts/prepare-windows-ai-workspace.sh` installs the
 pinned official ARM64 VS Code 1.136.1 SystemSetup bundle into

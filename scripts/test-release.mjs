@@ -1397,6 +1397,7 @@ const mandatoryFreshLoginSteps = [
   "run_idempotent_ui_action focus-password",
   "find-generic-password -s \"$keychain_service\" -w",
   "run_ui_action_once invoke-sign-in",
+  "input key escape",
   "wait_portal_ready 120",
   "FRESH_PROTECTED_LOGIN_PROVEN",
 ];
@@ -1408,6 +1409,10 @@ for (const step of mandatoryFreshLoginSteps) {
   previousFreshLoginStep = stepIndex;
 }
 assert.match(windowsBrowserLoginFlow, /replacement snapshot already has an authenticated portal session/);
+assert.match(
+  windowsBrowserLoginFlow,
+  /identity[\s\S]*host has accepted the submission[\s\S]*input key escape[\s\S]*invoke-edge-not-now[\s\S]*invoke-ms-yes/,
+);
 assert.match(windowsGuestLoginSource, /Join-Path \$env:APPDATA "npm\\eai[.]cmd"\) login/);
 assert.match(windowsGuestLoginSource, /if \[\[ "\$cli_finished" != 1 \|\| "\$cli_status" != 0 \]\]; then[\s\S]*cli_identity_is_active && cli_tenant_matches[\s\S]*AUTHENTICATED_PORTAL_AND_CLI_READY/);
 assert.match(windowsGuestLoginSource, /Join-Path \$env:APPDATA "npm\\eai[.]cmd"\) whoami/);
