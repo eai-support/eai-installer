@@ -508,6 +508,10 @@ POWERSHELL
   # EAI_HARNESS_USER_EMAIL. The value flows directly into virtual-key stdin.
   /usr/bin/security find-generic-password -s "$keychain_service" -w \
     | input type --stdin
+  # The password edit retains focus after the virtual keyboard completes. Send
+  # Enter through that same guest keyboard channel first. This avoids relying
+  # on a hidden UI Automation click that can remain open after an Edge redirect.
+  input key enter
   run_ui_action_once invoke-sign-in 30 >/dev/null \
     || fail "Microsoft's Sign in action did not become available."
   printf 'MICROSOFT_PASSWORD_STAGE_SUBMITTED\n'
