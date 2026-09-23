@@ -383,10 +383,20 @@ $conditions = @(
     [System.Windows.Automation.ControlType]::Button
   )
 )
-$matches = @($windowElement.FindAll(
+$rawMatches = @($windowElement.FindAll(
   [System.Windows.Automation.TreeScope]::Descendants,
   [System.Windows.Automation.AndCondition]::new([System.Windows.Automation.Condition[]]$conditions)
 ) | Where-Object { -not $_.Current.IsOffscreen -and $_.Current.IsEnabled })
+$uniqueMatches = @{}
+foreach ($element in $rawMatches) {
+  try {
+    $runtimeKey = [string]::Join('.', $element.GetRuntimeId())
+  } catch {
+    throw 'The approved EAI Setup action has no stable UI Automation runtime identity.'
+  }
+  $uniqueMatches[$runtimeKey] = $element
+}
+$matches = @($uniqueMatches.Values)
 if ($matches.Count -ne 1) {
   throw 'The receipt-bound EAI Setup window did not expose exactly one approved visible action.'
 }

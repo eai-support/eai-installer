@@ -1034,6 +1034,8 @@ assert.match(windowsFocusSource, /grep -Fqx 'EAI_SETUP_RECEIPT_BOUND_WINDOW_READ
 assert.match(windowsFocusSource, /Add-Type -AssemblyName UIAutomationClient/);
 assert.match(windowsFocusSource, /UI Automation action is not approved/);
 assert.match(windowsFocusSource, /InvokePattern\]::Pattern/);
+assert.match(windowsFocusSource, /\[string\]::Join\('[.]', \$element[.]GetRuntimeId\(\)\)/);
+assert.match(windowsFocusSource, /\$uniqueMatches\[\$runtimeKey\] = \$element/);
 assert.match(windowsGuestAdapterSource, /invoke_receipt_bound_eai_setup_button\(\)/);
 assert.doesNotMatch(windowsFocusSource, /Stop-Process|[.]Kill\(|CloseMainWindow|Remove-Item/);
 assert.ok(
