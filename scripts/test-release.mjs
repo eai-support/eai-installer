@@ -2149,7 +2149,7 @@ assert.doesNotMatch(windowsNormalLaunchSection, /Sign in to EAI/);
 const windowsVersionsReadyGate = windowsNormalLaunchSection.indexOf('versions_satisfy_contract "$versions"');
 const windowsWelcomeReadyGate = windowsNormalLaunchSection.indexOf('screen_has "This Windows PC is ready"');
 const windowsSignInReadyGate = windowsNormalLaunchSection.indexOf('screen_has "Sign in with browser"');
-assert.ok(windowsVersionsReadyGate >= 0 && windowsVersionsReadyGate < windowsWelcomeReadyGate);
+assert.ok(windowsWelcomeReadyGate >= 0 && windowsWelcomeReadyGate < windowsVersionsReadyGate);
 assert.ok(
   windowsWelcomeReadyGate < windowsSignInReadyGate,
   "Windows must continue from the visible ready state to the sign-in screen before the CLI phase",

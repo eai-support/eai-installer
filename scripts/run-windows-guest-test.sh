@@ -6308,18 +6308,22 @@ while (( SECONDS < prerequisite_deadline )); do
     liveness_failures=$((liveness_failures + 1))
     [[ "$liveness_failures" -lt 5 ]] || guest_test_fail "The released Windows app exited before prerequisite installation completed."
   fi
+  # The ready screen is emitted only after the privileged preparation flow
+  # completes. Stop the observer as soon as that receipt-bound state appears:
+  # otherwise its frequent guest-control polls can starve the version probe.
+  if screen_has "This Windows PC is ready"; then
+    readiness_visible=1
+    stop_prerequisite_uac_watcher \
+      || guest_test_fail "The Windows unexpected-consent-UI watcher did not close cleanly."
+  fi
   versions="$(guest_versions_json || true)"
   if [[ -n "$versions" ]] && versions_satisfy_contract "$versions"; then
     prerequisites_satisfied=1
-    # The consent monitor has covered the privileged prerequisite period.
-    # Stop it before using the same capture path for readiness. Concurrent
-    # captures can starve OCR even when the completed UI is visibly present.
-    stop_prerequisite_uac_watcher \
-      || guest_test_fail "The Windows unexpected-consent-UI watcher did not close cleanly."
-    if screen_has "This Windows PC is ready"; then
-      readiness_visible=1
+    if [[ "$readiness_visible" == 1 ]]; then
       ready_reads=$((ready_reads + 1))
       [[ "$ready_reads" -ge 2 ]] && break
+    else
+      ready_reads=0
     fi
   else
     ready_reads=0
