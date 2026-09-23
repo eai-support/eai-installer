@@ -3948,6 +3948,7 @@ function New-WmiStartupEnvironment([string]$mode, [string]$tenant, [string]$proj
     if ($name.StartsWith('EAI_SETUP_E2E', [StringComparison]::OrdinalIgnoreCase)) { continue }
     $environment[$name] = $value
   }
+  $environment['WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS'] = '--force-renderer-accessibility'
   if ($mode -eq 'e2e') {
     $environment['EAI_SETUP_E2E'] = '1'
     $environment['EAI_SETUP_E2E_PROJECT_NAME'] = $project
