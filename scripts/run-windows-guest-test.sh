@@ -386,26 +386,24 @@ $conditions = @(
     [System.Windows.Automation.ControlType]::Button
   )
 )
-$rawMatches = @($windowElement.FindAll(
+$match = $windowElement.FindFirst(
   [System.Windows.Automation.TreeScope]::Descendants,
   [System.Windows.Automation.AndCondition]::new([System.Windows.Automation.Condition[]]$conditions)
-) | Where-Object { -not $_.Current.IsOffscreen -and $_.Current.IsEnabled })
-$uniqueMatches = @{}
-foreach ($element in $rawMatches) {
-  try {
-    $runtimeKey = [string]::Join('.', $element.GetRuntimeId())
-  } catch {
-    throw 'The approved EAI Setup action has no stable UI Automation runtime identity.'
-  }
-  $uniqueMatches[$runtimeKey] = $element
+)
+if ($null -eq $match -or $match.Current.IsOffscreen -or -not $match.Current.IsEnabled) {
+  throw 'The receipt-bound EAI Setup window did not expose its approved visible action.'
 }
-$matches = @($uniqueMatches.Values)
-if ($matches.Count -ne 1) {
-  throw 'The receipt-bound EAI Setup window did not expose exactly one approved visible action.'
+try {
+  $runtimeKey = [string]::Join('.', $match.GetRuntimeId())
+  if ([string]::IsNullOrEmpty($runtimeKey)) {
+    throw 'empty runtime identity'
+  }
+} catch {
+  throw 'The approved EAI Setup action has no stable UI Automation runtime identity.'
 }
 if ($invokeButton -eq '1') {
   $invokePattern = $null
-  if (-not $matches[0].TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$invokePattern)) {
+  if (-not $match.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$invokePattern)) {
     throw 'The approved EAI Setup action does not expose UI Automation InvokePattern.'
   }
   ([System.Windows.Automation.InvokePattern]$invokePattern).Invoke()
