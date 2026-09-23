@@ -601,6 +601,9 @@ assert.match(windowsBeforeSnapshotRestore, /login-windows-guest[.]sh" --prefligh
 assert.doesNotMatch(windowsBeforeSnapshotRestore, /find-generic-password[^\n]* -w/);
 assert.match(windowsGuestAdapterSource, /local max_attempts="\$\{2:-30\}"/);
 assert.match(windowsGuestAdapterSource, /Unable to open new session in this virtual machine/);
+assert.match(windowsGuestAdapterSource, /resume_existing_vm="\$\{EAI_WINDOWS_RESUME:-0\}"/);
+assert.match(windowsGuestAdapterSource, /stage existing-vm-resume/);
+assert.match(windowsGuestAdapterSource, /guest_test_restore_snapshot "\$vm_name" "\$snapshot_id"/);
 const windowsPayloadWrapperStart = windowsGuestAdapterSource.indexOf("write_powershell_payload_wrapper() {");
 const windowsPayloadPowerShellStart = windowsGuestAdapterSource.indexOf("guest_ps_run() {");
 const windowsStreamedPowerShellStart = windowsGuestAdapterSource.indexOf("guest_ps() {");

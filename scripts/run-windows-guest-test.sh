@@ -5663,6 +5663,9 @@ guest_test_require base64
 guest_test_require screencapture
 guest_test_require osascript
 guest_test_require_environment
+resume_existing_vm="${EAI_WINDOWS_RESUME:-0}"
+[[ "$resume_existing_vm" == 0 || "$resume_existing_vm" == 1 ]] \
+  || guest_test_fail "EAI_WINDOWS_RESUME must be 0 or 1."
 [[ "${EAI_RELEASE_VERSION:-}" =~ ^[0-9]+[.][0-9]+[.][0-9]+$ ]] \
   || guest_test_fail "EAI_RELEASE_VERSION must be a semantic version."
 [[ -f "$ocr_source" ]] || guest_test_fail "The screenshot OCR helper is missing."
@@ -5680,8 +5683,17 @@ fi
 EAI_WINDOWS_VM_NAME="$vm_name" "$ROOT/scripts/login-windows-guest.sh" --preflight \
   || guest_test_fail "The protected Enterprise AI login credential is unavailable."
 
-stage snapshot-restore
-guest_test_restore_snapshot "$vm_name" "$snapshot_id"
+if [[ "$resume_existing_vm" == 1 ]]; then
+  stage existing-vm-resume
+  vm_status="$(prlctl status "$vm_name" 2>/dev/null || true)"
+  if [[ "$vm_status" != *running* ]]; then
+    prlctl start "$vm_name" >/dev/null \
+      || guest_test_fail "The Windows VM could not be started for stateful test recovery."
+  fi
+else
+  stage snapshot-restore
+  guest_test_restore_snapshot "$vm_name" "$snapshot_id"
+fi
 
 stage guest-session
 actual_user=""
