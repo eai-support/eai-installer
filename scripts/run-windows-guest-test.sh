@@ -6061,6 +6061,13 @@ while (( SECONDS < prerequisite_deadline )); do
 done
 [[ "$ready_reads" -ge 2 ]] || guest_test_fail "The Windows installer did not reach stable prerequisite readiness within 20 minutes."
 
+# The visual consent monitor uses the same host screen-capture path as the
+# completion assertion below.  It has protected the actual prerequisite work;
+# stop it once readiness is proven so the final UI transition is observed by a
+# single deterministic reader.
+stop_prerequisite_uac_watcher \
+  || guest_test_fail "The Windows unexpected-consent-UI watcher did not close cleanly."
+
 stage normal-welcome-continue
 # The readiness pass reuses the same DOM button that previously received
 # Get started. Its focus is retained when its label becomes Let’s go, so a
@@ -6101,8 +6108,6 @@ if [[ "$signin_visible" != 1 ]] && screen_has "Let's go"; then
 fi
 [[ "$signin_visible" == 1 ]] \
   || guest_test_fail "The released Windows app did not take Let’s go to the sign-in screen."
-stop_prerequisite_uac_watcher \
-  || guest_test_fail "The Windows unexpected-consent-UI watcher did not close cleanly."
 stage prerequisite-install-passed
 
 stage uac-admin-consent-restoration
