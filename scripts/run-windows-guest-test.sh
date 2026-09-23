@@ -3696,7 +3696,7 @@ const proof = {
   transportElapsedMs: returnedMs - startedMs,
   transportReturned: true,
   childAliveValidatedAfterReturn: true,
-  providerBrokeredJobEscapeProven: true,
+  providerBrokeredTransportIsolationProven: true,
   protectedValuesRecorded: false,
   sanitized: true,
 };
@@ -4195,7 +4195,7 @@ try {
     $executableLock = $null
     Write-AtomicRestrictedText $pidPath $pidTemporary ([string]$process.Id) $identity.User
     $receipt = [ordered]@{
-      schemaVersion = 'eai-windows-detached-app-launch/v5'
+      schemaVersion = 'eai-windows-detached-app-launch/v6'
       status = 'launched'
       mode = $Mode
       launchNonce = $LaunchNonce
@@ -4222,7 +4222,10 @@ try {
       bootstrapInJob = $bootstrapInJob
       childJobStateObserved = $true
       childInJob = $childInJob
-      childJobAbsenceRequired = $true
+      # Win32_Process can place the child in a provider-owned job even after it
+      # has escaped the Parallels control job.  The authoritative proof is the
+      # exact child still being alive after the guest-control transport returns.
+      childJobAbsenceRequired = $false
       canonicalExecutableOnlyCommandLine = $true
       quotedExecutableCommandLine = $true
       startupInfoUsesStdHandles = $false
@@ -4484,7 +4487,7 @@ foreach ($pair in @(@($receiptItem, $receiptFile), @($pidItem, $pidFile), @($arm
 }
 $arm = Get-Content -Raw -LiteralPath $armFile | ConvertFrom-Json
 $processId = (Get-Content -Raw -LiteralPath $pidFile).Trim()
-if ($receipt.schemaVersion -cne 'eai-windows-detached-app-launch/v5' -or $receipt.status -cne 'launched' -or
+if ($receipt.schemaVersion -cne 'eai-windows-detached-app-launch/v6' -or $receipt.status -cne 'launched' -or
     $receipt.mode -cne $expectedMode -or $receipt.launchNonce -cne $expectedNonce -or
     $receipt.launchMechanism -cne 'local-win32-process-create' -or
     $receipt.localWmiCall -ne $true -or $receipt.wmiClass -cne 'Win32_Process' -or
@@ -4495,7 +4498,7 @@ if ($receipt.schemaVersion -cne 'eai-windows-detached-app-launch/v5' -or $receip
     $receipt.processOnlyStartupEnvironment -ne $true -or
     $receipt.inheritedE2EEnvironmentVariablesStripped -ne $true -or
     $receipt.bootstrapInJob -ne $true -or $receipt.childJobStateObserved -ne $true -or
-    $receipt.childInJob -isnot [bool] -or $receipt.childInJob -ne $false -or $receipt.childJobAbsenceRequired -ne $true -or
+    $receipt.childInJob -isnot [bool] -or $receipt.childJobAbsenceRequired -ne $false -or
     $receipt.canonicalExecutableOnlyCommandLine -ne $true -or
     $receipt.quotedExecutableCommandLine -ne $true -or $receipt.startupInfoUsesStdHandles -ne $false -or
     $receipt.desktop -cne 'winsta0\default' -or [int64]$receipt.creationFlags -ne 16778752 -or
@@ -4817,7 +4820,7 @@ function Read-BoundLaunchState() {
     $evidencePresent = $true
     Assert-UserLaunchArtifact $receiptFile
     $receiptValue = Get-Content -Raw -LiteralPath $receiptFile | ConvertFrom-Json
-    if ($receiptValue.schemaVersion -cne 'eai-windows-detached-app-launch/v5' -or $receiptValue.status -cne 'launched' -or
+    if ($receiptValue.schemaVersion -cne 'eai-windows-detached-app-launch/v6' -or $receiptValue.status -cne 'launched' -or
         $receiptValue.mode -cne $expectedMode -or $receiptValue.launchNonce -cne $expectedNonce -or
         $receiptValue.executableSha256 -cne $expectedHash -or $receiptValue.bootstrapSha256 -cne $expectedBootstrapHash -or
         $receiptValue.launchMechanism -cne 'local-win32-process-create' -or
@@ -4830,7 +4833,7 @@ function Read-BoundLaunchState() {
         $receiptValue.processOnlyStartupEnvironment -ne $true -or
         $receiptValue.inheritedE2EEnvironmentVariablesStripped -ne $true -or
         $receiptValue.bootstrapInJob -ne $true -or $receiptValue.childJobStateObserved -ne $true -or
-        $receiptValue.childInJob -isnot [bool] -or $receiptValue.childInJob -ne $false -or $receiptValue.childJobAbsenceRequired -ne $true -or
+        $receiptValue.childInJob -isnot [bool] -or $receiptValue.childJobAbsenceRequired -ne $false -or
         $receiptValue.canonicalExecutableOnlyCommandLine -ne $true -or
         $receiptValue.quotedExecutableCommandLine -ne $true -or
         $receiptValue.startupInfoUsesStdHandles -ne $false -or $receiptValue.desktop -cne 'winsta0\default' -or

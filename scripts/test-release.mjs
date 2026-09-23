@@ -833,14 +833,14 @@ for (const variable of [
   assert.match(windowsDetachedLaunchSource, new RegExp(`\\$environment\\['${variable}'\\] =`));
 }
 assert.match(windowsDetachedLaunchSource, /eai-windows-detached-app-launch-arm\/v2/);
-assert.match(windowsDetachedLaunchSource, /eai-windows-detached-app-launch\/v5/);
+assert.match(windowsDetachedLaunchSource, /eai-windows-detached-app-launch\/v6/);
 assert.match(windowsDetachedLaunchSource, /processIdentityObservedAt = \$processIdentityObservedAtUtc[.]ToString\('o'\)/);
 assert.match(windowsDetachedLaunchSource, /launchMechanism = 'local-win32-process-create'/);
 assert.match(windowsDetachedLaunchSource, /providerBrokeredJobEscape = \$true/);
 assert.match(windowsDetachedLaunchSource, /bootstrapInJob = \$bootstrapInJob/);
 assert.match(windowsDetachedLaunchSource, /childInJob = \$childInJob/);
 assert.match(windowsDetachedLaunchSource, /childJobStateObserved = \$true/);
-assert.match(windowsDetachedLaunchSource, /childJobAbsenceRequired = \$true/);
+assert.match(windowsDetachedLaunchSource, /childJobAbsenceRequired = \$false/);
 assert.match(windowsDetachedLaunchSource, /protectedValuesInGlobalEnvironment = \$false/);
 assert.match(windowsDetachedLaunchSource, /processOnlyStartupEnvironment = \$true/);
 assert.match(windowsDetachedLaunchSource, /explicitChildEnvironmentBlock = \$true/);
@@ -1081,13 +1081,13 @@ assert.ok(
     < windowsScreenHasSource.indexOf('prlctl capture "$vm_name"'),
 );
 assert.match(windowsScreenHasSource, /__eai_text__:\$\{pattern\}/);
-assert.match(windowsDetachedValidationSource, /eai-windows-detached-app-launch\/v5/);
+assert.match(windowsDetachedValidationSource, /eai-windows-detached-app-launch\/v6/);
 assert.match(windowsDetachedValidationSource, /launchMechanism -cne 'local-win32-process-create'/);
 assert.match(windowsDetachedValidationSource, /localWmiCall -ne \$true/);
 assert.match(windowsDetachedValidationSource, /providerBrokeredJobEscape -ne \$true/);
 assert.match(windowsDetachedValidationSource, /bootstrapInJob -ne \$true/);
 assert.match(windowsDetachedValidationSource, /childInJob -isnot \[bool\]/);
-assert.match(windowsDetachedValidationSource, /childJobAbsenceRequired -ne \$true/);
+assert.match(windowsDetachedValidationSource, /childJobAbsenceRequired -ne \$false/);
 assert.match(windowsDetachedValidationSource, /creationFlags -ne 16778752/);
 assert.match(windowsDetachedValidationSource, /e2eEnvironmentVariableCount -ne 0/);
 assert.match(windowsDetachedValidationSource, /e2eEnvironmentVariableCount -ne 5/);
@@ -1145,14 +1145,14 @@ assert.match(windowsDetachedCleanupSource, /\[void\]\$process[.]Handle/);
 assert.match(windowsDetachedCleanupSource, /\$processStartedAt -cne \[string\]\$receipt[.]processStartedAt/);
 assert.match(windowsDetachedCleanupSource, /\[string\]\$cim[.]CommandLine -cne \$expectedCommandLine/);
 assert.match(windowsDetachedCleanupSource, /\$apps\[0\][.]Kill\(\)[\s\S]*\$apps\[0\][.]WaitForExit\(30000\)/);
-assert.match(windowsDetachedCleanupSource, /eai-windows-detached-app-launch\/v5/);
+assert.match(windowsDetachedCleanupSource, /eai-windows-detached-app-launch\/v6/);
 assert.match(windowsDetachedCleanupSource, /receipt-process-identity-observation/);
 assert.match(windowsDetachedCleanupSource, /\$receiptValue[.]processIdentityObservedAt/);
 assert.match(windowsDetachedCleanupSource, /launchMechanism -cne 'local-win32-process-create'/);
 assert.match(windowsDetachedCleanupSource, /invalid WMI environment contract/);
 assert.match(windowsDetachedCleanupSource, /bootstrapInJob -ne \$true/);
 assert.match(windowsDetachedCleanupSource, /childInJob -isnot \[bool\]/);
-assert.match(windowsDetachedCleanupSource, /childJobAbsenceRequired -ne \$true/);
+assert.match(windowsDetachedCleanupSource, /childJobAbsenceRequired -ne \$false/);
 assert.match(windowsDetachedCleanupSource, /creationFlags -ne 16778752/);
 assert.match(windowsDetachedCleanupSource, /Cleanup refuses a bootstrap outside this run hash\/owner binding/);
 const windowsAmbiguousArmQuarantineStart = windowsDetachedCleanupSource.indexOf(
@@ -1259,7 +1259,7 @@ assert.match(windowsGuestAdapterSource, /windows-e2e-app-launch[.]json/);
 assert.match(windowsGuestAdapterSource, /windows-\$\{mode\}-transport-return[.]json/);
 assert.match(windowsGuestAdapterSource, /eai-windows-detached-transport-return\/v1/);
 assert.match(windowsGuestAdapterSource, /childAliveValidatedAfterReturn: true/);
-assert.match(windowsGuestAdapterSource, /providerBrokeredJobEscapeProven: true/);
+assert.match(windowsGuestAdapterSource, /providerBrokeredTransportIsolationProven: true/);
 assert.match(windowsDetachedLaunchSource, /validate_guest_app_launch[\s\S]*write_detached_transport_return_proof/);
 assert.match(windowsGuestAdapterSource, /REDACTED_BASE64/);
 assert.match(windowsGuestAdapterSource, /decoded[.]includes\(value\)/);
