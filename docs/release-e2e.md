@@ -448,6 +448,16 @@ modifier held by a previous injected event from changing the next character.
 Never use the host clipboard as a fallback and never include protected text in
 arguments, logs, screenshots, or test evidence.
 
+On macOS Tahoe, use only the signed executable at
+`/Applications/Parallels Desktop.app/Contents/MacOS/prlctl`. Do not call the
+generic `prlctl` launcher from Node code. This host can stage that launcher in
+a temporary directory. macOS then kills the staged binary with a **Launch
+Constraint Violation**, and Parallels can show a misleading Desktop crash
+report. `guest-test-lib.sh` exports `EAI_PARALLELS_PRLCTL`; keyboard helpers
+must use that absolute path. Verify this rule with one read-only `status` call
+and confirm that it creates no new `prlctl-*.ips` diagnostic report before a
+full VM test.
+
 If Microsoft rejects a password after a clean restore, do not assume the
 Keychain value was modified. First verify the Keychain item locally without
 printing it, verify the exact email was accepted, and run a non-secret virtual

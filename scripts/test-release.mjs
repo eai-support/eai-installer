@@ -2101,6 +2101,10 @@ assert.match(guestTestLibrarySource, /defenderAddEvidence[?][.]targetHashVerifie
 const windowsNormalLaunchSection = windowsGuestAdapterSource.slice(windowsNormalLaunch, windowsE2eLaunch);
 assert.match(guestTestLibrarySource, /EAI_PARALLELS_PRLCTL='\/Applications\/Parallels Desktop[.]app\/Contents\/MacOS\/prlctl'/);
 assert.match(guestTestLibrarySource, /PATH="\$\(dirname "\$EAI_PARALLELS_PRLCTL"\):\$PATH"/);
+assert.match(guestTestLibrarySource, /export PATH EAI_PARALLELS_PRLCTL/);
+assert.match(parallelsInputSource, /process[.]env[.]EAI_PARALLELS_PRLCTL/);
+assert.match(parallelsInputSource, /spawnSync\(prlctl, \["status", vm\]/);
+assert.match(parallelsInputSource, /spawnSync\(prlctl, \["send-key-event", vm, "--json"\]/);
 assert.match(vmAdapterPreflightSource, /prlctl_bin='\/Applications\/Parallels Desktop[.]app\/Contents\/MacOS\/prlctl'/);
 assert.match(vmAdapterPreflightSource, /codesign --verify --deep --strict "\$prlctl_bin"/);
 assert.match(vmAdapterPreflightSource, /"\$prlctl_bin" list "\$vm_name" --info/);

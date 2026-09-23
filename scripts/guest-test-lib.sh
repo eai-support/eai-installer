@@ -10,7 +10,7 @@ readonly EAI_PARALLELS_PRLCTL='/Applications/Parallels Desktop.app/Contents/MacO
 # and signature are deliberately checked by vm-adapter-preflight.sh, not on
 # source, so static CI may inspect these adapters without Parallels installed.
 PATH="$(dirname "$EAI_PARALLELS_PRLCTL"):$PATH"
-export PATH
+export PATH EAI_PARALLELS_PRLCTL
 
 guest_test_fail() {
   printf 'Guest release test failed: %s\n' "$*" >&2

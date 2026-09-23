@@ -126,7 +126,13 @@ const { vm, delay, repeat, positionals } = parseArgs(process.argv.slice(2));
 const [command, operand, ...extra] = positionals;
 if (!command || extra.length > 0) fail(usage());
 
-const status = spawnSync("prlctl", ["status", vm], { encoding: "utf8" });
+// macOS Tahoe rejects a copied `prlctl` binary under launch constraints.  Do
+// not rely on PATH here: Node can resolve a generic launcher which this host
+// stages in a temporary directory.  The signed app-bundle executable is the
+// only supported control path for the live E2E guests.
+const prlctl = process.env.EAI_PARALLELS_PRLCTL
+  || "/Applications/Parallels Desktop.app/Contents/MacOS/prlctl";
+const status = spawnSync(prlctl, ["status", vm], { encoding: "utf8" });
 if (status.status !== 0 || !status.stdout.includes("running")) fail(`VM '${vm}' is not running.`);
 
 const events = [];
@@ -147,7 +153,7 @@ if (command === "key") {
 }
 
 if (events.length === 0) fail("No input events were generated.");
-const result = spawnSync("prlctl", ["send-key-event", vm, "--json"], {
+const result = spawnSync(prlctl, ["send-key-event", vm, "--json"], {
   input: JSON.stringify(events),
   encoding: "utf8",
   stdio: ["pipe", "ignore", "pipe"],
