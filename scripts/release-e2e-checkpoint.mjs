@@ -62,6 +62,16 @@ export function advanceCheckpoint(file, release, phase, evidence = {}) {
   atomicWrite(file, ledger);
   return ledger;
 }
+export function resetCheckpoint(file, release, reason) {
+  if (!/^[a-z0-9-]{3,80}$/.test(reason || "")) fail("Checkpoint reset reason is invalid.");
+  const ledger = initializeCheckpoint(file, release);
+  const verifiedAt = new Date().toISOString();
+  ledger.phase = "fresh";
+  ledger.updatedAt = verifiedAt;
+  ledger.events.push({ phase: "fresh-reset", verifiedAt, evidence: { reason } });
+  atomicWrite(file, ledger);
+  return ledger;
+}
 function option(name) { const index = process.argv.indexOf(`--${name}`); return index === -1 ? undefined : process.argv[index + 1]; }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const command = process.argv[2];
@@ -71,5 +81,6 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   if (command === "init") console.log(JSON.stringify(initializeCheckpoint(file, release)));
   else if (command === "read") console.log(JSON.stringify(readCheckpoint(file, release) || initializeCheckpoint(file, release)));
   else if (command === "advance") console.log(JSON.stringify(advanceCheckpoint(file, release, option("phase"), option("evidence") ? JSON.parse(option("evidence")) : {})));
+  else if (command === "reset") console.log(JSON.stringify(resetCheckpoint(file, release, option("reason"))));
   else fail("Expected init, read, or advance.");
 }
