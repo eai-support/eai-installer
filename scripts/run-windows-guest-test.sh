@@ -5720,7 +5720,35 @@ EAI_WINDOWS_VM_NAME="$vm_name" EAI_WINDOWS_GUEST_USER="$guest_user" \
 stage ai-workspace-provision-passed
 
 stage portal-login
-EAI_WINDOWS_VM_NAME="$vm_name" "$ROOT/scripts/login-windows-guest.sh" --portal-only \
+portal_login_attempt=0
+portal_login_status=1
+portal_login_output=""
+for portal_login_attempt in 1 2 3; do
+  set +e
+  portal_login_output="$(
+    EAI_WINDOWS_VM_NAME="$vm_name" "$ROOT/scripts/login-windows-guest.sh" --portal-only 2>&1
+  )"
+  portal_login_status=$?
+  set -e
+  printf '%s\n' "$portal_login_output"
+  if [[ "$portal_login_status" == 0 ]]; then
+    break
+  fi
+  # A rejected credential is authoritative. Do not make further sign-in
+  # attempts that could lock the release-test identity. Other failures at this
+  # stage are known Parallels/UI transport races; the login helper resets Edge
+  # before each bounded retry.
+  if printf '%s\n' "$portal_login_output" \
+    | grep -Fq 'Microsoft rejected the configured release-test account credentials.'; then
+    break
+  fi
+  if [[ "$portal_login_attempt" -lt 3 ]]; then
+    printf 'WINDOWS_PORTAL_LOGIN_RETRY attempt=%s\n' "$portal_login_attempt" >&2
+    sleep 3
+  fi
+done
+unset portal_login_output
+[[ "$portal_login_status" == 0 ]] \
   || guest_test_fail "Enterprise AI portal login failed in the Windows guest."
 stage portal-login-passed
 

@@ -510,6 +510,9 @@ assert.match(windowsGuestAdapterSource, /vm_name="\$\{EAI_WINDOWS_VM_NAME:-Windo
 assert.match(windowsGuestAdapterSource, /snapshot_id="\$\{EAI_WINDOWS_SNAPSHOT_ID:-48921a89-eb72-430e-b4bf-a7b70d8bfaab\}"/);
 assert.match(windowsGuestAdapterSource, /guest_user="\$\{EAI_WINDOWS_GUEST_USER:-eai-douglasross\}"/);
 assert.match(windowsGuestAdapterSource, /login-windows-guest[.]sh/);
+assert.match(windowsGuestAdapterSource, /for portal_login_attempt in 1 2 3; do/);
+assert.match(windowsGuestAdapterSource, /WINDOWS_PORTAL_LOGIN_RETRY attempt=%s/);
+assert.match(windowsGuestAdapterSource, /Microsoft rejected the configured release-test account credentials[.][\s\S]*break/);
 assert.match(windowsGuestAdapterSource, /prepare-windows-ai-workspace[.]sh/);
 assert.match(windowsGuestAdapterSource, /windows-ai-handoff-process-query[.]sh/);
 assert.match(guestTestLibrarySource, /prlctl snapshot-list "\$vm_name"/);
