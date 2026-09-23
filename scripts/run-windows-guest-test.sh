@@ -815,6 +815,40 @@ guest_system_ps_once() {
     -InputFormat Text -OutputFormat Text -Command -
 }
 
+clear_stateful_resume_artifacts() {
+  # A stateful retry must make the bridge's fixed test paths empty before it
+  # re-downloads the exact release asset. These are explicit E2E-owned files;
+  # reject directories and reparse points so recovery cannot widen deletion.
+  guest_system_ps_run "" 5 >/dev/null <<'POWERSHELL'
+$ErrorActionPreference = 'Stop'
+$paths = @(
+  'C:\Users\Public\eai-setup-under-test.exe',
+  'C:\Users\Public\eai-setup-installer-worker.ps1',
+  'C:\Users\Public\eai-setup-installer-worker.ps1.tmp',
+  'C:\Users\Public\eai-setup-installer-bridge-armed.json',
+  'C:\Users\Public\eai-setup-installer-bridge-armed.json.tmp',
+  'C:\Users\Public\eai-setup-installer-launch.signal',
+  'C:\Users\Public\eai-setup-installer-launch.signal.tmp',
+  'C:\Users\Public\eai-setup-installer-cancel.signal',
+  'C:\Users\Public\eai-setup-installer-cancel.signal.tmp',
+  'C:\Users\Public\eai-setup-installer-complete.json',
+  'C:\Users\Public\eai-setup-installer-complete.json.tmp'
+)
+foreach ($path in $paths) {
+  if (-not (Test-Path -LiteralPath $path)) { continue }
+  $item = Get-Item -LiteralPath $path -Force -ErrorAction Stop
+  if ($item.PSIsContainer -or (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) -or
+      -not [string]::Equals($item.FullName, $path, [StringComparison]::OrdinalIgnoreCase)) {
+    throw "Refusing to remove an invalid stateful-recovery artifact: $path"
+  }
+  Remove-Item -LiteralPath $path -Force -ErrorAction Stop
+}
+if ($paths | Where-Object { Test-Path -LiteralPath $_ }) {
+  throw 'A stale stateful-recovery artifact remains.'
+}
+POWERSHELL
+}
+
 write_uac_policy_arm_receipt() {
   local arm_json="$1"
   local receipt_file=""
@@ -5983,6 +6017,11 @@ unset portal_login_output
 stage portal-login-passed
 
 host_hash="$(guest_test_host_sha256)"
+if [[ "$resume_existing_vm" == 1 ]]; then
+  stage stateful-artifact-recovery
+  clear_stateful_resume_artifacts \
+    || guest_test_fail "Stale Windows E2E artifacts could not be cleared for stateful recovery."
+fi
 stage installer-bridge-arm
 start_installer_bridge "$host_hash" "$guest_user" \
   || guest_test_fail "The protected current-user installer bridge could not arm before the Defender guardian."
