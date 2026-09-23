@@ -2295,6 +2295,8 @@ assert.match(windowsVersionsSource, /WaitForExit\(5000\)/);
 assert.match(windowsVersionsSource, /taskkill[.]exe/);
 assert.match(windowsVersionsSource, /streamsCompleted/);
 assert.match(windowsVersionsSource, /StandardOutput[.]Dispose\(\)/);
+assert.match(windowsGuestAdapterSource, /function atLeast\(version, minimum\)/);
+assert.match(windowsGuestAdapterSource, /!atLeast\(cliVersion, expectedCli\)/);
 const windowsBaselineStart = windowsGuestAdapterSource.indexOf("stage clean-snapshot-preflight");
 const windowsBaselineEnd = windowsGuestAdapterSource.indexOf("before_versions=", windowsBaselineStart);
 const windowsBaselineSource = windowsGuestAdapterSource.slice(windowsBaselineStart, windowsBaselineEnd);

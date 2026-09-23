@@ -5648,7 +5648,19 @@ const versions = JSON.parse(process.env.EAI_WINDOWS_VERSIONS);
 const nodeMajor = Number.parseInt(String(versions.node || "").replace(/^v/, "").split(".")[0], 10);
 const expectedCli = process.env.EAI_EXPECTED_CLI_VERSION;
 const cliVersion = String(versions.eai || "").match(/[0-9]+\.[0-9]+\.[0-9]+/)?.[0];
-if (!versions.git || !Number.isInteger(nodeMajor) || nodeMajor < 24 || !versions.npm || cliVersion !== expectedCli) {
+function atLeast(version, minimum) {
+  const actual = version?.split(".").map(Number);
+  const required = minimum?.split(".").map(Number);
+  if (!actual || !required || actual.length !== 3 || required.length !== 3
+    || actual.some((part) => !Number.isInteger(part)) || required.some((part) => !Number.isInteger(part))) {
+    return false;
+  }
+  for (let index = 0; index < 3; index += 1) {
+    if (actual[index] !== required[index]) return actual[index] > required[index];
+  }
+  return true;
+}
+if (!versions.git || !Number.isInteger(nodeMajor) || nodeMajor < 24 || !versions.npm || !atLeast(cliVersion, expectedCli)) {
   process.exitCode = 1;
 }
 NODE
@@ -5904,30 +5916,38 @@ POWERSHELL
 done
 [[ -n "$baseline_json" ]] \
   || guest_test_fail "The Windows clean-snapshot preflight returned no guest data."
-EAI_WINDOWS_BASELINE="$baseline_json" EAI_WINDOWS_EXPECTED_USER="$guest_user" node --input-type=module <<'NODE'
+EAI_WINDOWS_BASELINE="$baseline_json" EAI_WINDOWS_EXPECTED_USER="$guest_user" \
+  EAI_WINDOWS_RESUME="$resume_existing_vm" node --input-type=module <<'NODE'
 const value = JSON.parse(process.env.EAI_WINDOWS_BASELINE);
 const expectedUser = process.env.EAI_WINDOWS_EXPECTED_USER.toLowerCase();
+const resuming = process.env.EAI_WINDOWS_RESUME === "1";
 if (!String(value.os).includes("Windows 11")) throw new Error(`Expected Windows 11, found ${value.os}`);
 if (!String(value.osArchitecture).toUpperCase().includes("ARM") || value.processArchitecture !== "ARM64") throw new Error("The Windows guest is not ARM64.");
 if (!String(value.identity).toLowerCase().endsWith(`\\${expectedUser}`) || value.interactive !== true) throw new Error("The Windows guest session identity is invalid.");
 if (value.localAdministrator !== true) throw new Error("The approved Windows release-test user is not a local administrator.");
 if (value.parallelsTools !== true || value.winget !== true) throw new Error("Parallels Tools or WinGet is unavailable.");
-if (value.promptOnSecureDesktopKind !== "DWord" || value.promptOnSecureDesktop !== 0 ||
+if (!resuming && (value.promptOnSecureDesktopKind !== "DWord" || value.promptOnSecureDesktop !== 0 ||
     value.consentPromptBehaviorAdminKind !== "DWord" || value.consentPromptBehaviorAdmin !== 5 ||
-    value.enableLUAKind !== "DWord" || value.enableLUA !== 1) {
+    value.enableLUAKind !== "DWord" || value.enableLUA !== 1)) {
   throw new Error("The approved Windows snapshot does not have the required UAC consent-policy baseline.");
 }
-for (const key of ["edgeProcesses", "git", "node", "npm", "eai", "vscode", "eaiSetup", "userEaiState", "publicTestArtifacts"]) {
-  if (value[key] !== false) throw new Error(`The approved Windows snapshot is not clean: ${key} is already present.`);
+if (!resuming) {
+  for (const key of ["edgeProcesses", "git", "node", "npm", "eai", "vscode", "eaiSetup", "userEaiState", "publicTestArtifacts"]) {
+    if (value[key] !== false) throw new Error(`The approved Windows snapshot is not clean: ${key} is already present.`);
+  }
 }
 NODE
 before_versions='{"git":null,"node":null,"npm":null,"eai":null}'
 stage clean-snapshot-preflight-passed
 
-stage ai-workspace-provision
-EAI_WINDOWS_VM_NAME="$vm_name" EAI_WINDOWS_GUEST_USER="$guest_user" \
-  "$ROOT/scripts/prepare-windows-ai-workspace.sh"
-stage ai-workspace-provision-passed
+if [[ "$resume_existing_vm" == 1 ]]; then
+  stage ai-workspace-resume
+else
+  stage ai-workspace-provision
+  EAI_WINDOWS_VM_NAME="$vm_name" EAI_WINDOWS_GUEST_USER="$guest_user" \
+    "$ROOT/scripts/prepare-windows-ai-workspace.sh"
+  stage ai-workspace-provision-passed
+fi
 
 stage portal-login
 portal_login_attempt=0
