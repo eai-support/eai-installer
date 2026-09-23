@@ -1042,7 +1042,7 @@ assert.doesNotMatch(
   windowsDetachedPathProofSources,
   /\[string\]::Equals\(\$(?:process|armedProcess)[.]Path,|\[string\]::Equals\(\$_[.]Path,|\[string\]::Equals\(\$actualExecutable, \$expectedExecutable|\[string\]::Equals\(\$(?:armedPath|path), \$expectedPowerShell/,
 );
-assert.match(windowsFocusSource, /eai-windows-detached-app-launch\/v5/);
+assert.match(windowsFocusSource, /eai-windows-detached-app-launch\/v6/);
 assert.match(windowsFocusSource, /\$receipt[.]mode -cne 'normal'/);
 assert.match(windowsFocusSource, /\[int\]\$receipt[.]processId -ne \[int\]\$pidText/);
 assert.match(windowsFocusSource, /\$receipt[.]processOwnerSid -cne \$identity[.]User[.]Value/);

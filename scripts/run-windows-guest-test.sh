@@ -318,7 +318,7 @@ $pidText = (Get-Content -Raw -LiteralPath $pidFile).Trim()
 $receipt = Get-Content -Raw -LiteralPath $receiptFile | ConvertFrom-Json
 $executable = (Get-Content -Raw -LiteralPath $executableFile).Trim()
 if ($pidText -cnotmatch '^[1-9][0-9]*$' -or
-    $receipt.schemaVersion -cne 'eai-windows-detached-app-launch/v5' -or
+    $receipt.schemaVersion -cne 'eai-windows-detached-app-launch/v6' -or
     $receipt.status -cne 'launched' -or $receipt.mode -cne 'normal' -or
     [int]$receipt.processId -ne [int]$pidText -or
     $receipt.processOwnerSid -cne $identity.User.Value -or
