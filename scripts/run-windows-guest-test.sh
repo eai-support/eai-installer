@@ -6308,6 +6308,18 @@ POWERSHELL
 [[ "$executable_hash" =~ ^[0-9a-f]{64}$ ]] || guest_test_fail "The resumed Windows installation could not be independently verified."
 clear_stateful_resume_artifacts \
   || guest_test_fail "Stale Windows E2E artifacts could not be cleared before UI-node recovery."
+guest_ps_run "$executable_hash"$'\n' <<'POWERSHELL'
+$ErrorActionPreference = 'Stop'
+$expectedHash = [Console]::In.ReadLine()
+if ($expectedHash -cnotmatch '^[0-9a-f]{64}$') { throw 'The resumed executable hash is invalid.' }
+$executable = Join-Path $env:LOCALAPPDATA 'EAI Setup\eai-setup.exe'
+if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) { throw 'The resumed EAI Setup executable is missing.' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $executable).Hash.ToLowerInvariant() -cne $expectedHash) {
+  throw 'The resumed EAI Setup executable changed before app launch.'
+}
+Set-Content -NoNewline -Encoding ASCII -LiteralPath 'C:\Users\Public\eai-setup-e2e-executable.txt' -Value $executable
+POWERSHELL
+stage resume-launch-pointer-restored
 stage resume-native-installer-verified
 fi
 
