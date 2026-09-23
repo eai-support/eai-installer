@@ -17,7 +17,7 @@ mkdir -p "$test_dir/bin"
 cp /bin/sleep "$test_dir/bin/prlctl"
 start_seconds=$SECONDS
 set +e
-PATH="$test_dir/bin:$PATH" windows_hidden_bounded_prlctl 1 30
+EAI_PARALLELS_PRLCTL="$test_dir/bin/prlctl" windows_hidden_bounded_prlctl 1 30
 status=$?
 set -e
 elapsed=$((SECONDS - start_seconds))
