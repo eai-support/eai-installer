@@ -234,8 +234,11 @@ APPLESCRIPT
 focus_receipt_bound_eai_setup_window() {
   local output=""
   local expected_hash="${executable_hash:-}"
+  local button_name="${1:-}"
+  local invoke_button="${2:-0}"
   [[ "$expected_hash" =~ ^[0-9a-f]{64}$ ]] || return 1
-  output="$(guest_ps_run "$guest_normal_pid"$'\n'"$guest_normal_launch_receipt"$'\n'"$guest_executable_file"$'\n'"$expected_hash"$'\n' 2 <<'POWERSHELL'
+  [[ "$invoke_button" == 0 || "$invoke_button" == 1 ]] || return 1
+  output="$(guest_ps_run "$guest_normal_pid"$'\n'"$guest_normal_launch_receipt"$'\n'"$guest_executable_file"$'\n'"$expected_hash"$'\n'"$button_name"$'\n'"$invoke_button"$'\n' 2 <<'POWERSHELL'
 $ErrorActionPreference = 'Stop'
 
 function ConvertTo-ComparableAppPath([string]$path) {
@@ -255,6 +258,8 @@ $pidFile = [Console]::In.ReadLine()
 $receiptFile = [Console]::In.ReadLine()
 $executableFile = [Console]::In.ReadLine()
 $expectedHash = [Console]::In.ReadLine()
+$buttonName = [Console]::In.ReadLine()
+$invokeButton = [Console]::In.ReadLine()
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 if ($identity.IsSystem -or $expectedHash -cnotmatch '^[0-9a-f]{64}$') {
   throw 'The EAI Setup focus trust inputs are invalid.'
@@ -351,15 +356,68 @@ try {
 for ($poll = 0; $poll -lt 20 -and [EaiReleaseWindowFocus]::GetForegroundWindow() -ne $window; $poll++) {
   Start-Sleep -Milliseconds 100
 }
-if ([EaiReleaseWindowFocus]::GetForegroundWindow() -ne $window) {
-  throw 'The exact EAI Setup window could not be proven in the foreground.'
+if ([string]::IsNullOrEmpty($buttonName)) {
+  # Parallels can deny a guest-control PowerShell process foreground ownership
+  # even while its receipt-bound app window is visible in the interactive
+  # desktop. The window/process binding remains authoritative for screenshots.
+  $process.Dispose()
+  [Console]::Out.WriteLine('EAI_SETUP_RECEIPT_BOUND_WINDOW_READY')
+  return
+}
+$validButtonName = $buttonName -in @('Get started', "Let's go")
+if (-not $validButtonName -or $invokeButton -notin @('0', '1')) {
+  throw 'The EAI Setup UI Automation action is not approved.'
+}
+Add-Type -AssemblyName UIAutomationClient
+Add-Type -AssemblyName UIAutomationTypes
+$windowElement = [System.Windows.Automation.AutomationElement]::FromHandle($window)
+if ($null -eq $windowElement -or [int]$windowElement.Current.ProcessId -ne $process.Id) {
+  throw 'The EAI Setup UI Automation window is not bound to the exact live process.'
+}
+$conditions = @(
+  [System.Windows.Automation.PropertyCondition]::new(
+    [System.Windows.Automation.AutomationElement]::NameProperty, $buttonName
+  ),
+  [System.Windows.Automation.PropertyCondition]::new(
+    [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+    [System.Windows.Automation.ControlType]::Button
+  )
+)
+$matches = @($windowElement.FindAll(
+  [System.Windows.Automation.TreeScope]::Descendants,
+  [System.Windows.Automation.AndCondition]::new([System.Windows.Automation.Condition[]]$conditions)
+) | Where-Object { -not $_.Current.IsOffscreen -and $_.Current.IsEnabled })
+if ($matches.Count -ne 1) {
+  throw 'The receipt-bound EAI Setup window did not expose exactly one approved visible action.'
+}
+if ($invokeButton -eq '1') {
+  $invokePattern = $null
+  if (-not $matches[0].TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$invokePattern)) {
+    throw 'The approved EAI Setup action does not expose UI Automation InvokePattern.'
+  }
+  ([System.Windows.Automation.InvokePattern]$invokePattern).Invoke()
+  $process.Dispose()
+  [Console]::Out.WriteLine('EAI_SETUP_RECEIPT_BOUND_BUTTON_INVOKED')
+  return
 }
 $process.Dispose()
-[Console]::Out.WriteLine('EAI_SETUP_RECEIPT_BOUND_WINDOW_FOCUSED')
+[Console]::Out.WriteLine('EAI_SETUP_RECEIPT_BOUND_BUTTON_READY')
 POWERSHELL
   )" || return 1
+  if printf '%s\n' "$output" | /usr/bin/tr -d '\r' \
+    | /usr/bin/grep -Fqx 'EAI_SETUP_RECEIPT_BOUND_WINDOW_READY'; then
+    printf '%s\n' "$output"
+    return 0
+  fi
+  return 1
+}
+
+invoke_receipt_bound_eai_setup_button() {
+  local button_name="$1"
+  local output=""
+  output="$(focus_receipt_bound_eai_setup_window "$button_name" 1)" || return 1
   printf '%s\n' "$output" | /usr/bin/tr -d '\r' \
-    | /usr/bin/grep -Fqx 'EAI_SETUP_RECEIPT_BOUND_WINDOW_FOCUSED'
+    | /usr/bin/grep -Fqx 'EAI_SETUP_RECEIPT_BOUND_BUTTON_INVOKED'
 }
 
 screen_has() {
@@ -6048,10 +6106,10 @@ welcome_started=0
 welcome_advanced=0
 for _ in $(seq 1 30); do
   if screen_has "Get started"; then
-    # screen_has proves the receipt-bound EAI Setup window is foregrounded
-    # immediately before sending the visible primary action.
-    input key tab
-    input key enter
+    # Use the exact process-bound UI Automation element instead of depending
+    # on Parallels granting a guest-control process foreground ownership.
+    invoke_receipt_bound_eai_setup_button "Get started" \
+      || guest_test_fail "The receipt-bound Get started action could not be invoked."
     welcome_started=1
     break
   fi
@@ -6138,7 +6196,8 @@ for _ in $(seq 1 30); do
 done
 [[ "$lets_go_visible" == 1 ]] \
   || guest_test_fail "The released Windows app did not show Let’s go after prerequisite readiness."
-input key enter
+invoke_receipt_bound_eai_setup_button "Let's go" \
+  || guest_test_fail "The receipt-bound Let’s go action could not be invoked."
 signin_visible=0
 for _ in $(seq 1 30); do
   if screen_has "Sign in with browser"; then
@@ -6150,8 +6209,8 @@ done
 # If a platform WebView cleared the retained button focus, make one bounded
 # fallback Tab activation only after proving the unchanged Let’s go screen.
 if [[ "$signin_visible" != 1 ]] && screen_has "Let's go"; then
-  input key tab
-  input key enter
+  invoke_receipt_bound_eai_setup_button "Let's go" \
+    || guest_test_fail "The receipt-bound Let’s go retry could not be invoked."
   for _ in $(seq 1 15); do
     if screen_has "Sign in with browser"; then
       signin_visible=1
