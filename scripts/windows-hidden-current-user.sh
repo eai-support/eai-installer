@@ -54,10 +54,13 @@ windows_hidden_current_user_ps() {
   local vm_name="$1"
   local stdin_payload="${2:-}"
   local script nonce base stage_base payload wrapper wrapper_base64 vbs vbs_base64
-  local ps_path vbs_path stdout_path stderr_path status_path
+  local ps_path vbs_path stdout_path stderr_path status_path wscript_timeout_seconds
   local stage status_text output error_text attempt
   script="$(/bin/cat)"
   [[ -n "$script" ]] || return 2
+  wscript_timeout_seconds="${EAI_WINDOWS_HIDDEN_CURRENT_USER_TIMEOUT_SECONDS:-600}"
+  [[ "$wscript_timeout_seconds" =~ ^[1-9][0-9]*$ ]] \
+    && (( wscript_timeout_seconds >= 15 && wscript_timeout_seconds <= 600 )) || return 2
   nonce="$(/usr/bin/uuidgen | /usr/bin/tr -d '-' | /usr/bin/tr '[:upper:]' '[:lower:]')"
   base="C:\\Users\\Public\\eai-hidden-${nonce}"
   stage_base="${base}.tmp"
@@ -154,7 +157,7 @@ windows_hidden_current_user_ps() {
 
   local wscript_status=1
   for attempt in 1 2 3; do
-    if windows_hidden_bounded_prlctl 600 exec "$vm_name" --current-user wscript.exe "$vbs_path" >/dev/null 2>&1; then
+    if windows_hidden_bounded_prlctl "$wscript_timeout_seconds" exec "$vm_name" --current-user wscript.exe "$vbs_path" >/dev/null 2>&1; then
       wscript_status=0
       break
     fi

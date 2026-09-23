@@ -1519,7 +1519,7 @@ POWERSHELL
   (
     local attached_status=1
     set +e
-    printf '%s\n' "$bootstrap_script" | windows_hidden_current_user_ps "$vm_name" "" \
+    printf '%s\n' "$bootstrap_script" | EAI_WINDOWS_HIDDEN_CURRENT_USER_TIMEOUT_SECONDS=45 windows_hidden_current_user_ps "$vm_name" "" \
       >"$bridge_stdout" 2>"$bridge_stderr"
     attached_status=$?
     set -e

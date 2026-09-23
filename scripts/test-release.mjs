@@ -631,7 +631,7 @@ assert.match(windowsStreamedPowerShellSource, /printf '%s\\n' "\$script" \| wind
 assert.doesNotMatch(windowsStreamedPowerShellSource, /EncodedCommand/);
 assert.match(windowsHiddenCurrentUserSource, /payload="\$\(printf '%s' "\$stdin_payload" \| \/usr\/bin\/base64 \| \/usr\/bin\/tr -d '\\n'\)"/);
 assert.match(windowsHiddenCurrentUserSource, /\[Console\]::SetIn\(\[IO[.]StringReader\]::new\(\$__eaiInput\)\)/);
-assert.match(windowsHiddenCurrentUserSource, /windows_hidden_bounded_prlctl 600 exec "\$vm_name" --current-user wscript[.]exe "\$vbs_path"/);
+assert.match(windowsHiddenCurrentUserSource, /windows_hidden_bounded_prlctl "\$wscript_timeout_seconds" exec "\$vm_name" --current-user wscript[.]exe "\$vbs_path"/);
 assert.match(windowsHiddenCurrentUserSource, /"\$prlctl_bin" "\$@" <&0 &/);
 assert.match(windowsHiddenCurrentUserSource, /\) <\/dev\/null >\/dev\/null 2>&1 &/);
 assert.match(windowsHiddenCurrentUserSource, /s[.]Run\(.*powershell[.]exe.*-File/);
@@ -1297,7 +1297,9 @@ assert.match(windowsHiddenCurrentUserSource, /-InputFormat Text -OutputFormat Te
 assert.match(windowsHiddenCurrentUserSource, /stage_base="\$\{base\}[.]tmp"/);
 assert.match(windowsHiddenCurrentUserSource, /Move-Item -LiteralPath '\$stage_base' -Destination '\$base' -ErrorAction Stop/);
 assert.match(windowsHiddenCurrentUserSource, /EAI_HIDDEN_WORKER_STAGED/);
-assert.match(windowsHiddenCurrentUserSource, /for attempt in 1 2 3; do[\s\S]*windows_hidden_bounded_prlctl 600 exec "\$vm_name" --current-user wscript[.]exe[\s\S]*type "\$status_path"/);
+assert.match(windowsHiddenCurrentUserSource, /wscript_timeout_seconds="\$\{EAI_WINDOWS_HIDDEN_CURRENT_USER_TIMEOUT_SECONDS:-600\}"/);
+assert.match(windowsHiddenCurrentUserSource, /wscript_timeout_seconds >= 15 && wscript_timeout_seconds <= 600/);
+assert.match(windowsHiddenCurrentUserSource, /for attempt in 1 2 3; do[\s\S]*windows_hidden_bounded_prlctl "\$wscript_timeout_seconds" exec "\$vm_name" --current-user wscript[.]exe[\s\S]*type "\$status_path"/);
 assert.doesNotMatch(
   windowsHiddenCurrentUserSource,
   /windows_hidden_bounded_prlctl 600 exec "\$vm_name" --current-user wscript[.]exe[^\n]*\|\| true/,
@@ -1815,6 +1817,7 @@ for (const installerBridgeArtifact of [
   assert.match(windowsGuestAdapterSource, new RegExp(`C:\\\\Users\\\\Public\\\\${installerBridgeArtifact.replaceAll(".", "[.]")}`));
 }
 assert.match(windowsInstallerBridgeSource, /windows_hidden_current_user_ps "\$vm_name" ""/);
+assert.match(windowsInstallerBridgeSource, /EAI_WINDOWS_HIDDEN_CURRENT_USER_TIMEOUT_SECONDS=45 windows_hidden_current_user_ps "\$vm_name" ""/);
 assert.equal(
   (windowsInstallerBridgeSource.match(/windows_hidden_current_user_ps "\$vm_name" ""/g) ?? []).length,
   1,
