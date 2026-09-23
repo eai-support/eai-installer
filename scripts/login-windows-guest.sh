@@ -510,36 +510,33 @@ POWERSHELL
     || fail "Microsoft's Sign in action did not become available."
   printf 'MICROSOFT_PASSWORD_STAGE_SUBMITTED\n'
 
-  # Microsoft shows this exact public error on the approved identity host when
-  # the test account or password is rejected.  Detect it before the general
-  # portal-ready wait so the E2E receipt distinguishes an invalid credential
-  # from a redirect or installer failure.
-  for _ in $(seq 1 15); do
-    authentication_probe="$(run_readonly_ui_action probe-microsoft-authentication 5)" \
-      || fail "Microsoft authentication status could not be inspected safely."
-    if printf '%s\n' "$authentication_probe" | /usr/bin/tr -d '\r' \
-      | /usr/bin/grep -Fqx 'EAI_MICROSOFT_AUTH_REJECTED'; then
-      unset authentication_probe
-      fail "Microsoft rejected the configured release-test account credentials."
-    fi
-    unset authentication_probe
-    if portal_ready_state; then
-      break
-    fi
-    sleep 1
-  done
-
   # Edge's native credential-save flyout is not part of the web accessibility
   # tree. It can cover the approved Microsoft "Stay signed in?" page after a
-  # successful password submission. Escape is sent only after the identity
-  # host has accepted the submission and the bounded post-submit probe has
-  # completed; it dismisses that optional browser flyout without changing the
-  # Microsoft account or the portal session.
-  input key escape
+  # successful password submission. Send Escape only during a short bounded
+  # post-submit window, so it dismisses that optional browser flyout without
+  # changing the Microsoft account or the portal session. Repetition covers
+  # the race between the Microsoft redirect and Edge rendering its native UI.
+  for _ in $(seq 1 12); do
+    input key escape
+    sleep 1
+  done
   run_ui_action_once invoke-edge-not-now 10 >/dev/null \
     || fail "The Edge password-save prompt could not be handled safely."
   run_ui_action_once invoke-ms-yes 45 >/dev/null \
     || fail "Microsoft's stay-signed-in prompt could not be handled safely."
+
+  # Microsoft shows this exact public error on the approved identity host when
+  # the test account or password is rejected. Detect it after the prompt window
+  # so it is one read-only, retryable status check rather than a series of
+  # guest-control calls that can race Parallels after a browser redirect.
+  authentication_probe="$(run_readonly_ui_action probe-microsoft-authentication 5)" \
+    || fail "Microsoft authentication status could not be inspected safely."
+  if printf '%s\n' "$authentication_probe" | /usr/bin/tr -d '\r' \
+    | /usr/bin/grep -Fqx 'EAI_MICROSOFT_AUTH_REJECTED'; then
+    unset authentication_probe
+    fail "Microsoft rejected the configured release-test account credentials."
+  fi
+  unset authentication_probe
   wait_portal_ready 120 \
     || fail "The authenticated Enterprise AI portal did not become ready."
   printf 'FRESH_PROTECTED_LOGIN_PROVEN\n'
