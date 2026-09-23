@@ -832,7 +832,18 @@ $paths = @(
   'C:\Users\Public\eai-setup-installer-cancel.signal',
   'C:\Users\Public\eai-setup-installer-cancel.signal.tmp',
   'C:\Users\Public\eai-setup-installer-complete.json',
-  'C:\Users\Public\eai-setup-installer-complete.json.tmp'
+  'C:\Users\Public\eai-setup-installer-complete.json.tmp',
+  'C:\Users\Public\eai-setup-defender-guardian.ps1',
+  'C:\Users\Public\eai-setup-defender-guardian.ps1.tmp',
+  'C:\Users\Public\eai-setup-defender-guardian-armed.json',
+  'C:\Users\Public\eai-setup-defender-guardian-armed.json.tmp',
+  'C:\Users\Public\eai-setup-defender-add.json',
+  'C:\Users\Public\eai-setup-defender-add.json.tmp',
+  'C:\Users\Public\eai-setup-defender-remove.json',
+  'C:\Users\Public\eai-setup-defender-remove.json.tmp',
+  'C:\Users\Public\eai-setup-defender-done.signal',
+  'C:\Users\Public\eai-setup-defender-target-ready.signal',
+  'C:\Users\Public\eai-setup-defender-target-ready.signal.tmp'
 )
 foreach ($path in $paths) {
   if (-not (Test-Path -LiteralPath $path)) { continue }
