@@ -6019,7 +6019,21 @@ done
 [[ "$ready_reads" -ge 2 ]] || guest_test_fail "The Windows installer did not reach stable prerequisite readiness within 20 minutes."
 
 stage normal-welcome-continue
-input key tab
+# The readiness pass reuses the same DOM button that previously received
+# Get started. Its focus is retained when its label becomes Let’s go, so a
+# leading Tab can move focus away from the primary action. Prove the completed
+# label while the receipt-bound app window is foregrounded, then activate the
+# focused primary action directly.
+lets_go_visible=0
+for _ in $(seq 1 30); do
+  if screen_has "Let's go"; then
+    lets_go_visible=1
+    break
+  fi
+  sleep 1
+done
+[[ "$lets_go_visible" == 1 ]] \
+  || guest_test_fail "The released Windows app did not show Let’s go after prerequisite readiness."
 input key enter
 signin_visible=0
 for _ in $(seq 1 30); do
@@ -6029,6 +6043,19 @@ for _ in $(seq 1 30); do
   fi
   sleep 1
 done
+# If a platform WebView cleared the retained button focus, make one bounded
+# fallback Tab activation only after proving the unchanged Let’s go screen.
+if [[ "$signin_visible" != 1 ]] && screen_has "Let's go"; then
+  input key tab
+  input key enter
+  for _ in $(seq 1 15); do
+    if screen_has "Sign in with browser"; then
+      signin_visible=1
+      break
+    fi
+    sleep 1
+  done
+fi
 [[ "$signin_visible" == 1 ]] \
   || guest_test_fail "The released Windows app did not take Let’s go to the sign-in screen."
 stop_prerequisite_uac_watcher \
