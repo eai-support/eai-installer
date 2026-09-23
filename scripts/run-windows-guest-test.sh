@@ -392,6 +392,7 @@ start_prerequisite_uac_watcher() {
   local log_file="$work_dir/prerequisite-uac-watcher.log"
   rm -f "$stop_file" "$failure_file" "$log_file"
   (
+    capture_failures=0
     while [[ ! -e "$stop_file" ]]; do
       if unexpected_prerequisite_uac_visible; then
         printf '%s unexpected-uac-consent-ui\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$failure_file"
@@ -399,7 +400,16 @@ start_prerequisite_uac_watcher() {
       else
         monitor_status=$?
       fi
-      if [[ "$monitor_status" != 1 ]]; then
+      if [[ "$monitor_status" == 1 ]]; then
+        capture_failures=0
+      else
+        # Parallels can reject a capture while the application replaces its
+        # window. Do not turn one lost frame into a false UAC finding.
+        capture_failures=$((capture_failures + 1))
+        if [[ "$capture_failures" -lt 3 ]]; then
+          sleep 1
+          continue
+        fi
         printf '%s consent-ui-monitor-infrastructure-failed\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$failure_file"
         exit 2
       fi
