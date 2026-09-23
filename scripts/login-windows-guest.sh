@@ -243,8 +243,8 @@ run_readonly_ui_action() {
   local output=""
   local status=1
   local attempt
-  [[ "$action" == probe-portal-ready || "$action" == wait-portal-ready ]] \
-    || fail "Only the portal-readiness action may use the read-only UI retry."
+  [[ "$action" == probe-microsoft-authentication || "$action" == probe-portal-ready || "$action" == wait-portal-ready ]] \
+    || fail "Only a read-only authentication or portal-status action may use the UI retry."
   for attempt in $(seq 1 3); do
     set +e
     output="$(run_ui_action_once "$action" "$timeout_seconds" 2>&1)"
@@ -515,7 +515,7 @@ POWERSHELL
   # portal-ready wait so the E2E receipt distinguishes an invalid credential
   # from a redirect or installer failure.
   for _ in $(seq 1 15); do
-    authentication_probe="$(run_ui_action_once probe-microsoft-authentication 5)" \
+    authentication_probe="$(run_readonly_ui_action probe-microsoft-authentication 5)" \
       || fail "Microsoft authentication status could not be inspected safely."
     if printf '%s\n' "$authentication_probe" | /usr/bin/tr -d '\r' \
       | /usr/bin/grep -Fqx 'EAI_MICROSOFT_AUTH_REJECTED'; then

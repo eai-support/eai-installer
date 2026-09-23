@@ -1367,12 +1367,13 @@ assert.match(windowsLoginIdempotentUiSource, /is_parallels_exact_job_result_fail
 assert.doesNotMatch(windowsLoginIdempotentUiSource, /invoke-next|invoke-sign-in|input type/);
 assert.match(windowsGuestLoginSource, /run_idempotent_ui_action focus-email 60/);
 assert.match(windowsGuestLoginSource, /run_idempotent_ui_action focus-password 60/);
-assert.match(windowsLoginReadOnlyUiSource, /"\$action" == probe-portal-ready \|\| "\$action" == wait-portal-ready/);
+assert.match(windowsLoginReadOnlyUiSource, /"\$action" == probe-microsoft-authentication \|\| "\$action" == probe-portal-ready \|\| "\$action" == wait-portal-ready/);
 assert.match(windowsLoginReadOnlyUiSource, /for attempt in \$\(seq 1 3\); do/);
 assert.match(windowsLoginReadOnlyUiSource, /"\$status" == 255/);
 assert.doesNotMatch(windowsLoginReadOnlyUiSource, /input type|invoke-public-email|invoke-next|invoke-sign-in/);
 assert.match(windowsGuestLoginSource, /wait_enterprise_portal_https\(\) \{[\s\S]*run_guest_powershell_readonly <<'POWERSHELL'/);
 assert.match(windowsGuestLoginSource, /portal_ready_state\(\) \{[\s\S]*run_readonly_ui_action probe-portal-ready 5/);
+assert.match(windowsGuestLoginSource, /authentication_probe="\$\(run_readonly_ui_action probe-microsoft-authentication 5\)"/);
 assert.match(windowsGuestLoginSource, /wait_portal_ready\(\) \{[\s\S]*run_readonly_ui_action wait-portal-ready/);
 assert.match(windowsGuestLoginSource, /EAI_PORTAL_READY/);
 assert.match(windowsGuestLoginSource, /EAI_PORTAL_NOT_READY/);
