@@ -239,10 +239,22 @@ focus_receipt_bound_eai_setup_window() {
   local output=""
   local expected_hash="${executable_hash:-}"
   local button_name="${1:-}"
+  local button_selector=""
   local invoke_button="${2:-0}"
   [[ "$expected_hash" =~ ^[0-9a-f]{64}$ ]] || return 1
   [[ "$invoke_button" == 0 || "$invoke_button" == 1 ]] || return 1
-  output="$(guest_ps_run "$guest_normal_pid"$'\n'"$guest_normal_launch_receipt"$'\n'"$guest_executable_file"$'\n'"$expected_hash"$'\n'"$button_name"$'\n'"$invoke_button"$'\n' 2 <<'POWERSHELL'
+  case "$button_name" in
+    '') button_selector='' ;;
+    'Get started') button_selector='eai-action-start' ;;
+    'Let’s go') button_selector='eai-action-continue' ;;
+    '__eai_text__:Get started') button_selector='eai-text-start' ;;
+    '__eai_text__:Checking this Windows PC') button_selector='eai-text-checking' ;;
+    '__eai_text__:This Windows PC is ready') button_selector='eai-text-ready' ;;
+    '__eai_text__:Let’s go') button_selector='eai-text-continue' ;;
+    '__eai_text__:Sign in with browser') button_selector='eai-text-signin' ;;
+    *) return 1 ;;
+  esac
+  output="$(guest_ps_run "$guest_normal_pid"$'\n'"$guest_normal_launch_receipt"$'\n'"$guest_executable_file"$'\n'"$expected_hash"$'\n'"$button_selector"$'\n'"$invoke_button"$'\n' 2 <<'POWERSHELL'
 $ErrorActionPreference = 'Stop'
 
 function ConvertTo-ComparableAppPath([string]$path) {
@@ -262,7 +274,7 @@ $pidFile = [Console]::In.ReadLine()
 $receiptFile = [Console]::In.ReadLine()
 $executableFile = [Console]::In.ReadLine()
 $expectedHash = [Console]::In.ReadLine()
-$buttonName = [Console]::In.ReadLine()
+$buttonSelector = [Console]::In.ReadLine()
 $invokeButton = [Console]::In.ReadLine()
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 if ($identity.IsSystem -or $expectedHash -cnotmatch '^[0-9a-f]{64}$') {
@@ -336,7 +348,7 @@ foreach ($terminal in @(Get-Process WindowsTerminal -ErrorAction SilentlyContinu
   }
 }
 $window = $process.MainWindowHandle
-if ([string]::IsNullOrEmpty($buttonName)) {
+if ([string]::IsNullOrEmpty($buttonSelector)) {
   [void][EaiReleaseWindowFocus]::AllowSetForegroundWindow([uint32]::MaxValue)
   [void][EaiReleaseWindowFocus]::ShowWindowAsync($window, 9)
   $foregroundWindow = [EaiReleaseWindowFocus]::GetForegroundWindow()
@@ -362,7 +374,7 @@ if ([string]::IsNullOrEmpty($buttonName)) {
     Start-Sleep -Milliseconds 100
   }
 }
-if ([string]::IsNullOrEmpty($buttonName)) {
+if ([string]::IsNullOrEmpty($buttonSelector)) {
   # Parallels can deny a guest-control PowerShell process foreground ownership
   # even while its receipt-bound app window is visible in the interactive
   # desktop. The window/process binding remains authoritative for screenshots.
@@ -376,16 +388,16 @@ $windowElement = [System.Windows.Automation.AutomationElement]::FromHandle($wind
 if ($null -eq $windowElement -or [int]$windowElement.Current.ProcessId -ne $process.Id) {
   throw 'The EAI Setup UI Automation window is not bound to the exact live process.'
 }
-if ($buttonName.StartsWith('__eai_text__:')) {
-  $expectedText = $buttonName.Substring('__eai_text__:'.Length)
-  $approvedTexts = @(
-    'Get started',
-    'Checking this Windows PC',
-    'This Windows PC is ready',
-    'Let’s go',
-    'Sign in with browser'
-  )
-  if ($invokeButton -ne '0' -or $expectedText -notin $approvedTexts) {
+$textSelectors = @{
+  'eai-text-start' = 'Get started'
+  'eai-text-checking' = 'Checking this Windows PC'
+  'eai-text-ready' = 'This Windows PC is ready'
+  'eai-text-continue' = 'Let’s go'
+  'eai-text-signin' = 'Sign in with browser'
+}}
+if ($textSelectors.ContainsKey($buttonSelector)) {
+  $expectedText = $textSelectors[$buttonSelector]
+  if ($invokeButton -ne '0') {
     throw 'The EAI Setup UI text probe is not approved.'
   }
   $textElement = $windowElement.FindFirst(
@@ -401,10 +413,14 @@ if ($buttonName.StartsWith('__eai_text__:')) {
   [Console]::Out.WriteLine('EAI_SETUP_RECEIPT_BOUND_TEXT_READY')
   return
 }
-$validButtonName = $buttonName -in @('Get started', 'Let’s go')
-if (-not $validButtonName -or $invokeButton -notin @('0', '1')) {
+$actionSelectors = @{
+  'eai-action-start' = 'Get started'
+  'eai-action-continue' = 'Let’s go'
+}}
+if (-not $actionSelectors.ContainsKey($buttonSelector) -or $invokeButton -notin @('0', '1')) {
   throw 'The EAI Setup UI Automation action is not approved.'
 }
+$buttonName = $actionSelectors[$buttonSelector]
 $conditions = @(
   [System.Windows.Automation.PropertyCondition]::new(
     [System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'setupStart'
