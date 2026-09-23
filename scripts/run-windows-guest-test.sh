@@ -6363,16 +6363,14 @@ stage normal-welcome-start
 welcome_started=0
 welcome_advanced=0
 for _ in $(seq 1 30); do
-  if screen_has "Get started"; then
-    # Use the exact process-bound UI Automation element instead of depending
-    # on Parallels granting a guest-control process foreground ownership.
-    # The watcher captures the VM at a high frequency. Arm it only immediately
-    # before privileged preparation begins, after the WebView has rendered.
+  # WebView2 can omit accessibility descendants in a Parallels guest even
+  # when its receipt-bound top-level window is present. Focus that exact window
+  # and use the normal keyboard activation of the primary Welcome action.
+  if focus_receipt_bound_eai_setup_window >/dev/null; then
     start_prerequisite_uac_watcher
     prerequisite_uac_watcher_alive \
       || guest_test_fail "The exact-window Windows unexpected-consent-UI watcher did not start."
-    invoke_receipt_bound_eai_setup_button "Get started" \
-      || guest_test_fail "The receipt-bound Get started action could not be invoked."
+    input key enter
     welcome_started=1
     break
   fi

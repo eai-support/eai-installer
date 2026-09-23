@@ -534,7 +534,7 @@ assert.match(windowsGuestAdapterSource, /guest_user="\$\{EAI_WINDOWS_GUEST_USER:
 assert.match(windowsGuestAdapterSource, /login-windows-guest[.]sh/);
 assert.match(windowsGuestAdapterSource, /for baseline_attempt in 1 2 3; do[\s\S]*The Windows clean-snapshot preflight returned no guest data/);
 assert.match(windowsGuestAdapterSource, /stage normal-welcome-continue[\s\S]*screen_has "Let’s go"[\s\S]*invoke_receipt_bound_eai_setup_button "Let’s go"/);
-assert.match(windowsGuestAdapterSource, /Get started[\s\S]*invoke_receipt_bound_eai_setup_button "Get started"/);
+assert.match(windowsGuestAdapterSource, /WebView2 can omit accessibility descendants[\s\S]*focus_receipt_bound_eai_setup_window[\s\S]*input key enter/);
 assert.match(windowsGuestAdapterSource, /for portal_login_attempt in 1 2 3; do/);
 assert.match(windowsGuestAdapterSource, /WINDOWS_PORTAL_LOGIN_RETRY attempt=%s/);
 assert.match(windowsGuestAdapterSource, /Microsoft rejected the configured release-test account credentials[.][\s\S]*break/);
@@ -2165,10 +2165,9 @@ assert.match(windowsGuestAdapterSource, /\[DllImport\("kernel32[.]dll"\)\] publi
 assert.match(windowsNormalLaunchSection, /cleanup_detached_guest_app normal/);
 assert.doesNotMatch(windowsNormalLaunchSection, /EAI_SETUP_E2E(?:_|\s*=)/);
 assert.match(windowsNormalLaunchSection, /versions_satisfy_contract "\$versions"/);
-assert.match(windowsNormalLaunchSection, /screen_has "Get started"/);
 assert.match(windowsNormalLaunchSection, /screen_has "This Windows PC is ready"/);
 assert.match(windowsNormalLaunchSection, /screen_has "Sign in with browser"/);
-assert.match(windowsNormalLaunchSection, /invoke_receipt_bound_eai_setup_button "Get started"/);
+assert.match(windowsNormalLaunchSection, /focus_receipt_bound_eai_setup_window >\/dev\/null[\s\S]*input key enter/);
 assert.match(windowsNormalLaunchSection, /invoke_receipt_bound_eai_setup_button "Let’s go"/);
 assert.doesNotMatch(windowsNormalLaunchSection, /Prerequisites installed successfully/);
 assert.doesNotMatch(windowsNormalLaunchSection, /Sign in to EAI/);
@@ -2345,8 +2344,8 @@ assert.match(windowsNormalLaunchSection, /while \(\( SECONDS < prerequisite_dead
 assert.doesNotMatch(windowsNormalLaunchSection, /for attempt in \$\(seq 1 240\)/);
 const windowsUacWatcherLaunch = windowsNormalLaunchSection.indexOf("start_prerequisite_uac_watcher");
 const windowsFirstNormalLivenessProbe = windowsNormalLaunchSection.indexOf('guest_process_alive "$guest_normal_pid"');
-const windowsGetStartedVisible = windowsNormalLaunchSection.indexOf('screen_has "Get started"');
-const windowsGetStartedInvoke = windowsNormalLaunchSection.indexOf('invoke_receipt_bound_eai_setup_button "Get started"');
+const windowsGetStartedVisible = windowsNormalLaunchSection.indexOf('focus_receipt_bound_eai_setup_window >/dev/null');
+const windowsGetStartedInvoke = windowsNormalLaunchSection.indexOf('input key enter', windowsGetStartedVisible);
 const windowsPrerequisiteLoop = windowsNormalLaunchSection.indexOf("stage prerequisite-install");
 const windowsUacWatcherStop = windowsNormalLaunchSection.indexOf("stop_prerequisite_uac_watcher");
 assert.ok(windowsUacWatcherLaunch >= 0 && windowsUacWatcherLaunch < windowsPrerequisiteLoop);
