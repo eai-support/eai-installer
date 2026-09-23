@@ -328,10 +328,16 @@ async function downloadAsset({ repo, tag, asset, destination }) {
   const target = path.join(destination, asset);
   if (!commandExists("gh")) throw new Error("gh is required to download the published release asset");
   const result = await run("gh", ["release", "download", tag, "--repo", repo, "--pattern", asset, "--dir", destination, "--clobber"], { role: "release-download", signalEligible: true });
-  if (result.code !== 0 || !fs.existsSync(target)) {
+  if (result.code === 0 && fs.existsSync(target)) return { path: target, source: "github-release" };
+  // Public release assets have a stable GitHub download URL.  Retain the
+  // GitHub CLI as the primary path, but do not let its API rate limit prevent
+  // a guest from testing the same exact published asset.
+  const direct = await run("curl", ["--fail", "--location", "--retry", "2", "--output", target,
+    `https://github.com/${repo}/releases/download/${tag}/${asset}`], { role: "release-download-direct", signalEligible: true });
+  if (direct.code !== 0 || !fs.existsSync(target)) {
     throw new Error(`GitHub release download failed for ${asset}: ${redact(result.stderr || result.stdout)}`);
   }
-  return { path: target, source: "github-release" };
+  return { path: target, source: "github-release-direct" };
 }
 
 async function validateAsset(assetPath, vm) {
