@@ -243,6 +243,81 @@ function Test-PortalReady {
     return $gettingStarted -and $allApps
 }
 
+function Test-MicrosoftAuthenticationRejected {
+    try {
+        Assert-EdgeLocation -ExpectedHost "enterpriseaiplatform.ciamlogin.com"
+    } catch {
+        return $false
+    }
+    return Test-ExactEdgeElement -Names @(
+        "We couldn't find an account with this email address or password."
+    ) -ControlType "Any"
+}
+
+function Dismiss-WindowsActivationNotice {
+    $root = [System.Windows.Automation.AutomationElement]::RootElement
+    $windowConditions = @(
+        [System.Windows.Automation.PropertyCondition]::new(
+            [System.Windows.Automation.AutomationElement]::NameProperty,
+            "Activation settings"
+        ),
+        [System.Windows.Automation.PropertyCondition]::new(
+            [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+            [System.Windows.Automation.ControlType]::Window
+        )
+    )
+    $windowCondition = [System.Windows.Automation.AndCondition]::new(
+        [System.Windows.Automation.Condition[]]$windowConditions
+    )
+    $windows = @($root.FindAll([System.Windows.Automation.TreeScope]::Children, $windowCondition))
+    if ($windows.Count -eq 0) { return }
+    if ($windows.Count -ne 1) { throw "The Windows activation notice is ambiguous." }
+
+    $notice = $windows[0]
+    $headingConditions = @(
+        [System.Windows.Automation.PropertyCondition]::new(
+            [System.Windows.Automation.AutomationElement]::NameProperty,
+            "Activate Windows now"
+        ),
+        [System.Windows.Automation.PropertyCondition]::new(
+            [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+            [System.Windows.Automation.ControlType]::Text
+        )
+    )
+    $headingCondition = [System.Windows.Automation.AndCondition]::new(
+        [System.Windows.Automation.Condition[]]$headingConditions
+    )
+    if (@($notice.FindAll([System.Windows.Automation.TreeScope]::Descendants, $headingCondition)).Count -ne 1) {
+        throw "The activation window did not match the expected Windows notice."
+    }
+    $closeConditions = @(
+        [System.Windows.Automation.PropertyCondition]::new(
+            [System.Windows.Automation.AutomationElement]::NameProperty,
+            "Close"
+        ),
+        [System.Windows.Automation.PropertyCondition]::new(
+            [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+            [System.Windows.Automation.ControlType]::Button
+        )
+    )
+    $closeCondition = [System.Windows.Automation.AndCondition]::new(
+        [System.Windows.Automation.Condition[]]$closeConditions
+    )
+    $close = @($notice.FindAll([System.Windows.Automation.TreeScope]::Descendants, $closeCondition))
+    if ($close.Count -ne 1 -or -not $close[0].Current.IsEnabled -or $close[0].Current.IsOffscreen) {
+        throw "The expected Windows activation Close control is not available."
+    }
+    Invoke-UiElement -Element $close[0]
+    $deadline = [DateTime]::UtcNow.AddSeconds(10)
+    do {
+        if ($notice.Current.IsOffscreen) { return }
+        $current = @($root.FindAll([System.Windows.Automation.TreeScope]::Children, $windowCondition))
+        if ($current.Count -eq 0) { return }
+        Start-Sleep -Milliseconds 250
+    } while ([DateTime]::UtcNow -lt $deadline)
+    throw "The Windows activation notice did not close."
+}
+
 function Invoke-UiElement {
     param([Parameter(Mandatory = $true)]$Element)
 
@@ -966,6 +1041,7 @@ function Invoke-WindowsUiAction {
         [Parameter(Mandatory = $true)]
         [ValidateSet(
             "edge-first-run",
+            "dismiss-windows-activation",
             "invoke-public-email",
             "invoke-portal-microsoft",
             "focus-email",
@@ -974,6 +1050,7 @@ function Invoke-WindowsUiAction {
             "invoke-sign-in",
             "invoke-edge-not-now",
             "invoke-ms-yes",
+            "probe-microsoft-authentication",
             "probe-portal-ready",
             "wait-portal-ready",
             "wait-platform-apps",
@@ -1010,6 +1087,9 @@ function Invoke-WindowsUiAction {
         throw "Cleanup target values are not accepted by this UI action."
     }
     switch ($Action) {
+        "dismiss-windows-activation" {
+            Dismiss-WindowsActivationNotice
+        }
         "edge-first-run" {
             Dismiss-EdgeFirstRun -TimeoutSeconds $TimeoutSeconds
         }
@@ -1054,6 +1134,13 @@ function Invoke-WindowsUiAction {
         }
         "invoke-ms-yes" {
             [void](Invoke-OptionalExactEdgeButton -Names @("Yes") -TimeoutSeconds $TimeoutSeconds -ExpectedHost "enterpriseaiplatform.ciamlogin.com")
+        }
+        "probe-microsoft-authentication" {
+            if (Test-MicrosoftAuthenticationRejected) {
+                [Console]::Out.WriteLine("EAI_MICROSOFT_AUTH_REJECTED")
+            } else {
+                [Console]::Out.WriteLine("EAI_MICROSOFT_AUTH_PENDING")
+            }
         }
         "probe-portal-ready" {
             if (Test-PortalReady) {

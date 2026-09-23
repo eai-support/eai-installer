@@ -86,11 +86,10 @@ function parseArgs(argv) {
 }
 
 function tap(events, key, delay) {
-  if (key === KEY.enter) {
-    events.push({ key, event: "press", delay }, { key, event: "release", delay });
-  } else {
-    events.push({ key, delay });
-  }
+  // `prlctl send-key-event` accepts an omitted event type, but its behaviour
+  // differs across Parallels Tools releases.  Always emit a complete physical
+  // key cycle so a held modifier cannot leak into the next character.
+  events.push({ key, event: "press", delay }, { key, event: "release", delay });
 }
 
 function chord(events, names, delay) {

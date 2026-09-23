@@ -36,6 +36,7 @@ const windowsPortalEvidenceFinalizer = path.join(root, "scripts", "finalize-wind
 const windowsDiagnosticCleanupPowerShell = path.join(root, "scripts", "windows-diagnostic-cleanup.ps1");
 const windowsDiagnosticCleanupTest = path.join(root, "scripts", "test-windows-diagnostic-cleanup.sh");
 const windowsDiagnosticCleanupGate = path.join(root, "scripts", "write-windows-diagnostic-cleanup-gate.mjs");
+const parallelsInput = path.join(root, "scripts", "parallels-input.mjs");
 const keychainE2eLauncher = path.join(root, "scripts", "run-release-e2e-from-keychain.sh");
 const keychainLoader = path.join(root, "scripts", "load-release-e2e-keychain.sh");
 const ubuntuGuestCore = path.join(root, "scripts", "ubuntu-guest-test-core.sh");
@@ -72,8 +73,13 @@ const windowsPortalEvidenceFinalizerSource = readSource(windowsPortalEvidenceFin
 const windowsDiagnosticCleanupPowerShellSource = readSource(windowsDiagnosticCleanupPowerShell);
 const keychainE2eLauncherSource = readSource(keychainE2eLauncher);
 const keychainLoaderSource = readSource(keychainLoader);
+const parallelsInputSource = readSource(parallelsInput);
 assert.match(keychainLoaderSource, /EAI_HARNESS_TENANT_ID/);
 assert.match(keychainLoaderSource, /find-generic-password/);
+assert.match(parallelsInputSource, /events\.push\(\{ key, event: "press", delay \}, \{ key, event: "release", delay \}\)/);
+assert.match(parallelsInputSource, /events\.push\(\{ key: KEY\.shift, event: "press", delay \}\)/);
+assert.match(parallelsInputSource, /events\.push\(\{ key: KEY\.shift, event: "release", delay \}\)/);
+assert.doesNotMatch(parallelsInputSource, /events\.push\(\{ key, delay \}\)/);
 assert.match(releaseShell, /source "\$ROOT\/scripts\/load-release-e2e-keychain[.]sh"/);
 assert.match(keychainE2eLauncherSource, /\/usr\/sbin\/ioreg -n Root -d1/);
 assert.match(keychainE2eLauncherSource, /"IOConsoleLocked" = Yes/);
@@ -504,6 +510,11 @@ assert.match(windowsGuestAdapterSource, /vm_name="\$\{EAI_WINDOWS_VM_NAME:-Windo
 assert.match(windowsGuestAdapterSource, /snapshot_id="\$\{EAI_WINDOWS_SNAPSHOT_ID:-48921a89-eb72-430e-b4bf-a7b70d8bfaab\}"/);
 assert.match(windowsGuestAdapterSource, /guest_user="\$\{EAI_WINDOWS_GUEST_USER:-eai-douglasross\}"/);
 assert.match(windowsGuestAdapterSource, /login-windows-guest[.]sh/);
+assert.match(windowsGuestAdapterSource, /for baseline_attempt in 1 2 3; do[\s\S]*The Windows clean-snapshot preflight returned no guest data/);
+assert.match(windowsGuestAdapterSource, /stage normal-welcome-continue[\s\S]*screen_has "Let's go"[\s\S]*input key enter[\s\S]*If a platform WebView cleared the retained button focus[\s\S]*input key tab/);
+assert.match(windowsGuestAdapterSource, /for portal_login_attempt in 1 2 3; do/);
+assert.match(windowsGuestAdapterSource, /WINDOWS_PORTAL_LOGIN_RETRY attempt=%s/);
+assert.match(windowsGuestAdapterSource, /Microsoft rejected the configured release-test account credentials[.][\s\S]*break/);
 assert.match(windowsGuestAdapterSource, /prepare-windows-ai-workspace[.]sh/);
 assert.match(windowsGuestAdapterSource, /windows-ai-handoff-process-query[.]sh/);
 assert.match(guestTestLibrarySource, /prlctl snapshot-list "\$vm_name"/);
@@ -622,7 +633,7 @@ assert.match(windowsStreamedPowerShellSource, /printf '%s\\n' "\$script" \| wind
 assert.doesNotMatch(windowsStreamedPowerShellSource, /EncodedCommand/);
 assert.match(windowsHiddenCurrentUserSource, /payload="\$\(printf '%s' "\$stdin_payload" \| \/usr\/bin\/base64 \| \/usr\/bin\/tr -d '\\n'\)"/);
 assert.match(windowsHiddenCurrentUserSource, /\[Console\]::SetIn\(\[IO[.]StringReader\]::new\(\$__eaiInput\)\)/);
-assert.match(windowsHiddenCurrentUserSource, /windows_hidden_bounded_prlctl 600 exec "\$vm_name" --current-user wscript[.]exe "\$vbs_path"/);
+assert.match(windowsHiddenCurrentUserSource, /windows_hidden_bounded_prlctl "\$wscript_timeout_seconds" exec "\$vm_name" --current-user wscript[.]exe "\$vbs_path"/);
 assert.match(windowsHiddenCurrentUserSource, /"\$prlctl_bin" "\$@" <&0 &/);
 assert.match(windowsHiddenCurrentUserSource, /\) <\/dev\/null >\/dev\/null 2>&1 &/);
 assert.match(windowsHiddenCurrentUserSource, /s[.]Run\(.*powershell[.]exe.*-File/);
@@ -1288,7 +1299,9 @@ assert.match(windowsHiddenCurrentUserSource, /-InputFormat Text -OutputFormat Te
 assert.match(windowsHiddenCurrentUserSource, /stage_base="\$\{base\}[.]tmp"/);
 assert.match(windowsHiddenCurrentUserSource, /Move-Item -LiteralPath '\$stage_base' -Destination '\$base' -ErrorAction Stop/);
 assert.match(windowsHiddenCurrentUserSource, /EAI_HIDDEN_WORKER_STAGED/);
-assert.match(windowsHiddenCurrentUserSource, /if ! windows_hidden_bounded_prlctl 600 exec "\$vm_name" --current-user wscript[.]exe/);
+assert.match(windowsHiddenCurrentUserSource, /wscript_timeout_seconds="\$\{EAI_WINDOWS_HIDDEN_CURRENT_USER_TIMEOUT_SECONDS:-600\}"/);
+assert.match(windowsHiddenCurrentUserSource, /wscript_timeout_seconds >= 15 && wscript_timeout_seconds <= 600/);
+assert.match(windowsHiddenCurrentUserSource, /for attempt in 1 2 3; do[\s\S]*windows_hidden_bounded_prlctl "\$wscript_timeout_seconds" exec "\$vm_name" --current-user wscript[.]exe[\s\S]*type "\$status_path"/);
 assert.doesNotMatch(
   windowsHiddenCurrentUserSource,
   /windows_hidden_bounded_prlctl 600 exec "\$vm_name" --current-user wscript[.]exe[^\n]*\|\| true/,
@@ -1355,18 +1368,19 @@ assert.match(windowsLoginReadOnlyPowerShellSource, /is_parallels_exact_job_resul
 assert.match(windowsLoginReadOnlyPowerShellSource, /sleep 2/);
 assert.doesNotMatch(windowsLoginReadOnlyPowerShellSource, /input|Invoke-WindowsUiAction|Remove-Item|Start-Process/);
 assert.doesNotMatch(windowsLoginUiActionOnceSource, /for attempt|is_parallels_exact_job_result_failure/);
-assert.match(windowsLoginIdempotentUiSource, /edge-first-run\|focus-email\|focus-password/);
+assert.match(windowsLoginIdempotentUiSource, /edge-first-run\|dismiss-windows-activation\|focus-email\|focus-password/);
 assert.match(windowsLoginIdempotentUiSource, /for attempt in \$\(seq 1 3\); do/);
 assert.match(windowsLoginIdempotentUiSource, /is_parallels_exact_job_result_failure "\$output"/);
 assert.doesNotMatch(windowsLoginIdempotentUiSource, /invoke-next|invoke-sign-in|input type/);
 assert.match(windowsGuestLoginSource, /run_idempotent_ui_action focus-email 60/);
 assert.match(windowsGuestLoginSource, /run_idempotent_ui_action focus-password 60/);
-assert.match(windowsLoginReadOnlyUiSource, /"\$action" == probe-portal-ready \|\| "\$action" == wait-portal-ready/);
+assert.match(windowsLoginReadOnlyUiSource, /"\$action" == probe-microsoft-authentication \|\| "\$action" == probe-portal-ready \|\| "\$action" == wait-portal-ready/);
 assert.match(windowsLoginReadOnlyUiSource, /for attempt in \$\(seq 1 3\); do/);
 assert.match(windowsLoginReadOnlyUiSource, /"\$status" == 255/);
 assert.doesNotMatch(windowsLoginReadOnlyUiSource, /input type|invoke-public-email|invoke-next|invoke-sign-in/);
 assert.match(windowsGuestLoginSource, /wait_enterprise_portal_https\(\) \{[\s\S]*run_guest_powershell_readonly <<'POWERSHELL'/);
 assert.match(windowsGuestLoginSource, /portal_ready_state\(\) \{[\s\S]*run_readonly_ui_action probe-portal-ready 5/);
+assert.match(windowsGuestLoginSource, /authentication_probe="\$\(run_readonly_ui_action probe-microsoft-authentication 5\)"/);
 assert.match(windowsGuestLoginSource, /wait_portal_ready\(\) \{[\s\S]*run_readonly_ui_action wait-portal-ready/);
 assert.match(windowsGuestLoginSource, /EAI_PORTAL_READY/);
 assert.match(windowsGuestLoginSource, /EAI_PORTAL_NOT_READY/);
@@ -1382,7 +1396,7 @@ const mandatoryFreshLoginSteps = [
   "reset_edge_profile",
   "wait_enterprise_portal_https",
   "launch_edge",
-  "if portal_ready_state",
+  "if wait_for_unauthenticated_portal_state",
   "run_ui_action_once invoke-public-email",
   "run_ui_action_once invoke-portal-microsoft",
   "run_idempotent_ui_action focus-email",
@@ -1391,6 +1405,7 @@ const mandatoryFreshLoginSteps = [
   "run_idempotent_ui_action focus-password",
   "find-generic-password -s \"$keychain_service\" -w",
   "run_ui_action_once invoke-sign-in",
+  "input key escape",
   "wait_portal_ready 120",
   "FRESH_PROTECTED_LOGIN_PROVEN",
 ];
@@ -1402,6 +1417,10 @@ for (const step of mandatoryFreshLoginSteps) {
   previousFreshLoginStep = stepIndex;
 }
 assert.match(windowsBrowserLoginFlow, /replacement snapshot already has an authenticated portal session/);
+assert.match(
+  windowsBrowserLoginFlow,
+  /for _ in \$\(seq 1 12\); do[\s\S]*input key escape[\s\S]*invoke-edge-not-now[\s\S]*invoke-ms-yes[\s\S]*run_readonly_ui_action probe-microsoft-authentication 5/,
+);
 assert.match(windowsGuestLoginSource, /Join-Path \$env:APPDATA "npm\\eai[.]cmd"\) login/);
 assert.match(windowsGuestLoginSource, /if \[\[ "\$cli_finished" != 1 \|\| "\$cli_status" != 0 \]\]; then[\s\S]*cli_identity_is_active && cli_tenant_matches[\s\S]*AUTHENTICATED_PORTAL_AND_CLI_READY/);
 assert.match(windowsGuestLoginSource, /Join-Path \$env:APPDATA "npm\\eai[.]cmd"\) whoami/);
@@ -1800,6 +1819,7 @@ for (const installerBridgeArtifact of [
   assert.match(windowsGuestAdapterSource, new RegExp(`C:\\\\Users\\\\Public\\\\${installerBridgeArtifact.replaceAll(".", "[.]")}`));
 }
 assert.match(windowsInstallerBridgeSource, /windows_hidden_current_user_ps "\$vm_name" ""/);
+assert.match(windowsInstallerBridgeSource, /EAI_WINDOWS_HIDDEN_CURRENT_USER_TIMEOUT_SECONDS=45 windows_hidden_current_user_ps "\$vm_name" ""/);
 assert.equal(
   (windowsInstallerBridgeSource.match(/windows_hidden_current_user_ps "\$vm_name" ""/g) ?? []).length,
   1,
@@ -1807,7 +1827,10 @@ assert.equal(
 assert.match(windowsInstallerBridgeSource, /eai-setup-installer-worker[.]ps1/);
 assert.match(windowsInstallerBridgeSource, /DETACHED_INSTALLER_WORKER_ARMED:/);
 assert.match(windowsInstallerBridgeSource, /tr -d '\\r' <"\$bridge_stdout"/);
-assert.match(windowsInstallerBridgeSource, /Start-Process -FilePath \$powerShellPath -ArgumentList \$arguments -WindowStyle Hidden -PassThru/);
+assert.match(windowsInstallerBridgeSource, /\[wmiclass\]'\\\\[.]\\root\\cimv2:Win32_ProcessStartup'/);
+assert.match(windowsInstallerBridgeSource, /\$workerStartup[.]ShowWindow = \[uint16\]0/);
+assert.match(windowsInstallerBridgeSource, /\$workerProcessClass[.]Create\(\$workerCommandLine, \$PSHOME, \$workerStartup\)/);
+assert.match(windowsInstallerBridgeSource, /\$workerOwner[.]Sid -cne \$identity[.]User[.]Value/);
 assert.match(windowsInstallerBridgeSource, /workerScriptSha256 = \$expectedWorkerSha256/);
 assert.match(windowsInstallerBridgeSource, /workerNonce = \$expectedWorkerNonce/);
 assert.match(windowsInstallerBridgeSource, /workerProcessId = \$workerProcessId/);
@@ -1821,7 +1844,7 @@ const windowsInstallerLockedHash = windowsInstallerBridgeSource.indexOf(
   "$lockedWorkerHasher.ComputeHash($workerLoadLock)",
 );
 const windowsInstallerDetachedLaunch = windowsInstallerBridgeSource.indexOf(
-  "Start-Process -FilePath $powerShellPath -ArgumentList $arguments -WindowStyle Hidden -PassThru",
+  "$workerProcessClass.Create($workerCommandLine, $PSHOME, $workerStartup)",
 );
 assert.ok(windowsInstallerWorkerLock >= 0 && windowsInstallerWorkerLock < windowsInstallerLockedHash);
 assert.ok(windowsInstallerLockedHash < windowsInstallerDetachedLaunch);
@@ -3081,6 +3104,8 @@ assert.match(vmAdapterPreflightSource, /"\$prlctl_bin" list "\$vm_name" --info/)
 assert.match(vmAdapterPreflightSource, /"\$prlctl_bin" snapshot-list "\$vm_name"/);
 assert.match(vmAdapterPreflightSource, /"schemaVersion":"eai\.vm-adapter-preflight\.v1"/);
 assert.match(vmAdapterPreflightSource, /"mutationAttempted":false/);
+assert.match(vmAdapterPreflightSource, /windows:outdated\|ubuntu:outdated/);
+assert.match(vmAdapterPreflightSource, /macos:\*\) fail "The macOS guest requires current Parallels Tools for UI control/);
 assert.doesNotMatch(vmAdapterPreflightSource, /\$prlctl_bin (?:start|stop|snapshot-switch|exec)/);
 for (const [index, adapter] of guestAdapters.entries()) {
   const source = fs.readFileSync(adapter, "utf8");

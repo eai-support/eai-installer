@@ -35,14 +35,32 @@ windows_hidden_bounded_prlctl() {
   return "$status"
 }
 
+windows_hidden_is_transient_parallels_result_failure() {
+  local output="$1"
+  local normalized=""
+  normalized="$(printf '%s' "$output" | /usr/bin/tr -d '\r')"
+  case "$normalized" in
+    'PrlJob_GetRetCode: Invalid argument. An invalid argument was passed.'|\
+    'PrlJob_GetResult: Invalid argument. An invalid argument was passed.')
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 windows_hidden_current_user_ps() {
   local vm_name="$1"
   local stdin_payload="${2:-}"
   local script nonce base stage_base payload wrapper wrapper_base64 vbs vbs_base64
-  local ps_path vbs_path stdout_path stderr_path status_path
+  local ps_path vbs_path stdout_path stderr_path status_path wscript_timeout_seconds
   local stage status_text output error_text attempt
   script="$(/bin/cat)"
   [[ -n "$script" ]] || return 2
+  wscript_timeout_seconds="${EAI_WINDOWS_HIDDEN_CURRENT_USER_TIMEOUT_SECONDS:-600}"
+  [[ "$wscript_timeout_seconds" =~ ^[1-9][0-9]*$ ]] \
+    && (( wscript_timeout_seconds >= 15 && wscript_timeout_seconds <= 600 )) || return 2
   nonce="$(/usr/bin/uuidgen | /usr/bin/tr -d '-' | /usr/bin/tr '[:upper:]' '[:lower:]')"
   base="C:\\Users\\Public\\eai-hidden-${nonce}"
   stage_base="${base}.tmp"
@@ -127,10 +145,36 @@ windows_hidden_current_user_ps() {
     printf '%s\n' "Remove-Item -LiteralPath '$stage_base','$base' -Recurse -Force -ErrorAction SilentlyContinue" \
       | windows_hidden_bounded_prlctl 10 exec "$vm_name" powershell.exe -NoLogo -NoProfile -NonInteractive \
         -InputFormat Text -OutputFormat Text -Command - >/dev/null 2>&1 || true
+    # Parallels can briefly return this exact result error while the restored
+    # interactive session is still accepting guest-control jobs.  Preserve it
+    # as a transport status so the caller's bounded retry can retry; every
+    # other staging failure remains a hard failure with its original output.
+    if windows_hidden_is_transient_parallels_result_failure "$stage_output"; then
+      return 255
+    fi
     return 3
   fi
 
-  if ! windows_hidden_bounded_prlctl 600 exec "$vm_name" --current-user wscript.exe "$vbs_path" >/dev/null 2>&1; then
+  local wscript_status=1
+  for attempt in 1 2 3; do
+    if windows_hidden_bounded_prlctl "$wscript_timeout_seconds" exec "$vm_name" --current-user wscript.exe "$vbs_path" >/dev/null 2>&1; then
+      wscript_status=0
+      break
+    fi
+    # Guest control can lose the synchronous WScript completion result even
+    # though the already-staged hidden worker continues and writes its status.
+    # Trust that receipt when it appears; otherwise retry only this exact
+    # hidden WScript invocation a bounded number of times.
+    status_text="$(windows_hidden_bounded_prlctl 5 exec "$vm_name" cmd.exe /D /Q /C type "$status_path" 2>/dev/null | /usr/bin/tr -d '\r\n' || true)"
+    if [[ "$status_text" =~ ^-?[0-9]+$ ]]; then
+      wscript_status=0
+      break
+    fi
+    if [[ "$attempt" -lt 3 ]]; then
+      sleep 2
+    fi
+  done
+  if [[ "$wscript_status" != 0 ]]; then
     printf '%s\n' "Remove-Item -LiteralPath '$base' -Recurse -Force -ErrorAction SilentlyContinue" \
       | windows_hidden_bounded_prlctl 10 exec "$vm_name" powershell.exe -NoLogo -NoProfile -NonInteractive \
         -InputFormat Text -OutputFormat Text -Command - >/dev/null 2>&1 || true

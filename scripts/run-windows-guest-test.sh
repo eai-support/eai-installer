@@ -1468,8 +1468,44 @@ if ($lockedWorkerSha256 -cne $expectedWorkerSha256) {
   throw 'The locked detached installer worker hash changed before launch.'
 }
 $arguments = "-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $workerScriptPath -ExpectedWorkerSha256 $expectedWorkerSha256 -ExpectedSessionId $sessionId"
-$launchedWorker = Start-Process -FilePath $powerShellPath -ArgumentList $arguments -WindowStyle Hidden -PassThru
-$launchedWorkerStartedAt = $launchedWorker.StartTime.ToUniversalTime().ToString('o')
+$workerStartupClass = $null
+$workerStartup = $null
+$workerProcessClass = $null
+$workerCreate = $null
+$launchedWorker = $null
+try {
+  # A child of the Parallels current-user guest-control request can be stopped
+  # when that request returns. Launch through local WMI so this verified
+  # background worker remains in the same interactive session but outside that
+  # transport-job lineage. ShowWindow=0 keeps it invisible to the guest user.
+  $workerStartupClass = [wmiclass]'\\.\root\cimv2:Win32_ProcessStartup'
+  $workerStartup = $workerStartupClass.CreateInstance()
+  $workerStartup.WinstationDesktop = 'winsta0\default'
+  $workerStartup.ShowWindow = [uint16]0
+  $workerStartup.CreateFlags = [uint32]1536
+  $workerProcessClass = [wmiclass]'\\.\root\cimv2:Win32_Process'
+  $workerCommandLine = '"' + $powerShellPath + '" ' + $arguments
+  $workerCreate = $workerProcessClass.Create($workerCommandLine, $PSHOME, $workerStartup)
+  if ([int]$workerCreate.ReturnValue -ne 0 -or [int]$workerCreate.ProcessId -le 0) {
+    throw 'The detached installer worker WMI launch failed.'
+  }
+  $launchedWorker = Get-Process -Id ([int]$workerCreate.ProcessId) -ErrorAction Stop
+  $launchedWorkerStartedAt = $launchedWorker.StartTime.ToUniversalTime().ToString('o')
+  $workerCim = Get-CimInstance Win32_Process -Filter "ProcessId = $($launchedWorker.Id)" -ErrorAction Stop
+  $workerOwner = Invoke-CimMethod -InputObject $workerCim -MethodName GetOwnerSid -ErrorAction Stop
+  try { $launchedWorkerPath = $launchedWorker.Path } catch { throw 'The detached installer worker process path could not be verified.' }
+  if ($launchedWorker.HasExited -or $launchedWorker.SessionId -ne $sessionId -or
+      -not [string]::Equals($launchedWorkerPath, $powerShellPath, [StringComparison]::OrdinalIgnoreCase) -or
+      $workerOwner.ReturnValue -ne 0 -or $workerOwner.Sid -cne $identity.User.Value -or
+      $launchedWorker.StartTime.ToUniversalTime().ToString('o') -cne $launchedWorkerStartedAt) {
+    throw 'The detached installer worker WMI launch does not match the expected user/session/path binding.'
+  }
+} finally {
+  if ($null -ne $workerCreate) { $workerCreate.Dispose() }
+  if ($null -ne $workerStartup) { $workerStartup.Dispose() }
+  if ($null -ne $workerStartupClass) { $workerStartupClass.Dispose() }
+  if ($null -ne $workerProcessClass) { $workerProcessClass.Dispose() }
+}
 
 $armed = $null
 for ($poll = 0; $poll -lt 120; $poll++) {
@@ -1519,7 +1555,7 @@ POWERSHELL
   (
     local attached_status=1
     set +e
-    printf '%s\n' "$bootstrap_script" | windows_hidden_current_user_ps "$vm_name" "" \
+    printf '%s\n' "$bootstrap_script" | EAI_WINDOWS_HIDDEN_CURRENT_USER_TIMEOUT_SECONDS=45 windows_hidden_current_user_ps "$vm_name" "" \
       >"$bridge_stdout" 2>"$bridge_stderr"
     attached_status=$?
     set -e
@@ -5532,6 +5568,8 @@ rm -f "$work_dir/windows-console-preflight.png"
 stage host-console-visible
 
 stage clean-snapshot-preflight
+baseline_json=""
+for baseline_attempt in 1 2 3; do
 baseline_json="$(guest_ps <<'POWERSHELL' | tr -d '\r' | tail -n 1
 $os = Get-CimInstance Win32_OperatingSystem
 $windowsIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -5694,6 +5732,11 @@ $uacPolicyItem = Get-Item -LiteralPath $uacPolicyPath -ErrorAction Stop
 } | ConvertTo-Json -Compress
 POWERSHELL
 )"
+  [[ -n "$baseline_json" ]] && break
+  sleep 2
+done
+[[ -n "$baseline_json" ]] \
+  || guest_test_fail "The Windows clean-snapshot preflight returned no guest data."
 EAI_WINDOWS_BASELINE="$baseline_json" EAI_WINDOWS_EXPECTED_USER="$guest_user" node --input-type=module <<'NODE'
 const value = JSON.parse(process.env.EAI_WINDOWS_BASELINE);
 const expectedUser = process.env.EAI_WINDOWS_EXPECTED_USER.toLowerCase();
@@ -5720,7 +5763,35 @@ EAI_WINDOWS_VM_NAME="$vm_name" EAI_WINDOWS_GUEST_USER="$guest_user" \
 stage ai-workspace-provision-passed
 
 stage portal-login
-EAI_WINDOWS_VM_NAME="$vm_name" "$ROOT/scripts/login-windows-guest.sh" --portal-only \
+portal_login_attempt=0
+portal_login_status=1
+portal_login_output=""
+for portal_login_attempt in 1 2 3; do
+  set +e
+  portal_login_output="$(
+    EAI_WINDOWS_VM_NAME="$vm_name" "$ROOT/scripts/login-windows-guest.sh" --portal-only 2>&1
+  )"
+  portal_login_status=$?
+  set -e
+  printf '%s\n' "$portal_login_output"
+  if [[ "$portal_login_status" == 0 ]]; then
+    break
+  fi
+  # A rejected credential is authoritative. Do not make further sign-in
+  # attempts that could lock the release-test identity. Other failures at this
+  # stage are known Parallels/UI transport races; the login helper resets Edge
+  # before each bounded retry.
+  if printf '%s\n' "$portal_login_output" \
+    | grep -Fq 'Microsoft rejected the configured release-test account credentials.'; then
+    break
+  fi
+  if [[ "$portal_login_attempt" -lt 3 ]]; then
+    printf 'WINDOWS_PORTAL_LOGIN_RETRY attempt=%s\n' "$portal_login_attempt" >&2
+    sleep 3
+  fi
+done
+unset portal_login_output
+[[ "$portal_login_status" == 0 ]] \
   || guest_test_fail "Enterprise AI portal login failed in the Windows guest."
 stage portal-login-passed
 
@@ -5990,8 +6061,29 @@ while (( SECONDS < prerequisite_deadline )); do
 done
 [[ "$ready_reads" -ge 2 ]] || guest_test_fail "The Windows installer did not reach stable prerequisite readiness within 20 minutes."
 
+# The visual consent monitor uses the same host screen-capture path as the
+# completion assertion below.  It has protected the actual prerequisite work;
+# stop it once readiness is proven so the final UI transition is observed by a
+# single deterministic reader.
+stop_prerequisite_uac_watcher \
+  || guest_test_fail "The Windows unexpected-consent-UI watcher did not close cleanly."
+
 stage normal-welcome-continue
-input key tab
+# The readiness pass reuses the same DOM button that previously received
+# Get started. Its focus is retained when its label becomes Let’s go, so a
+# leading Tab can move focus away from the primary action. Prove the completed
+# label while the receipt-bound app window is foregrounded, then activate the
+# focused primary action directly.
+lets_go_visible=0
+for _ in $(seq 1 30); do
+  if screen_has "Let's go"; then
+    lets_go_visible=1
+    break
+  fi
+  sleep 1
+done
+[[ "$lets_go_visible" == 1 ]] \
+  || guest_test_fail "The released Windows app did not show Let’s go after prerequisite readiness."
 input key enter
 signin_visible=0
 for _ in $(seq 1 30); do
@@ -6001,10 +6093,21 @@ for _ in $(seq 1 30); do
   fi
   sleep 1
 done
+# If a platform WebView cleared the retained button focus, make one bounded
+# fallback Tab activation only after proving the unchanged Let’s go screen.
+if [[ "$signin_visible" != 1 ]] && screen_has "Let's go"; then
+  input key tab
+  input key enter
+  for _ in $(seq 1 15); do
+    if screen_has "Sign in with browser"; then
+      signin_visible=1
+      break
+    fi
+    sleep 1
+  done
+fi
 [[ "$signin_visible" == 1 ]] \
   || guest_test_fail "The released Windows app did not take Let’s go to the sign-in screen."
-stop_prerequisite_uac_watcher \
-  || guest_test_fail "The Windows unexpected-consent-UI watcher did not close cleanly."
 stage prerequisite-install-passed
 
 stage uac-admin-consent-restoration

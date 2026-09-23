@@ -177,7 +177,7 @@ run_ui_action_once() {
   local output=""
   local status=1
   case "$action" in
-    edge-first-run|invoke-public-email|invoke-portal-microsoft|focus-email|invoke-next|focus-password|invoke-sign-in|invoke-edge-not-now|invoke-ms-yes|probe-portal-ready|wait-portal-ready)
+    edge-first-run|dismiss-windows-activation|invoke-public-email|invoke-portal-microsoft|focus-email|invoke-next|focus-password|invoke-sign-in|invoke-edge-not-now|invoke-ms-yes|probe-microsoft-authentication|probe-portal-ready|wait-portal-ready)
       ;;
     *)
       fail "Unsupported Windows UI action."
@@ -209,7 +209,7 @@ run_idempotent_ui_action() {
   local status=1
   local attempt
   case "$action" in
-    edge-first-run|focus-email|focus-password)
+    edge-first-run|dismiss-windows-activation|focus-email|focus-password)
       ;;
     *)
       fail "Unsupported idempotent Windows UI action."
@@ -243,8 +243,8 @@ run_readonly_ui_action() {
   local output=""
   local status=1
   local attempt
-  [[ "$action" == probe-portal-ready || "$action" == wait-portal-ready ]] \
-    || fail "Only the portal-readiness action may use the read-only UI retry."
+  [[ "$action" == probe-microsoft-authentication || "$action" == probe-portal-ready || "$action" == wait-portal-ready ]] \
+    || fail "Only a read-only authentication or portal-status action may use the UI retry."
   for attempt in $(seq 1 3); do
     set +e
     output="$(run_ui_action_once "$action" "$timeout_seconds" 2>&1)"
@@ -406,11 +406,33 @@ portal_ready_state() {
   local output=""
   local ready_count=0
   local not_ready_count=0
+  # Edge is launched through WMI so it survives the Parallels guest-control
+  # request.  On a snapshot restore its accessibility tree can take several
+  # seconds to become queryable, even though the browser process exists.  A
+  # transient UIA transport/readiness failure is neither proof of an existing
+  # portal session nor proof that the sign-in page is ready; retry it below.
   output="$(run_readonly_ui_action probe-portal-ready 5)" || return 2
   ready_count="$(printf '%s\n' "$output" | /usr/bin/tr -d '\r' | /usr/bin/grep -Fxc 'EAI_PORTAL_READY' || true)"
   not_ready_count="$(printf '%s\n' "$output" | /usr/bin/tr -d '\r' | /usr/bin/grep -Fxc 'EAI_PORTAL_NOT_READY' || true)"
   if [[ "$ready_count" == 1 && "$not_ready_count" == 0 ]]; then return 0; fi
   if [[ "$ready_count" == 0 && "$not_ready_count" == 1 ]]; then return 1; fi
+  return 2
+}
+
+wait_for_unauthenticated_portal_state() {
+  local state=2
+  local attempt
+  for attempt in $(seq 1 30); do
+    if portal_ready_state; then
+      return 0
+    else
+      state=$?
+    fi
+    if [[ "$state" == 1 ]]; then
+      return 1
+    fi
+    sleep 1
+  done
   return 2
 }
 
@@ -424,8 +446,9 @@ if [[ "$mode" != cli ]]; then
   [[ "$status" == *running* ]] \
     || fail "The Windows VM must already be running before browser login."
   actual_user="$(
-    printf '%s\n' '[Security.Principal.WindowsIdentity]::GetCurrent().Name' | windows_hidden_current_user_ps "$vm_name" 2>/dev/null \
-      | /usr/bin/tr -d '\r\n'
+    run_guest_powershell_readonly <<'POWERSHELL' | /usr/bin/tr -d '\r\n'
+[Security.Principal.WindowsIdentity]::GetCurrent().Name
+POWERSHELL
   )"
   actual_user_lower="$(printf '%s' "$actual_user" | /usr/bin/tr '[:upper:]' '[:lower:]')"
   [[ -n "$actual_user" && "$actual_user_lower" != *"system"* ]] \
@@ -438,13 +461,18 @@ if [[ "$mode" != cli ]]; then
     || fail "The Enterprise AI Group sign-in endpoint was not reachable from the Windows guest."
   launch_edge \
     || fail "Microsoft Edge could not open the Enterprise AI Group sign-in page."
+  # The clean Windows image can display this non-actionable activation notice
+  # over Edge after networking returns.  Close only the exact documented
+  # notice; never change activation, licensing, or any Windows setting.
+  run_idempotent_ui_action dismiss-windows-activation 15 >/dev/null \
+    || fail "The Windows activation notice could not be dismissed safely."
   if ! run_idempotent_ui_action edge-first-run 120 >/dev/null 2>&1; then
     run_ui_action_once invoke-public-email 30 >/dev/null \
       || fail "Microsoft Edge first-run setup could not be handled safely."
   fi
 
   portal_state_status=2
-  if portal_ready_state; then
+  if wait_for_unauthenticated_portal_state; then
     fail "The replacement snapshot already has an authenticated portal session; a fresh protected login cannot be proven."
   else
     portal_state_status=$?
@@ -482,10 +510,33 @@ if [[ "$mode" != cli ]]; then
     || fail "Microsoft's Sign in action did not become available."
   printf 'MICROSOFT_PASSWORD_STAGE_SUBMITTED\n'
 
+  # Edge's native credential-save flyout is not part of the web accessibility
+  # tree. It can cover the approved Microsoft "Stay signed in?" page after a
+  # successful password submission. Send Escape only during a short bounded
+  # post-submit window, so it dismisses that optional browser flyout without
+  # changing the Microsoft account or the portal session. Repetition covers
+  # the race between the Microsoft redirect and Edge rendering its native UI.
+  for _ in $(seq 1 12); do
+    input key escape
+    sleep 1
+  done
   run_ui_action_once invoke-edge-not-now 10 >/dev/null \
     || fail "The Edge password-save prompt could not be handled safely."
   run_ui_action_once invoke-ms-yes 45 >/dev/null \
     || fail "Microsoft's stay-signed-in prompt could not be handled safely."
+
+  # Microsoft shows this exact public error on the approved identity host when
+  # the test account or password is rejected. Detect it after the prompt window
+  # so it is one read-only, retryable status check rather than a series of
+  # guest-control calls that can race Parallels after a browser redirect.
+  authentication_probe="$(run_readonly_ui_action probe-microsoft-authentication 5)" \
+    || fail "Microsoft authentication status could not be inspected safely."
+  if printf '%s\n' "$authentication_probe" | /usr/bin/tr -d '\r' \
+    | /usr/bin/grep -Fqx 'EAI_MICROSOFT_AUTH_REJECTED'; then
+    unset authentication_probe
+    fail "Microsoft rejected the configured release-test account credentials."
+  fi
+  unset authentication_probe
   wait_portal_ready 120 \
     || fail "The authenticated Enterprise AI portal did not become ready."
   printf 'FRESH_PROTECTED_LOGIN_PROVEN\n'

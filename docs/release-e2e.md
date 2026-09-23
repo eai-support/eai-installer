@@ -430,6 +430,38 @@ output suppressed, then verifies the active identity and the configured
 tenant's direct membership. A conforming adapter never accepts a saved guest
 session as the authentication proof.
 
+### Windows keyboard-control rule
+
+Do not mix host GUI typing with the Parallels guest keyboard path. Computer Use
+may inspect the visible VM and dismiss an already identified non-sensitive
+dialog, but it must not type or paste into the Windows guest during a release
+test. Host focus, host keyboard layout, and clipboard routing are not evidence
+that the same characters reached the guest.
+
+For every Windows guest text entry, first use the origin-bound UI Automation
+action to focus the exact guest field, then pipe the value only to
+`node scripts/parallels-input.mjs --vm "Windows 11" type --stdin`. The helper
+uses `prlctl send-key-event` against the VM itself; it sends an explicit press
+and release for every physical key and an explicit Shift press/base-key/release
+sequence for uppercase and US-layout symbols such as `!`. This prevents a
+modifier held by a previous injected event from changing the next character.
+Never use the host clipboard as a fallback and never include protected text in
+arguments, logs, screenshots, or test evidence.
+
+If Microsoft rejects a password after a clean restore, do not assume the
+Keychain value was modified. First verify the Keychain item locally without
+printing it, verify the exact email was accepted, and run a non-secret virtual
+keyboard canary through the same focused-field path. Only a matching canary
+justifies treating the identity-provider result as a credential failure. An
+input-path mismatch is a harness defect: fix it and rerun from the clean
+snapshot before trying the account again.
+
+After a successful Microsoft password submission, Edge can show its native
+**Save your password?** flyout above Microsoft's **Stay signed in?** page. The
+guest helper dismisses only that optional browser flyout with Escape, then uses
+the approved accessibility action for the Microsoft prompt. Do not replace this
+with host GUI typing or an unbounded click.
+
 The clean snapshot intentionally has no AI workspace. Once the preflight has
 proved that absence, `scripts/prepare-windows-ai-workspace.sh` installs the
 pinned official ARM64 VS Code 1.136.1 SystemSetup bundle into
