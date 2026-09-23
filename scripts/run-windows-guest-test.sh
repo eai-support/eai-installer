@@ -523,12 +523,16 @@ screen_has() {
   local pattern="$1"
   local screenshot="$work_dir/screen.png"
   local status=2
+  local ui_probe_output=""
   # The Windows VM can be in Parallels Coherence, where a VM-console capture
   # omits the visible extracted app window. Prefer the receipt-bound UI tree
   # for the installer’s approved flow text, and retain image OCR as fallback
   # for all other evidence (including unexpected UAC dialogs).
-  if focus_receipt_bound_eai_setup_window "__eai_text__:${pattern}" 0 >/dev/null 2>&1; then
+  if ui_probe_output="$(focus_receipt_bound_eai_setup_window "__eai_text__:${pattern}" 0 2>&1)"; then
     return 0
+  fi
+  if [[ -n "${EAI_VM_RESULT_FILE:-}" && -n "$ui_probe_output" ]]; then
+    printf '%s\n' "$ui_probe_output" >"$(dirname "$EAI_VM_RESULT_FILE")/windows-ui-probe-error.log"
   fi
   focus_receipt_bound_eai_setup_window || return 1
   if prlctl capture "$vm_name" --file "$screenshot" >/dev/null 2>&1; then
