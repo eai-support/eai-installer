@@ -403,9 +403,6 @@ if (-not $validButtonName -or $invokeButton -notin @('0', '1')) {
 }
 $conditions = @(
   [System.Windows.Automation.PropertyCondition]::new(
-    [System.Windows.Automation.AutomationElement]::NameProperty, $buttonName
-  ),
-  [System.Windows.Automation.PropertyCondition]::new(
     [System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'setupStart'
   ),
   [System.Windows.Automation.PropertyCondition]::new(
@@ -6348,7 +6345,9 @@ stage normal-welcome-continue
 # focused primary action directly.
 lets_go_visible=0
 for _ in $(seq 1 30); do
-  if screen_has "Let’s go"; then
+  # Coherence can delay this label in the WebView accessibility bridge. The
+  # receipt-bound primary control itself has the stable setupStart identifier.
+  if focus_receipt_bound_eai_setup_window "Let’s go" 0 >/dev/null; then
     lets_go_visible=1
     break
   fi
