@@ -301,7 +301,13 @@ using System.Runtime.InteropServices;
 public static class EaiReleaseWindowFocus {
   [DllImport("user32.dll")] public static extern bool ShowWindowAsync(IntPtr window, int command);
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr window);
+  [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr window);
+  [DllImport("user32.dll")] public static extern IntPtr SetFocus(IntPtr window);
   [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
+  [DllImport("user32.dll")] public static extern uint GetCurrentThreadId();
+  [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint sourceThread, uint targetThread, bool attach);
+  [DllImport("user32.dll")] public static extern bool AllowSetForegroundWindow(uint processId);
 }
 '@
 $terminalRoot = (Join-Path $env:ProgramFiles 'WindowsApps\Microsoft.WindowsTerminal_')
@@ -321,8 +327,27 @@ foreach ($terminal in @(Get-Process WindowsTerminal -ErrorAction SilentlyContinu
   }
 }
 $window = $process.MainWindowHandle
+[void][EaiReleaseWindowFocus]::AllowSetForegroundWindow(0xFFFFFFFF)
 [void][EaiReleaseWindowFocus]::ShowWindowAsync($window, 9)
-[void][EaiReleaseWindowFocus]::SetForegroundWindow($window)
+$foregroundWindow = [EaiReleaseWindowFocus]::GetForegroundWindow()
+$currentThread = [EaiReleaseWindowFocus]::GetCurrentThreadId()
+$foregroundProcessId = 0
+$foregroundThread = if ($foregroundWindow -eq [IntPtr]::Zero) { 0 } else {
+  [EaiReleaseWindowFocus]::GetWindowThreadProcessId($foregroundWindow, [ref]$foregroundProcessId)
+}
+$attached = $false
+try {
+  if ($foregroundThread -ne 0 -and $foregroundThread -ne $currentThread) {
+    $attached = [EaiReleaseWindowFocus]::AttachThreadInput($currentThread, $foregroundThread, $true)
+  }
+  [void][EaiReleaseWindowFocus]::BringWindowToTop($window)
+  [void][EaiReleaseWindowFocus]::SetForegroundWindow($window)
+  [void][EaiReleaseWindowFocus]::SetFocus($window)
+} finally {
+  if ($attached) {
+    [void][EaiReleaseWindowFocus]::AttachThreadInput($currentThread, $foregroundThread, $false)
+  }
+}
 for ($poll = 0; $poll -lt 20 -and [EaiReleaseWindowFocus]::GetForegroundWindow() -ne $window; $poll++) {
   Start-Sleep -Milliseconds 100
 }
