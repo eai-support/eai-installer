@@ -1468,8 +1468,44 @@ if ($lockedWorkerSha256 -cne $expectedWorkerSha256) {
   throw 'The locked detached installer worker hash changed before launch.'
 }
 $arguments = "-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $workerScriptPath -ExpectedWorkerSha256 $expectedWorkerSha256 -ExpectedSessionId $sessionId"
-$launchedWorker = Start-Process -FilePath $powerShellPath -ArgumentList $arguments -WindowStyle Hidden -PassThru
-$launchedWorkerStartedAt = $launchedWorker.StartTime.ToUniversalTime().ToString('o')
+$workerStartupClass = $null
+$workerStartup = $null
+$workerProcessClass = $null
+$workerCreate = $null
+$launchedWorker = $null
+try {
+  # A child of the Parallels current-user guest-control request can be stopped
+  # when that request returns. Launch through local WMI so this verified
+  # background worker remains in the same interactive session but outside that
+  # transport-job lineage. ShowWindow=0 keeps it invisible to the guest user.
+  $workerStartupClass = [wmiclass]'\\.\root\cimv2:Win32_ProcessStartup'
+  $workerStartup = $workerStartupClass.CreateInstance()
+  $workerStartup.WinstationDesktop = 'winsta0\default'
+  $workerStartup.ShowWindow = [uint16]0
+  $workerStartup.CreateFlags = [uint32]1536
+  $workerProcessClass = [wmiclass]'\\.\root\cimv2:Win32_Process'
+  $workerCommandLine = '"' + $powerShellPath + '" ' + $arguments
+  $workerCreate = $workerProcessClass.Create($workerCommandLine, $PSHOME, $workerStartup)
+  if ([int]$workerCreate.ReturnValue -ne 0 -or [int]$workerCreate.ProcessId -le 0) {
+    throw 'The detached installer worker WMI launch failed.'
+  }
+  $launchedWorker = Get-Process -Id ([int]$workerCreate.ProcessId) -ErrorAction Stop
+  $launchedWorkerStartedAt = $launchedWorker.StartTime.ToUniversalTime().ToString('o')
+  $workerCim = Get-CimInstance Win32_Process -Filter "ProcessId = $($launchedWorker.Id)" -ErrorAction Stop
+  $workerOwner = Invoke-CimMethod -InputObject $workerCim -MethodName GetOwnerSid -ErrorAction Stop
+  try { $launchedWorkerPath = $launchedWorker.Path } catch { throw 'The detached installer worker process path could not be verified.' }
+  if ($launchedWorker.HasExited -or $launchedWorker.SessionId -ne $sessionId -or
+      -not [string]::Equals($launchedWorkerPath, $powerShellPath, [StringComparison]::OrdinalIgnoreCase) -or
+      $workerOwner.ReturnValue -ne 0 -or $workerOwner.Sid -cne $identity.User.Value -or
+      $launchedWorker.StartTime.ToUniversalTime().ToString('o') -cne $launchedWorkerStartedAt) {
+    throw 'The detached installer worker WMI launch does not match the expected user/session/path binding.'
+  }
+} finally {
+  if ($null -ne $workerCreate) { $workerCreate.Dispose() }
+  if ($null -ne $workerStartup) { $workerStartup.Dispose() }
+  if ($null -ne $workerStartupClass) { $workerStartupClass.Dispose() }
+  if ($null -ne $workerProcessClass) { $workerProcessClass.Dispose() }
+}
 
 $armed = $null
 for ($poll = 0; $poll -lt 120; $poll++) {

@@ -1826,7 +1826,10 @@ assert.equal(
 assert.match(windowsInstallerBridgeSource, /eai-setup-installer-worker[.]ps1/);
 assert.match(windowsInstallerBridgeSource, /DETACHED_INSTALLER_WORKER_ARMED:/);
 assert.match(windowsInstallerBridgeSource, /tr -d '\\r' <"\$bridge_stdout"/);
-assert.match(windowsInstallerBridgeSource, /Start-Process -FilePath \$powerShellPath -ArgumentList \$arguments -WindowStyle Hidden -PassThru/);
+assert.match(windowsInstallerBridgeSource, /\[wmiclass\]'\\\\[.]\\root\\cimv2:Win32_ProcessStartup'/);
+assert.match(windowsInstallerBridgeSource, /\$workerStartup[.]ShowWindow = \[uint16\]0/);
+assert.match(windowsInstallerBridgeSource, /\$workerProcessClass[.]Create\(\$workerCommandLine, \$PSHOME, \$workerStartup\)/);
+assert.match(windowsInstallerBridgeSource, /\$workerOwner[.]Sid -cne \$identity[.]User[.]Value/);
 assert.match(windowsInstallerBridgeSource, /workerScriptSha256 = \$expectedWorkerSha256/);
 assert.match(windowsInstallerBridgeSource, /workerNonce = \$expectedWorkerNonce/);
 assert.match(windowsInstallerBridgeSource, /workerProcessId = \$workerProcessId/);
@@ -1840,7 +1843,7 @@ const windowsInstallerLockedHash = windowsInstallerBridgeSource.indexOf(
   "$lockedWorkerHasher.ComputeHash($workerLoadLock)",
 );
 const windowsInstallerDetachedLaunch = windowsInstallerBridgeSource.indexOf(
-  "Start-Process -FilePath $powerShellPath -ArgumentList $arguments -WindowStyle Hidden -PassThru",
+  "$workerProcessClass.Create($workerCommandLine, $PSHOME, $workerStartup)",
 );
 assert.ok(windowsInstallerWorkerLock >= 0 && windowsInstallerWorkerLock < windowsInstallerLockedHash);
 assert.ok(windowsInstallerLockedHash < windowsInstallerDetachedLaunch);
