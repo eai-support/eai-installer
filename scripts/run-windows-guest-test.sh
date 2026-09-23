@@ -364,7 +364,7 @@ if ([string]::IsNullOrEmpty($buttonName)) {
   [Console]::Out.WriteLine('EAI_SETUP_RECEIPT_BOUND_WINDOW_READY')
   return
 }
-$validButtonName = $buttonName -in @('Get started', "Let's go")
+$validButtonName = $buttonName -in @('Get started', 'Let’s go')
 if (-not $validButtonName -or $invokeButton -notin @('0', '1')) {
   throw 'The EAI Setup UI Automation action is not approved.'
 }
@@ -380,7 +380,7 @@ if ($buttonName.StartsWith('__eai_text__:')) {
     'Get started',
     'Checking this Windows PC',
     'This Windows PC is ready',
-    "Let's go",
+    'Let’s go',
     'Sign in with browser'
   )
   if ($invokeButton -ne '0' -or $expectedText -notin $approvedTexts) {
@@ -6252,7 +6252,7 @@ stage normal-welcome-continue
 # focused primary action directly.
 lets_go_visible=0
 for _ in $(seq 1 30); do
-  if screen_has "Let's go"; then
+  if screen_has "Let’s go"; then
     lets_go_visible=1
     break
   fi
@@ -6260,7 +6260,7 @@ for _ in $(seq 1 30); do
 done
 [[ "$lets_go_visible" == 1 ]] \
   || guest_test_fail "The released Windows app did not show Let’s go after prerequisite readiness."
-invoke_receipt_bound_eai_setup_button "Let's go" \
+invoke_receipt_bound_eai_setup_button "Let’s go" \
   || guest_test_fail "The receipt-bound Let’s go action could not be invoked."
 signin_visible=0
 for _ in $(seq 1 30); do
@@ -6272,8 +6272,8 @@ for _ in $(seq 1 30); do
 done
 # If a platform WebView cleared the retained button focus, make one bounded
 # fallback Tab activation only after proving the unchanged Let’s go screen.
-if [[ "$signin_visible" != 1 ]] && screen_has "Let's go"; then
-  invoke_receipt_bound_eai_setup_button "Let's go" \
+if [[ "$signin_visible" != 1 ]] && screen_has "Let’s go"; then
+  invoke_receipt_bound_eai_setup_button "Let’s go" \
     || guest_test_fail "The receipt-bound Let’s go retry could not be invoked."
   for _ in $(seq 1 15); do
     if screen_has "Sign in with browser"; then
