@@ -327,7 +327,7 @@ foreach ($terminal in @(Get-Process WindowsTerminal -ErrorAction SilentlyContinu
   }
 }
 $window = $process.MainWindowHandle
-[void][EaiReleaseWindowFocus]::AllowSetForegroundWindow(0xFFFFFFFF)
+[void][EaiReleaseWindowFocus]::AllowSetForegroundWindow([uint32]::MaxValue)
 [void][EaiReleaseWindowFocus]::ShowWindowAsync($window, 9)
 $foregroundWindow = [EaiReleaseWindowFocus]::GetForegroundWindow()
 $currentThread = [EaiReleaseWindowFocus]::GetCurrentThreadId()
