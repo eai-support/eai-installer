@@ -7,10 +7,12 @@ import os from "node:os";
 import path from "node:path";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { advanceCheckpoint, initializeCheckpoint, readCheckpoint } from "./release-e2e-checkpoint.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const readSource = (sourcePath) => fs.readFileSync(sourcePath, "utf8").replace(/\r\n/g, "\n");
 const runner = path.join(root, "scripts", "release-e2e.mjs");
+const checkpointLedger = path.join(root, "scripts", "release-e2e-checkpoint.mjs");
 const macosGuestPreparer = path.join(root, "scripts", "prepare-macos-guest-dmg.sh");
 const macosAiWorkspacePreparer = path.join(root, "scripts", "prepare-macos-ai-workspace.sh");
 const macosGuestLogin = path.join(root, "scripts", "login-macos-guest.sh");
@@ -52,6 +54,7 @@ const macosGuestAdapterSource = readSource(guestAdapters[0]);
 const windowsGuestAdapterSource = readSource(guestAdapters[1]);
 const releaseShell = readSource(path.join(root, "release.sh"));
 const runnerSource = readSource(runner);
+const checkpointLedgerSource = readSource(checkpointLedger);
 const macosGuestPreparerSource = readSource(macosGuestPreparer);
 const macosAiWorkspacePreparerSource = readSource(macosAiWorkspacePreparer);
 const macosGuestLoginSource = readSource(macosGuestLogin);
@@ -75,6 +78,25 @@ const keychainE2eLauncherSource = readSource(keychainE2eLauncher);
 const keychainLoaderSource = readSource(keychainLoader);
 const parallelsInputSource = readSource(parallelsInput);
 assert.match(keychainLoaderSource, /EAI_HARNESS_TENANT_ID/);
+assert.match(checkpointLedgerSource, /eai\.release-e2e\.checkpoint-ledger\.v1/);
+assert.match(checkpointLedgerSource, /Checkpoint ledger is bound to a different published release asset/);
+assert.match(runnerSource, /windows-resume-ledger\.json/);
+assert.match(runnerSource, /EAI_WINDOWS_RESUME_PHASE/);
+
+const checkpointFixture = fs.mkdtempSync(path.join(os.tmpdir(), "eai-release-e2e-checkpoint-"));
+const checkpointFixturePath = path.join(checkpointFixture, "windows.json");
+const checkpointBinding = {
+  version: "0.3.24",
+  tag: "eai-setup-test-v0.3.24",
+  assetSha256: "e47420ac9a18f261491c1540abb217054b88eed50cc009b24b7c9fc6b83716d8",
+};
+assert.equal(initializeCheckpoint(checkpointFixturePath, checkpointBinding).phase, "fresh");
+assert.equal(advanceCheckpoint(checkpointFixturePath, checkpointBinding, "native-installer-verified", {
+  releaseAssetSha256: checkpointBinding.assetSha256,
+}).phase, "native-installer-verified");
+assert.equal(readCheckpoint(checkpointFixturePath, checkpointBinding).phase, "native-installer-verified");
+assert.throws(() => readCheckpoint(checkpointFixturePath, { ...checkpointBinding, version: "0.3.25" }), /different published release asset/);
+fs.rmSync(checkpointFixture, { recursive: true, force: true });
 assert.match(keychainLoaderSource, /find-generic-password/);
 assert.match(parallelsInputSource, /events\.push\(\{ key, event: "press", delay \}, \{ key, event: "release", delay \}\)/);
 assert.match(parallelsInputSource, /events\.push\(\{ key: KEY\.shift, event: "press", delay \}\)/);
@@ -602,6 +624,10 @@ assert.doesNotMatch(windowsBeforeSnapshotRestore, /find-generic-password[^\n]* -
 assert.match(windowsGuestAdapterSource, /local max_attempts="\$\{2:-30\}"/);
 assert.match(windowsGuestAdapterSource, /Unable to open new session in this virtual machine/);
 assert.match(windowsGuestAdapterSource, /resume_existing_vm="\$\{EAI_WINDOWS_RESUME:-0\}"/);
+assert.match(windowsGuestAdapterSource, /resume_phase="\$\{EAI_WINDOWS_RESUME_PHASE:-fresh\}"/);
+assert.match(windowsGuestAdapterSource, /checkpoint_advance\(\) \{/);
+assert.match(windowsGuestAdapterSource, /resume-native-installer-verification/);
+assert.match(windowsGuestAdapterSource, /normal-welcome-start-verified/);
 assert.match(windowsGuestAdapterSource, /stage existing-vm-resume/);
 assert.match(windowsGuestAdapterSource, /guest_test_restore_snapshot "\$vm_name" "\$snapshot_id"/);
 const windowsPayloadWrapperStart = windowsGuestAdapterSource.indexOf("write_powershell_payload_wrapper() {");

@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { initializeCheckpoint, readCheckpoint } from "./release-e2e-checkpoint.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const canonicalV4Adapter = fs.realpathSync(path.join(root, "scripts", "run-v4-app-deprovision.sh"));
@@ -366,6 +367,17 @@ async function runVm({ driver, command, vm, asset, output, release, appName, run
     EAI_HARNESS_TENANT_NAME: tenantName,
     EAI_HARNESS_PUBLIC_API_URL: apiOrigin,
   };
+
+  if (vm === "windows") {
+    const ledgerPath = path.join(root, "artifacts", "release-e2e", release.version, "windows-resume-ledger.json");
+    const binding = { version: release.version, tag: release.tag, assetSha256: asset.sha256 };
+    initializeCheckpoint(ledgerPath, binding);
+    const checkpoint = readCheckpoint(ledgerPath, binding);
+    env.EAI_WINDOWS_CHECKPOINT_LEDGER = ledgerPath;
+    env.EAI_WINDOWS_RESUME_PHASE = checkpoint.phase;
+    env.EAI_WINDOWS_RESUME = checkpoint.phase === "fresh" ? "0" : "1";
+    writeJson(path.join(vmDir, "checkpoint-ledger.json"), checkpoint);
+  }
 
   if (driver !== "command") throw new Error(`Unsupported VM driver: ${driver}`);
 

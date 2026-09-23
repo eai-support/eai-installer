@@ -40,6 +40,7 @@ ocr_binary="${TMPDIR:-/tmp}/eai-installer-macos-ocr-match"
 window_id_source="$ROOT/scripts/macos-parallels-window-id.swift"
 window_id_binary="${TMPDIR:-/tmp}/eai-installer-macos-parallels-window-id"
 input_helper="$ROOT/scripts/parallels-input.mjs"
+checkpoint_helper="$ROOT/scripts/release-e2e-checkpoint.mjs"
 work_dir="$(mktemp -d)"
 host_receipt="$work_dir/desktop-receipt.json"
 phase="preflight"
@@ -65,6 +66,21 @@ uac_watcher_started_at=""
 uac_consent_restore_required=0
 uac_policy_nonce=""
 uac_policy_run_binding=""
+resume_phase="${EAI_WINDOWS_RESUME_PHASE:-fresh}"
+
+checkpoint_advance() {
+  local checkpoint_phase="$1"
+  [[ -n "${EAI_WINDOWS_CHECKPOINT_LEDGER:-}" ]] || return 0
+  [[ "${host_hash:-}" =~ ^[0-9a-f]{64}$ ]] || guest_test_fail "The Windows checkpoint cannot be bound to the exact release asset."
+  node "$checkpoint_helper" advance \
+    --ledger "$EAI_WINDOWS_CHECKPOINT_LEDGER" \
+    --version "$EAI_RELEASE_VERSION" \
+    --tag "$EAI_RELEASE_TAG" \
+    --asset-sha256 "$host_hash" \
+    --phase "$checkpoint_phase" \
+    --evidence "{\"releaseAssetSha256\":\"$host_hash\"}" >/dev/null \
+    || guest_test_fail "The Windows checkpoint ledger rejected a verified test node."
+}
 
 stage() {
   phase="$1"
@@ -73,6 +89,14 @@ stage() {
   if [[ -n "${EAI_VM_RESULT_FILE:-}" ]]; then
     printf '%s\n' "$timestamp $phase" >"$(dirname "$EAI_VM_RESULT_FILE")/windows-stage.txt"
   fi
+  case "$phase" in
+    native-installer-passed) checkpoint_advance native-installer-verified ;;
+    normal-welcome-start-verified) checkpoint_advance welcome-start-verified ;;
+    normal-welcome-continue-ready) checkpoint_advance welcome-ready-verified ;;
+    prerequisite-install-passed) checkpoint_advance signin-verified ;;
+    cli-login-passed) checkpoint_advance cli-login-verified ;;
+    windows-e2e-passed) checkpoint_advance e2e-complete ;;
+  esac
 }
 
 input() {
@@ -5759,6 +5783,16 @@ guest_test_require_environment
 resume_existing_vm="${EAI_WINDOWS_RESUME:-0}"
 [[ "$resume_existing_vm" == 0 || "$resume_existing_vm" == 1 ]] \
   || guest_test_fail "EAI_WINDOWS_RESUME must be 0 or 1."
+case "$resume_phase" in
+  fresh|native-installer-verified|welcome-start-verified|welcome-ready-verified|signin-verified|cli-login-verified|e2e-complete) ;;
+  *) guest_test_fail "EAI_WINDOWS_RESUME_PHASE is invalid." ;;
+esac
+if [[ "$resume_phase" == fresh && "$resume_existing_vm" != 0 ]]; then
+  guest_test_fail "A fresh Windows checkpoint cannot request stateful recovery."
+fi
+if [[ "$resume_phase" != fresh && "$resume_existing_vm" != 1 ]]; then
+  guest_test_fail "A verified Windows checkpoint requires stateful recovery."
+fi
 [[ "${EAI_RELEASE_VERSION:-}" =~ ^[0-9]+[.][0-9]+[.][0-9]+$ ]] \
   || guest_test_fail "EAI_RELEASE_VERSION must be a semantic version."
 [[ -f "$ocr_source" ]] || guest_test_fail "The screenshot OCR helper is missing."
@@ -6021,15 +6055,22 @@ NODE
 before_versions='{"git":null,"node":null,"npm":null,"eai":null}'
 stage clean-snapshot-preflight-passed
 
-if [[ "$resume_existing_vm" == 1 ]]; then
-  stage ai-workspace-resume
+if [[ "$resume_phase" == fresh ]]; then
+  stage checkpoint-fresh-run
 else
+  stage checkpoint-resume-"$resume_phase"
+fi
+
+if [[ "$resume_phase" == fresh ]]; then
   stage ai-workspace-provision
   EAI_WINDOWS_VM_NAME="$vm_name" EAI_WINDOWS_GUEST_USER="$guest_user" \
     "$ROOT/scripts/prepare-windows-ai-workspace.sh"
   stage ai-workspace-provision-passed
+else
+  stage ai-workspace-resume
 fi
 
+if [[ "$resume_phase" == fresh ]]; then
 stage portal-login
 portal_login_attempt=0
 portal_login_status=1
@@ -6250,6 +6291,25 @@ POWERSHELL
 )"
 [[ "$executable_hash" =~ ^[0-9a-f]{64}$ ]] || guest_test_fail "The released Windows executable hash could not be recorded."
 stage native-installer-passed
+else
+stage resume-native-installer-verification
+host_hash="$(guest_test_host_sha256)"
+executable_hash="$(guest_ps_run "$EAI_RELEASE_VERSION" <<'POWERSHELL' | tr -d '\r' | tail -n 1
+$ErrorActionPreference = 'Stop'
+$expectedVersion = [Console]::In.ReadLine()
+$executable = Join-Path $env:LOCALAPPDATA 'EAI Setup\eai-setup.exe'
+if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) { throw 'The previously verified EAI Setup executable is missing.' }
+$entry = @(Get-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*' -ErrorAction SilentlyContinue |
+  Where-Object { $_.DisplayName -eq 'EAI Setup' -and $_.DisplayVersion -eq $expectedVersion })
+if ($entry.Count -ne 1) { throw 'The previously verified EAI Setup uninstall receipt is missing or mismatched.' }
+(Get-FileHash -Algorithm SHA256 -LiteralPath $executable).Hash.ToLowerInvariant()
+POWERSHELL
+)"
+[[ "$executable_hash" =~ ^[0-9a-f]{64}$ ]] || guest_test_fail "The resumed Windows installation could not be independently verified."
+clear_stateful_resume_artifacts \
+  || guest_test_fail "Stale Windows E2E artifacts could not be cleared before UI-node recovery."
+stage resume-native-installer-verified
+fi
 
 stage uac-admin-consent-suppression-arm
 arm_temporary_admin_consent_suppression \
@@ -6316,6 +6376,7 @@ for _ in $(seq 1 30); do
 done
 [[ "$welcome_advanced" == 1 ]] \
   || guest_test_fail "The released Windows app did not begin its device check after Get started."
+stage normal-welcome-start-verified
 
 stage prerequisite-install
 versions=""
