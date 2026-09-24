@@ -51,7 +51,10 @@ eai_version_supported() {
   (( major > 3 )) || (( major == 3 && minor > 18 )) || (( major == 3 && minor == 18 && patch >= 0 ))
 }
 eai_managed_deploy_ready() {
-  has eai && eai_version_supported && eai deploy app --help >/dev/null 2>&1
+  has eai && eai_version_supported || return 1
+  local deploy_help=""
+  deploy_help="$(eai deploy app --help 2>/dev/null)" || return 1
+  [[ "$deploy_help" == *"--source"* && "$deploy_help" == *"--github-link-session"* ]]
 }
 require_auto_install() {
   if [ "$AUTO_INSTALL" != "1" ]; then
@@ -131,7 +134,7 @@ if [ "$EAI_MANAGED_DEPLOY_READY" != "1" ] || [ "$AUTO_INSTALL" = "1" ]; then
 fi
 
 if [ "$EAI_MANAGED_DEPLOY_READY" != "1" ]; then
-  echo "EAI CLI 3.18.0 or newer with 'eai deploy app' is required." >&2
+  echo "EAI CLI 3.18.0 or newer with source choice and GitHub-link handoff is required." >&2
   exit 1
 fi
 
@@ -153,5 +156,5 @@ if [ -n "$PROJECT_NAME" ]; then
     eai init "$PROJECT_NAME" --current-dir
   fi
 else
-  echo "Next: eai login, eai whoami, then eai init <project-name>. Use 'eai deploy app --help' when you are ready to choose hosting."
+  echo "Next: eai login, eai whoami, then eai init <project-name>. Use 'eai deploy app --help' when you are ready to choose hosting. EAI hosting verifies your linked GitHub identity, then offers EAI-maintained or customer-owned source."
 fi

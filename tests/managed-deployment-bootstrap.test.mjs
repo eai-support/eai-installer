@@ -18,7 +18,7 @@ async function writeExecutable(path, source) {
   await chmod(path, 0o755);
 }
 
-async function createBootstrapHarness({ version, deployReady }) {
+async function createBootstrapHarness({ version, deployReady, sourceReady = deployReady }) {
   const root = await mkdtemp(join(tmpdir(), "eai-installer-managed-deploy-"));
   const bin = join(root, "bin");
   await mkdir(bin);
@@ -30,7 +30,7 @@ async function createBootstrapHarness({ version, deployReady }) {
       npm: 'if "%~1"=="--version" (echo 10.9.0 & exit /b 0)\necho %*>> "%EAI_TEST_NPM_LOG%"\nexit /b 0',
       eai: `echo %*>> "%EAI_TEST_EAI_LOG%"
 if "%~1"=="--version" (echo ${version} & exit /b 0)
-if "%~1"=="deploy" if "%~2"=="app" if "%~3"=="--help" exit /b ${deployReady ? 0 : 7}
+if "%~1"=="deploy" if "%~2"=="app" if "%~3"=="--help" (echo ${sourceReady ? "--source ^<choice^> --github-link-session ^<id^>" : "--repo ^<owner/name^>"} & exit /b ${deployReady ? 0 : 7})
 exit /b 1`,
     };
     for (const [name, source] of Object.entries(fixtures)) {
@@ -53,7 +53,7 @@ exit /b 1`,
       join(bin, "eai"),
       `printf "%s\\n" "$*" >> "$EAI_TEST_EAI_LOG"
 if [ "\${1:-}" = "--version" ]; then echo "${version}"; exit 0; fi
-if [ "\${1:-}" = "deploy" ] && [ "\${2:-}" = "app" ] && [ "\${3:-}" = "--help" ]; then exit ${deployReady ? 0 : 7}; fi
+if [ "\${1:-}" = "deploy" ] && [ "\${2:-}" = "app" ] && [ "\${3:-}" = "--help" ]; then echo "${sourceReady ? "--source <choice> --github-link-session <id>" : "--repo <owner/name>"}"; exit ${deployReady ? 0 : 7}; fi
 exit 1`,
     );
   }
@@ -115,6 +115,17 @@ test("rejects a pre-managed-deploy CLI without silently replacing it", async () 
 
 test("rejects a compatible version when the deploy command is unavailable", async () => {
   const harness = await createBootstrapHarness({ version: "3.18.0", deployReady: false });
+  try {
+    assert.equal(harness.run.status, 1, harness.run.stderr);
+    assert.match(harness.run.stderr, missingCliPattern);
+    await assert.rejects(readFile(harness.npmLog, "utf8"), { code: "ENOENT" });
+  } finally {
+    await rm(harness.root, { recursive: true, force: true });
+  }
+});
+
+test("rejects customer-only CLI help that lacks source choice and GitHub-link handoff", async () => {
+  const harness = await createBootstrapHarness({ version: "3.18.0", deployReady: true, sourceReady: false });
   try {
     assert.equal(harness.run.status, 1, harness.run.stderr);
     assert.match(harness.run.stderr, missingCliPattern);

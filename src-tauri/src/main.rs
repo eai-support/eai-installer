@@ -944,15 +944,17 @@ fn node_version() -> Option<String> {
     (current_version.0 >= MIN_NODE_MAJOR_VERSION).then_some(current)
 }
 
-fn eai_cli_is_compatible(current_version: (u64, u64, u64), has_deploy_app: bool) -> bool {
-    current_version >= MIN_EAI_CLI_VERSION && has_deploy_app
+fn eai_cli_is_compatible(current_version: (u64, u64, u64), deploy_help: &str) -> bool {
+    current_version >= MIN_EAI_CLI_VERSION
+        && deploy_help.contains("--source")
+        && deploy_help.contains("--github-link-session")
 }
 
 fn eai_cli_version() -> Option<String> {
     let current = version("eai", &["--version"])?;
     let current_version = semantic_version(&current)?;
-    let has_deploy_app = run_program("eai", &["deploy", "app", "--help"]).is_ok();
-    eai_cli_is_compatible(current_version, has_deploy_app).then_some(current)
+    let (stdout, stderr) = run_program("eai", &["deploy", "app", "--help"]).ok()?;
+    eai_cli_is_compatible(current_version, &format!("{stdout}\n{stderr}")).then_some(current)
 }
 
 fn macos_git_ready() -> bool {
@@ -2024,7 +2026,7 @@ fn run_bootstrap_sync(app: AppHandle, step: String, project_name: Option<String>
                     }
                     emit_progress(&app, "eai-cli", "EAI CLI ready", "Verifying the eai command.", Some(90), Some(5));
                     if eai_cli_version().is_none() {
-                        return command_result("eai-cli", false, "npm finished, but the installed EAI CLI is missing the compatible Deploy to EAI command.", Some("Choose Try again. EAI Setup requires EAI CLI 3.18.0 or newer with `eai deploy app`."), Some(format!("{stdout}\n{stderr}")), true);
+                        return command_result("eai-cli", false, "npm finished, but the installed EAI CLI is missing the compatible Deploy to EAI command.", Some("Choose Try again. EAI Setup requires EAI CLI 3.18.0 or newer with `eai deploy app --source` and GitHub-link handoff."), Some(format!("{stdout}\n{stderr}")), true);
                     }
                     let command = if cfg!(target_os = "windows") {
                         "npm install --global --prefix %APPDATA%\\npm @enterpriseai/cli"
@@ -2300,10 +2302,13 @@ mod tests {
 
     #[test]
     fn eai_cli_readiness_requires_version_3_18_and_managed_deploy_capability() {
-        assert!(!eai_cli_is_compatible((3, 17, 99), true));
-        assert!(!eai_cli_is_compatible((3, 18, 0), false));
-        assert!(eai_cli_is_compatible((3, 18, 0), true));
-        assert!(eai_cli_is_compatible((4, 0, 0), true));
+        let complete_help = "--target <target> --source <choice> --github-link-session <id>";
+        assert!(!eai_cli_is_compatible((3, 17, 99), complete_help));
+        assert!(!eai_cli_is_compatible((3, 18, 0), ""));
+        assert!(!eai_cli_is_compatible((3, 18, 0), "--source <choice>"));
+        assert!(!eai_cli_is_compatible((3, 18, 0), "--github-link-session <id>"));
+        assert!(eai_cli_is_compatible((3, 18, 0), complete_help));
+        assert!(eai_cli_is_compatible((4, 0, 0), complete_help));
     }
 
     #[test]

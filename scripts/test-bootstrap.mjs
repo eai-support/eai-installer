@@ -26,11 +26,11 @@ for (const value of ["--install-homebrew", "EAI_SETUP_INSTALL_HOMEBREW", "raw.gi
 if (!shell.includes('INSTALL_HOMEBREW="${EAI_SETUP_INSTALL_HOMEBREW:-0}"')) {
   throw new Error("bootstrap.sh: Homebrew installation is not opt-in");
 }
-for (const value of ["eai_version_supported", "eai_managed_deploy_ready", "major == 3 && minor == 18", "eai deploy app --help"]) {
+for (const value of ["eai_version_supported", "eai_managed_deploy_ready", "major == 3 && minor == 18", "eai deploy app --help", "--source", "--github-link-session"]) {
   if (!shell.includes(value)) throw new Error(`bootstrap.sh: combined EAI CLI readiness is missing: ${value}`);
 }
 const powershell = await readFile(new URL("../scripts/bootstrap.ps1", import.meta.url), "utf8");
-for (const value of ["Has-EaiManagedDeploy", "[version]::new(3, 18, 0)", "eai deploy app --help"]) {
+for (const value of ["Has-EaiManagedDeploy", "[version]::new(3, 18, 0)", "eai deploy app --help", "--source", "--github-link-session"]) {
   if (!powershell.includes(value)) throw new Error(`bootstrap.ps1: combined EAI CLI readiness is missing: ${value}`);
 }
 
@@ -85,8 +85,10 @@ if (eaiCli?.minimumVersion !== "3.18.0") {
   throw new Error("manifest: EAI CLI minimum must include managed deployment in 3.18.0");
 }
 for (const command of [
-  "eai deploy app <app-key> --target eai --tenant-id <tenant-id> --target-tenant-id <target-tenant-id> --repo <owner/name> --installation-id <id>",
-  "eai deploy app <app-key> --target eai --tenant-id <tenant-id> --target-tenant-id <target-tenant-id> --resume <operation-id>",
+  "eai deploy app <app-key> --target eai --tenant-id <tenant-id> --target-tenant-id <target-tenant-id> --source eai-managed",
+  "eai deploy app <app-key> --target eai --tenant-id <tenant-id> --target-tenant-id <target-tenant-id> --source customer-owned --repo <owner/name> --installation-id <id>",
+  "eai deploy app <app-key> --target eai --tenant-id <tenant-id> --target-tenant-id <target-tenant-id> --source eai-managed --github-link-session <session-id>",
+  "eai deploy app <app-key> --target eai --tenant-id <tenant-id> --target-tenant-id <target-tenant-id> --source eai-managed --resume <operation-id>",
 ]) {
   if (!manifest.runtime?.userCommands?.includes(command)) {
     throw new Error(`manifest: missing managed deployment onboarding command: ${command}`);
@@ -121,7 +123,7 @@ if ((rust.match(/env::var_os\("HOME"\)/g) ?? []).length !== 1 || rust.includes('
 for (const value of ['command.env("HOME", &home)', 'command.env("npm_config_cache", home.join(".eai-setup/npm-cache"))', 'command.env_remove("HOME")', 'command.env_remove("npm_config_cache")']) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter lets a GUI child process inherit an invalid home: ${value}`);
 }
-for (const value of ["const MIN_EAI_CLI_VERSION: (u64, u64, u64) = (3, 18, 0)", "MIN_NODE_MAJOR_VERSION: u64 = 24", "fn node_version()", "@enterpriseai/cli", "eai_cli_version()", "fn eai_cli_is_compatible", "current_version >= MIN_EAI_CLI_VERSION && has_deploy_app", "run_program(\"eai\", &[\"deploy\", \"app\", \"--help\"])", "user_npm_global_exec_dirs", "fn eai_cli_script", "APPDATA", "run_program_in_directory_with_env(\"node\", &node_args, directory, environment)"] ) {
+for (const value of ["const MIN_EAI_CLI_VERSION: (u64, u64, u64) = (3, 18, 0)", "MIN_NODE_MAJOR_VERSION: u64 = 24", "fn node_version()", "@enterpriseai/cli", "eai_cli_version()", "fn eai_cli_is_compatible", "current_version >= MIN_EAI_CLI_VERSION", 'deploy_help.contains("--source")', 'deploy_help.contains("--github-link-session")', "run_program(\"eai\", &[\"deploy\", \"app\", \"--help\"])", "user_npm_global_exec_dirs", "fn eai_cli_script", "APPDATA", "run_program_in_directory_with_env(\"node\", &node_args, directory, environment)"] ) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter does not verify the canonical EAI CLI release: ${value}`);
 }
 if (rust.includes("latest_eai_cli_requirement") || rust.includes('version("npm", &["view", "@enterpriseai/cli"')) {

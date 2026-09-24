@@ -28,8 +28,10 @@ function Has-EaiManagedDeploy {
   if ($versionOutput -notmatch '^v?(\d+)\.(\d+)\.(\d+)') { return $false }
   $currentVersion = [version]::new([int]$Matches[1], [int]$Matches[2], [int]$Matches[3])
   if ($currentVersion -lt [version]::new(3, 18, 0)) { return $false }
-  & eai deploy app --help *> $null
-  return $LASTEXITCODE -eq 0
+  $deployHelp = & eai deploy app --help 2>$null
+  if ($LASTEXITCODE -ne 0) { return $false }
+  $helpText = $deployHelp -join "`n"
+  return $helpText.Contains("--source") -and $helpText.Contains("--github-link-session")
 }
 
 if (-not (Has-Command "git")) {
@@ -59,7 +61,7 @@ if (-not $eaiManagedDeployReady) {
 }
 
 if (-not $eaiManagedDeployReady) {
-  throw "EAI CLI 3.18.0 or newer with 'eai deploy app' is required."
+  throw "EAI CLI 3.18.0 or newer with source choice and GitHub-link handoff is required."
 }
 
 Write-Host (git --version)
@@ -78,5 +80,5 @@ if ($ProjectName) {
     try { eai init $ProjectName --current-dir } finally { Pop-Location }
   }
 } else {
-  Write-Host "Next: eai login, eai whoami, then eai init <project-name>. Use 'eai deploy app --help' when you are ready to choose hosting."
+  Write-Host "Next: eai login, eai whoami, then eai init <project-name>. Use 'eai deploy app --help' when you are ready to choose hosting. EAI hosting verifies your linked GitHub identity, then offers EAI-maintained or customer-owned source."
 }

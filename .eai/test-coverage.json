@@ -6,7 +6,7 @@
       "features": [
         {
           "id": "managed-deployment-cli-bootstrap",
-          "description": "Every setup path installs and accepts only an EAI CLI release that exposes the managed app deployment command, then preserves the canonical hosting and exact-operation recovery commands in the installer manifest.",
+          "description": "Every setup path accepts only an EAI CLI release that exposes the EAI-managed deployment command, explicit source choice and actor-bound GitHub-link continuation, then preserves both source journeys and exact-operation recovery commands in the installer manifest.",
           "owned_paths": [
             ".eai/test-coverage.json",
             "docs/release-e2e.md",
