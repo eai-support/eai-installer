@@ -10,5 +10,6 @@ src-tauri/gen/
 .env.*
 !.env.example
 *.log
+test-results/
 __pycache__/
 *.py[cod]
