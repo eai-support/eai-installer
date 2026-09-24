@@ -40,6 +40,7 @@ ocr_binary="${TMPDIR:-/tmp}/eai-installer-macos-ocr-match"
 window_id_source="$ROOT/scripts/macos-parallels-window-id.swift"
 window_id_binary="${TMPDIR:-/tmp}/eai-installer-macos-parallels-window-id"
 input_helper="$ROOT/scripts/parallels-input.mjs"
+checkpoint_helper="$ROOT/scripts/release-e2e-checkpoint.mjs"
 work_dir="$(mktemp -d)"
 host_receipt="$work_dir/desktop-receipt.json"
 phase="preflight"
@@ -65,10 +66,37 @@ uac_watcher_started_at=""
 uac_consent_restore_required=0
 uac_policy_nonce=""
 uac_policy_run_binding=""
+resume_phase="${EAI_WINDOWS_RESUME_PHASE:-fresh}"
+
+checkpoint_advance() {
+  local checkpoint_phase="$1"
+  [[ -n "${EAI_WINDOWS_CHECKPOINT_LEDGER:-}" ]] || return 0
+  [[ "${host_hash:-}" =~ ^[0-9a-f]{64}$ ]] || guest_test_fail "The Windows checkpoint cannot be bound to the exact release asset."
+  node "$checkpoint_helper" advance \
+    --ledger "$EAI_WINDOWS_CHECKPOINT_LEDGER" \
+    --version "$EAI_RELEASE_VERSION" \
+    --tag "$EAI_RELEASE_TAG" \
+    --asset-sha256 "$host_hash" \
+    --phase "$checkpoint_phase" \
+    --evidence "{\"releaseAssetSha256\":\"$host_hash\"}" >/dev/null \
+    || guest_test_fail "The Windows checkpoint ledger rejected a verified test node."
+}
 
 stage() {
   phase="$1"
-  printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$phase"
+  local timestamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  printf '%s %s\n' "$timestamp" "$phase"
+  if [[ -n "${EAI_VM_RESULT_FILE:-}" ]]; then
+    printf '%s\n' "$timestamp $phase" >"$(dirname "$EAI_VM_RESULT_FILE")/windows-stage.txt"
+  fi
+  case "$phase" in
+    native-installer-passed) checkpoint_advance native-installer-verified ;;
+    normal-welcome-start-verified) checkpoint_advance welcome-start-verified ;;
+    normal-welcome-continue-ready) checkpoint_advance welcome-ready-verified ;;
+    prerequisite-install-passed) checkpoint_advance signin-verified ;;
+    cli-login-passed) checkpoint_advance cli-login-verified ;;
+    windows-e2e-passed) checkpoint_advance e2e-complete ;;
+  esac
 }
 
 input() {
@@ -235,10 +263,25 @@ focus_receipt_bound_eai_setup_window() {
   local output=""
   local expected_hash="${executable_hash:-}"
   local button_name="${1:-}"
+  local button_selector=""
   local invoke_button="${2:-0}"
   [[ "$expected_hash" =~ ^[0-9a-f]{64}$ ]] || return 1
   [[ "$invoke_button" == 0 || "$invoke_button" == 1 ]] || return 1
-  output="$(guest_ps_run "$guest_normal_pid"$'\n'"$guest_normal_launch_receipt"$'\n'"$guest_executable_file"$'\n'"$expected_hash"$'\n'"$button_name"$'\n'"$invoke_button"$'\n' 2 <<'POWERSHELL'
+  case "$button_name" in
+    '') button_selector='' ;;
+    'Get started') button_selector='eai-action-start' ;;
+    'Let’s go') button_selector='eai-action-continue' ;;
+    '__eai_text__:Get started') button_selector='eai-text-start' ;;
+    '__eai_text__:Checking this Windows PC') button_selector='eai-text-checking' ;;
+    '__eai_text__:This Windows PC is ready') button_selector='eai-text-ready' ;;
+    '__eai_text__:Let’s go') button_selector='eai-text-continue' ;;
+    '__eai_text__:Sign in with browser') button_selector='eai-text-signin' ;;
+    *) return 1 ;;
+  esac
+  # UI probes must not inherit the long timeout used for installer and project
+  # operations. A lost Parallels completion result must return to the bounded
+  # outer retry before the visible application becomes stale.
+  output="$(EAI_WINDOWS_HIDDEN_CURRENT_USER_TIMEOUT_SECONDS=15 guest_ps_run "$guest_normal_pid"$'\n'"$guest_normal_launch_receipt"$'\n'"$guest_executable_file"$'\n'"$expected_hash"$'\n'"$button_selector"$'\n'"$invoke_button"$'\n' 2 <<'POWERSHELL'
 $ErrorActionPreference = 'Stop'
 
 function ConvertTo-ComparableAppPath([string]$path) {
@@ -258,7 +301,7 @@ $pidFile = [Console]::In.ReadLine()
 $receiptFile = [Console]::In.ReadLine()
 $executableFile = [Console]::In.ReadLine()
 $expectedHash = [Console]::In.ReadLine()
-$buttonName = [Console]::In.ReadLine()
+$buttonSelector = [Console]::In.ReadLine()
 $invokeButton = [Console]::In.ReadLine()
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 if ($identity.IsSystem -or $expectedHash -cnotmatch '^[0-9a-f]{64}$') {
@@ -275,7 +318,7 @@ $pidText = (Get-Content -Raw -LiteralPath $pidFile).Trim()
 $receipt = Get-Content -Raw -LiteralPath $receiptFile | ConvertFrom-Json
 $executable = (Get-Content -Raw -LiteralPath $executableFile).Trim()
 if ($pidText -cnotmatch '^[1-9][0-9]*$' -or
-    $receipt.schemaVersion -cne 'eai-windows-detached-app-launch/v5' -or
+    $receipt.schemaVersion -cne 'eai-windows-detached-app-launch/v6' -or
     $receipt.status -cne 'launched' -or $receipt.mode -cne 'normal' -or
     [int]$receipt.processId -ne [int]$pidText -or
     $receipt.processOwnerSid -cne $identity.User.Value -or
@@ -332,31 +375,33 @@ foreach ($terminal in @(Get-Process WindowsTerminal -ErrorAction SilentlyContinu
   }
 }
 $window = $process.MainWindowHandle
-[void][EaiReleaseWindowFocus]::AllowSetForegroundWindow([uint32]::MaxValue)
-[void][EaiReleaseWindowFocus]::ShowWindowAsync($window, 9)
-$foregroundWindow = [EaiReleaseWindowFocus]::GetForegroundWindow()
-$currentThread = [EaiReleaseWindowFocus]::GetCurrentThreadId()
-$foregroundProcessId = 0
-$foregroundThread = if ($foregroundWindow -eq [IntPtr]::Zero) { 0 } else {
-  [EaiReleaseWindowFocus]::GetWindowThreadProcessId($foregroundWindow, [ref]$foregroundProcessId)
-}
-$attached = $false
-try {
-  if ($foregroundThread -ne 0 -and $foregroundThread -ne $currentThread) {
-    $attached = [EaiReleaseWindowFocus]::AttachThreadInput($currentThread, $foregroundThread, $true)
+if ([string]::IsNullOrEmpty($buttonSelector)) {
+  [void][EaiReleaseWindowFocus]::AllowSetForegroundWindow([uint32]::MaxValue)
+  [void][EaiReleaseWindowFocus]::ShowWindowAsync($window, 9)
+  $foregroundWindow = [EaiReleaseWindowFocus]::GetForegroundWindow()
+  $currentThread = [EaiReleaseWindowFocus]::GetCurrentThreadId()
+  $foregroundProcessId = 0
+  $foregroundThread = if ($foregroundWindow -eq [IntPtr]::Zero) { 0 } else {
+    [EaiReleaseWindowFocus]::GetWindowThreadProcessId($foregroundWindow, [ref]$foregroundProcessId)
   }
-  [void][EaiReleaseWindowFocus]::BringWindowToTop($window)
-  [void][EaiReleaseWindowFocus]::SetForegroundWindow($window)
-  [void][EaiReleaseWindowFocus]::SetFocus($window)
-} finally {
-  if ($attached) {
-    [void][EaiReleaseWindowFocus]::AttachThreadInput($currentThread, $foregroundThread, $false)
+  $attached = $false
+  try {
+    if ($foregroundThread -ne 0 -and $foregroundThread -ne $currentThread) {
+      $attached = [EaiReleaseWindowFocus]::AttachThreadInput($currentThread, $foregroundThread, $true)
+    }
+    [void][EaiReleaseWindowFocus]::BringWindowToTop($window)
+    [void][EaiReleaseWindowFocus]::SetForegroundWindow($window)
+    [void][EaiReleaseWindowFocus]::SetFocus($window)
+  } finally {
+    if ($attached) {
+      [void][EaiReleaseWindowFocus]::AttachThreadInput($currentThread, $foregroundThread, $false)
+    }
+  }
+  for ($poll = 0; $poll -lt 20 -and [EaiReleaseWindowFocus]::GetForegroundWindow() -ne $window; $poll++) {
+    Start-Sleep -Milliseconds 100
   }
 }
-for ($poll = 0; $poll -lt 20 -and [EaiReleaseWindowFocus]::GetForegroundWindow() -ne $window; $poll++) {
-  Start-Sleep -Milliseconds 100
-}
-if ([string]::IsNullOrEmpty($buttonName)) {
+if ([string]::IsNullOrEmpty($buttonSelector)) {
   # Parallels can deny a guest-control PowerShell process foreground ownership
   # even while its receipt-bound app window is visible in the interactive
   # desktop. The window/process binding remains authoritative for screenshots.
@@ -364,45 +409,72 @@ if ([string]::IsNullOrEmpty($buttonName)) {
   [Console]::Out.WriteLine('EAI_SETUP_RECEIPT_BOUND_WINDOW_READY')
   return
 }
-$validButtonName = $buttonName -in @('Get started', "Let's go")
-if (-not $validButtonName -or $invokeButton -notin @('0', '1')) {
-  throw 'The EAI Setup UI Automation action is not approved.'
-}
 Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
 $windowElement = [System.Windows.Automation.AutomationElement]::FromHandle($window)
 if ($null -eq $windowElement -or [int]$windowElement.Current.ProcessId -ne $process.Id) {
   throw 'The EAI Setup UI Automation window is not bound to the exact live process.'
 }
+$textSelectors = @{
+  'eai-text-start' = 'Get started'
+  'eai-text-checking' = 'Checking this Windows PC'
+  'eai-text-ready' = 'This Windows PC is ready'
+  'eai-text-continue' = 'Let’s go'
+  'eai-text-signin' = 'Sign in with browser'
+}}
+if ($textSelectors.ContainsKey($buttonSelector)) {
+  $expectedText = $textSelectors[$buttonSelector]
+  if ($invokeButton -ne '0') {
+    throw 'The EAI Setup UI text probe is not approved.'
+  }
+  $textElement = $windowElement.FindFirst(
+    [System.Windows.Automation.TreeScope]::Descendants,
+    [System.Windows.Automation.PropertyCondition]::new(
+      [System.Windows.Automation.AutomationElement]::NameProperty, $expectedText
+    )
+  )
+  if ($null -eq $textElement -or $textElement.Current.IsOffscreen) {
+    throw 'The receipt-bound EAI Setup window did not expose its approved visible text.'
+  }
+  $process.Dispose()
+  [Console]::Out.WriteLine('EAI_SETUP_RECEIPT_BOUND_TEXT_READY')
+  return
+}
+$actionSelectors = @{
+  'eai-action-start' = 'Get started'
+  'eai-action-continue' = 'Let’s go'
+}}
+if (-not $actionSelectors.ContainsKey($buttonSelector) -or $invokeButton -notin @('0', '1')) {
+  throw 'The EAI Setup UI Automation action is not approved.'
+}
+$buttonName = $actionSelectors[$buttonSelector]
 $conditions = @(
   [System.Windows.Automation.PropertyCondition]::new(
-    [System.Windows.Automation.AutomationElement]::NameProperty, $buttonName
+    [System.Windows.Automation.AutomationElement]::AutomationIdProperty, 'setupStart'
   ),
   [System.Windows.Automation.PropertyCondition]::new(
     [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
     [System.Windows.Automation.ControlType]::Button
   )
 )
-$rawMatches = @($windowElement.FindAll(
+$match = $windowElement.FindFirst(
   [System.Windows.Automation.TreeScope]::Descendants,
   [System.Windows.Automation.AndCondition]::new([System.Windows.Automation.Condition[]]$conditions)
-) | Where-Object { -not $_.Current.IsOffscreen -and $_.Current.IsEnabled })
-$uniqueMatches = @{}
-foreach ($element in $rawMatches) {
-  try {
-    $runtimeKey = [string]::Join('.', $element.GetRuntimeId())
-  } catch {
-    throw 'The approved EAI Setup action has no stable UI Automation runtime identity.'
-  }
-  $uniqueMatches[$runtimeKey] = $element
+)
+if ($null -eq $match -or $match.Current.IsOffscreen -or -not $match.Current.IsEnabled) {
+  throw 'The receipt-bound EAI Setup window did not expose its approved visible action.'
 }
-$matches = @($uniqueMatches.Values)
-if ($matches.Count -ne 1) {
-  throw 'The receipt-bound EAI Setup window did not expose exactly one approved visible action.'
+try {
+  $runtimeKey = [string]::Join('.', $match.GetRuntimeId())
+  if ([string]::IsNullOrEmpty($runtimeKey)) {
+    throw 'empty runtime identity'
+  }
+} catch {
+  throw 'The approved EAI Setup action has no stable UI Automation runtime identity.'
 }
 if ($invokeButton -eq '1') {
   $invokePattern = $null
-  if (-not $matches[0].TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$invokePattern)) {
+  if (-not $match.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$invokePattern)) {
     throw 'The approved EAI Setup action does not expose UI Automation InvokePattern.'
   }
   ([System.Windows.Automation.InvokePattern]$invokePattern).Invoke()
@@ -414,8 +486,18 @@ $process.Dispose()
 [Console]::Out.WriteLine('EAI_SETUP_RECEIPT_BOUND_BUTTON_READY')
 POWERSHELL
   )" || return 1
+  local expected_receipt='EAI_SETUP_RECEIPT_BOUND_WINDOW_READY'
+  if [[ "$button_name" == __eai_text__:* ]]; then
+    expected_receipt='EAI_SETUP_RECEIPT_BOUND_TEXT_READY'
+  elif [[ -n "$button_name" ]]; then
+    if [[ "$invoke_button" == 1 ]]; then
+      expected_receipt='EAI_SETUP_RECEIPT_BOUND_BUTTON_INVOKED'
+    else
+      expected_receipt='EAI_SETUP_RECEIPT_BOUND_BUTTON_READY'
+    fi
+  fi
   if printf '%s\n' "$output" | /usr/bin/tr -d '\r' \
-    | /usr/bin/grep -Fqx 'EAI_SETUP_RECEIPT_BOUND_WINDOW_READY'; then
+    | /usr/bin/grep -Fqx "$expected_receipt"; then
     printf '%s\n' "$output"
     return 0
   fi
@@ -424,16 +506,34 @@ POWERSHELL
 
 invoke_receipt_bound_eai_setup_button() {
   local button_name="$1"
-  local output=""
-  output="$(focus_receipt_bound_eai_setup_window "$button_name" 1)" || return 1
-  printf '%s\n' "$output" | /usr/bin/tr -d '\r' \
-    | /usr/bin/grep -Fqx 'EAI_SETUP_RECEIPT_BOUND_BUTTON_INVOKED'
+  local probe=0
+  # Probe until the exact app-owned primary control has settled. A probe never
+  # invokes UI and a failed probe is therefore safe to retry.
+  for probe in $(seq 1 30); do
+    if focus_receipt_bound_eai_setup_window "$button_name" 0 >/dev/null; then
+      focus_receipt_bound_eai_setup_window "$button_name" 1 >/dev/null
+      return $?
+    fi
+    sleep 1
+  done
+  return 1
 }
 
 screen_has() {
   local pattern="$1"
   local screenshot="$work_dir/screen.png"
   local status=2
+  local ui_probe_output=""
+  # The Windows VM can be in Parallels Coherence, where a VM-console capture
+  # omits the visible extracted app window. Prefer the receipt-bound UI tree
+  # for the installer’s approved flow text, and retain image OCR as fallback
+  # for all other evidence (including unexpected UAC dialogs).
+  if ui_probe_output="$(focus_receipt_bound_eai_setup_window "__eai_text__:${pattern}" 0 2>&1)"; then
+    return 0
+  fi
+  if [[ -n "${EAI_VM_RESULT_FILE:-}" && -n "$ui_probe_output" ]]; then
+    printf '%s\n' "$ui_probe_output" >"$(dirname "$EAI_VM_RESULT_FILE")/windows-ui-probe-error.log"
+  fi
   focus_receipt_bound_eai_setup_window || return 1
   if prlctl capture "$vm_name" --file "$screenshot" >/dev/null 2>&1; then
     set +e
@@ -627,7 +727,8 @@ guest_ps_run() {
       printf '%s\n' "$output"
       return 0
     fi
-    if is_parallels_session_open_failure "$output"; then
+    if is_parallels_session_open_failure "$output" \
+      || is_parallels_ambiguous_launch_result_failure "$status" "$output"; then
       if [[ "$attempt" -ge "$max_attempts" ]]; then
         break
       fi
@@ -666,7 +767,8 @@ guest_ps() {
       printf '%s\n' "$output"
       return 0
     fi
-    if is_parallels_session_open_failure "$output"; then
+    if is_parallels_session_open_failure "$output" \
+      || is_parallels_ambiguous_launch_result_failure "$status" "$output"; then
       if [[ "$attempt" -ge "$max_attempts" ]]; then
         break
       fi
@@ -710,7 +812,8 @@ guest_system_ps_run() {
       printf '%s\n' "$output"
       return 0
     fi
-    if is_parallels_session_open_failure "$output"; then
+    if is_parallels_session_open_failure "$output" \
+      || is_parallels_ambiguous_launch_result_failure "$status" "$output"; then
       [[ "$attempt" -lt "$max_attempts" ]] || break
       sleep 2
       continue
@@ -740,7 +843,8 @@ guest_system_ps() {
       printf '%s\n' "$output"
       return 0
     fi
-    if is_parallels_session_open_failure "$output"; then
+    if is_parallels_session_open_failure "$output" \
+      || is_parallels_ambiguous_launch_result_failure "$status" "$output"; then
       [[ "$attempt" -lt 5 ]] || break
       sleep 2
       continue
@@ -759,6 +863,65 @@ guest_system_ps_once() {
   printf '& {\n%s\n}\n\n' "$script" | prlctl exec "$vm_name" cmd.exe /D /S /C powershell.exe \
     -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass \
     -InputFormat Text -OutputFormat Text -Command -
+}
+
+clear_stateful_resume_artifacts() {
+  # A stateful retry must make the bridge's fixed test paths empty before it
+  # re-downloads the exact release asset. These are explicit E2E-owned files;
+  # reject directories and reparse points so recovery cannot widen deletion.
+  guest_system_ps_run "" 5 >/dev/null <<'POWERSHELL'
+$ErrorActionPreference = 'Stop'
+$paths = @(
+  'C:\Users\Public\eai-setup-under-test.exe',
+  'C:\Users\Public\eai-setup-e2e-executable.txt',
+  'C:\Users\Public\eai-setup-e2e-install.json',
+  'C:\Users\Public\eai-setup-normal.pid',
+  'C:\Users\Public\eai-setup-normal.pid.tmp',
+  'C:\Users\Public\eai-setup-normal-launch.json',
+  'C:\Users\Public\eai-setup-normal-launch.json.tmp',
+  'C:\Users\Public\eai-setup-normal-launch-arm.json',
+  'C:\Users\Public\eai-setup-normal-launch-arm.json.tmp',
+  'C:\Users\Public\eai-setup-normal-launch-cancel.signal',
+  'C:\Users\Public\eai-setup-normal-launch-cancel.signal.tmp',
+  'C:\Users\Public\eai-setup-app-bootstrap.ps1',
+  'C:\Users\Public\eai-setup-app-bootstrap.ps1.tmp',
+  'C:\Users\Public\eai-setup-normal.log',
+  'C:\Users\Public\eai-setup-normal-error.log',
+  'C:\Users\Public\eai-setup-installer-worker.ps1',
+  'C:\Users\Public\eai-setup-installer-worker.ps1.tmp',
+  'C:\Users\Public\eai-setup-installer-bridge-armed.json',
+  'C:\Users\Public\eai-setup-installer-bridge-armed.json.tmp',
+  'C:\Users\Public\eai-setup-installer-launch.signal',
+  'C:\Users\Public\eai-setup-installer-launch.signal.tmp',
+  'C:\Users\Public\eai-setup-installer-cancel.signal',
+  'C:\Users\Public\eai-setup-installer-cancel.signal.tmp',
+  'C:\Users\Public\eai-setup-installer-complete.json',
+  'C:\Users\Public\eai-setup-installer-complete.json.tmp',
+  'C:\Users\Public\eai-setup-defender-guardian.ps1',
+  'C:\Users\Public\eai-setup-defender-guardian.ps1.tmp',
+  'C:\Users\Public\eai-setup-defender-guardian-armed.json',
+  'C:\Users\Public\eai-setup-defender-guardian-armed.json.tmp',
+  'C:\Users\Public\eai-setup-defender-add.json',
+  'C:\Users\Public\eai-setup-defender-add.json.tmp',
+  'C:\Users\Public\eai-setup-defender-remove.json',
+  'C:\Users\Public\eai-setup-defender-remove.json.tmp',
+  'C:\Users\Public\eai-setup-defender-done.signal',
+  'C:\Users\Public\eai-setup-defender-target-ready.signal',
+  'C:\Users\Public\eai-setup-defender-target-ready.signal.tmp'
+)
+foreach ($path in $paths) {
+  if (-not (Test-Path -LiteralPath $path)) { continue }
+  $item = Get-Item -LiteralPath $path -Force -ErrorAction Stop
+  if ($item.PSIsContainer -or (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) -or
+      -not [string]::Equals($item.FullName, $path, [StringComparison]::OrdinalIgnoreCase)) {
+    throw "Refusing to remove an invalid stateful-recovery artifact: $path"
+  }
+  Remove-Item -LiteralPath $path -Force -ErrorAction Stop
+}
+if ($paths | Where-Object { Test-Path -LiteralPath $_ }) {
+  throw 'A stale stateful-recovery artifact remains.'
+}
+POWERSHELL
 }
 
 write_uac_policy_arm_receipt() {
@@ -3537,7 +3700,7 @@ const proof = {
   transportElapsedMs: returnedMs - startedMs,
   transportReturned: true,
   childAliveValidatedAfterReturn: true,
-  providerBrokeredJobEscapeProven: true,
+  providerBrokeredTransportIsolationProven: true,
   protectedValuesRecorded: false,
   sanitized: true,
 };
@@ -3789,6 +3952,7 @@ function New-WmiStartupEnvironment([string]$mode, [string]$tenant, [string]$proj
     if ($name.StartsWith('EAI_SETUP_E2E', [StringComparison]::OrdinalIgnoreCase)) { continue }
     $environment[$name] = $value
   }
+  $environment['WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS'] = '--force-renderer-accessibility'
   if ($mode -eq 'e2e') {
     $environment['EAI_SETUP_E2E'] = '1'
     $environment['EAI_SETUP_E2E_PROJECT_NAME'] = $project
@@ -3966,7 +4130,7 @@ try {
   $startupEnvironment = New-WmiStartupEnvironment $Mode $tenantId $projectName
   $startupEnvironmentValues = [string[]]$startupEnvironment.Values
   $e2eEnvironmentVariableCount = [int]$startupEnvironment.E2eVariableCount
-  $creationFlags = [uint32]1536
+  $creationFlags = [uint32]16778752
   $childInJob = $false
   $processEvidence = $null
   $processStartedAt = $null
@@ -4035,7 +4199,7 @@ try {
     $executableLock = $null
     Write-AtomicRestrictedText $pidPath $pidTemporary ([string]$process.Id) $identity.User
     $receipt = [ordered]@{
-      schemaVersion = 'eai-windows-detached-app-launch/v5'
+      schemaVersion = 'eai-windows-detached-app-launch/v6'
       status = 'launched'
       mode = $Mode
       launchNonce = $LaunchNonce
@@ -4062,6 +4226,9 @@ try {
       bootstrapInJob = $bootstrapInJob
       childJobStateObserved = $true
       childInJob = $childInJob
+      # Win32_Process can place the child in a provider-owned job even after it
+      # has escaped the Parallels control job.  The authoritative proof is the
+      # exact child still being alive after the guest-control transport returns.
       childJobAbsenceRequired = $false
       canonicalExecutableOnlyCommandLine = $true
       quotedExecutableCommandLine = $true
@@ -4324,7 +4491,7 @@ foreach ($pair in @(@($receiptItem, $receiptFile), @($pidItem, $pidFile), @($arm
 }
 $arm = Get-Content -Raw -LiteralPath $armFile | ConvertFrom-Json
 $processId = (Get-Content -Raw -LiteralPath $pidFile).Trim()
-if ($receipt.schemaVersion -cne 'eai-windows-detached-app-launch/v5' -or $receipt.status -cne 'launched' -or
+if ($receipt.schemaVersion -cne 'eai-windows-detached-app-launch/v6' -or $receipt.status -cne 'launched' -or
     $receipt.mode -cne $expectedMode -or $receipt.launchNonce -cne $expectedNonce -or
     $receipt.launchMechanism -cne 'local-win32-process-create' -or
     $receipt.localWmiCall -ne $true -or $receipt.wmiClass -cne 'Win32_Process' -or
@@ -4338,7 +4505,7 @@ if ($receipt.schemaVersion -cne 'eai-windows-detached-app-launch/v5' -or $receip
     $receipt.childInJob -isnot [bool] -or $receipt.childJobAbsenceRequired -ne $false -or
     $receipt.canonicalExecutableOnlyCommandLine -ne $true -or
     $receipt.quotedExecutableCommandLine -ne $true -or $receipt.startupInfoUsesStdHandles -ne $false -or
-    $receipt.desktop -cne 'winsta0\default' -or [int64]$receipt.creationFlags -ne 1536 -or
+    $receipt.desktop -cne 'winsta0\default' -or [int64]$receipt.creationFlags -ne 16778752 -or
     $receipt.emptyApplicationArguments -ne $true -or $receipt.executableSha256 -cne $expectedHash -or
     $processId -cnotmatch '^[1-9][0-9]*$' -or [int]$processId -ne [int]$receipt.processId -or
     $receipt.processSessionId -le 0 -or $receipt.providerProcessId -le 0 -or
@@ -4657,7 +4824,7 @@ function Read-BoundLaunchState() {
     $evidencePresent = $true
     Assert-UserLaunchArtifact $receiptFile
     $receiptValue = Get-Content -Raw -LiteralPath $receiptFile | ConvertFrom-Json
-    if ($receiptValue.schemaVersion -cne 'eai-windows-detached-app-launch/v5' -or $receiptValue.status -cne 'launched' -or
+    if ($receiptValue.schemaVersion -cne 'eai-windows-detached-app-launch/v6' -or $receiptValue.status -cne 'launched' -or
         $receiptValue.mode -cne $expectedMode -or $receiptValue.launchNonce -cne $expectedNonce -or
         $receiptValue.executableSha256 -cne $expectedHash -or $receiptValue.bootstrapSha256 -cne $expectedBootstrapHash -or
         $receiptValue.launchMechanism -cne 'local-win32-process-create' -or
@@ -4674,7 +4841,7 @@ function Read-BoundLaunchState() {
         $receiptValue.canonicalExecutableOnlyCommandLine -ne $true -or
         $receiptValue.quotedExecutableCommandLine -ne $true -or
         $receiptValue.startupInfoUsesStdHandles -ne $false -or $receiptValue.desktop -cne 'winsta0\default' -or
-        [int64]$receiptValue.creationFlags -ne 1536 -or
+        [int64]$receiptValue.creationFlags -ne 16778752 -or
         $receiptValue.processSessionId -le 0 -or $receiptValue.bootstrapProcessSessionId -le 0 -or
         $receiptValue.processOwnerSid -cne $expectedUserSid.Value -or $receiptValue.processId -le 0 -or
         $receiptValue.providerProcessId -le 0) {
@@ -5594,7 +5761,19 @@ const versions = JSON.parse(process.env.EAI_WINDOWS_VERSIONS);
 const nodeMajor = Number.parseInt(String(versions.node || "").replace(/^v/, "").split(".")[0], 10);
 const expectedCli = process.env.EAI_EXPECTED_CLI_VERSION;
 const cliVersion = String(versions.eai || "").match(/[0-9]+\.[0-9]+\.[0-9]+/)?.[0];
-if (!versions.git || !Number.isInteger(nodeMajor) || nodeMajor < 24 || !versions.npm || cliVersion !== expectedCli) {
+function atLeast(version, minimum) {
+  const actual = version?.split(".").map(Number);
+  const required = minimum?.split(".").map(Number);
+  if (!actual || !required || actual.length !== 3 || required.length !== 3
+    || actual.some((part) => !Number.isInteger(part)) || required.some((part) => !Number.isInteger(part))) {
+    return false;
+  }
+  for (let index = 0; index < 3; index += 1) {
+    if (actual[index] !== required[index]) return actual[index] > required[index];
+  }
+  return true;
+}
+if (!versions.git || !Number.isInteger(nodeMajor) || nodeMajor < 24 || !versions.npm || !atLeast(cliVersion, expectedCli)) {
   process.exitCode = 1;
 }
 NODE
@@ -5609,6 +5788,19 @@ guest_test_require base64
 guest_test_require screencapture
 guest_test_require osascript
 guest_test_require_environment
+resume_existing_vm="${EAI_WINDOWS_RESUME:-0}"
+[[ "$resume_existing_vm" == 0 || "$resume_existing_vm" == 1 ]] \
+  || guest_test_fail "EAI_WINDOWS_RESUME must be 0 or 1."
+case "$resume_phase" in
+  fresh|native-installer-verified|welcome-start-verified|welcome-ready-verified|signin-verified|cli-login-verified|e2e-complete) ;;
+  *) guest_test_fail "EAI_WINDOWS_RESUME_PHASE is invalid." ;;
+esac
+if [[ "$resume_phase" == fresh && "$resume_existing_vm" != 0 ]]; then
+  guest_test_fail "A fresh Windows checkpoint cannot request stateful recovery."
+fi
+if [[ "$resume_phase" != fresh && "$resume_existing_vm" != 1 ]]; then
+  guest_test_fail "A verified Windows checkpoint requires stateful recovery."
+fi
 [[ "${EAI_RELEASE_VERSION:-}" =~ ^[0-9]+[.][0-9]+[.][0-9]+$ ]] \
   || guest_test_fail "EAI_RELEASE_VERSION must be a semantic version."
 [[ -f "$ocr_source" ]] || guest_test_fail "The screenshot OCR helper is missing."
@@ -5626,8 +5818,17 @@ fi
 EAI_WINDOWS_VM_NAME="$vm_name" "$ROOT/scripts/login-windows-guest.sh" --preflight \
   || guest_test_fail "The protected Enterprise AI login credential is unavailable."
 
-stage snapshot-restore
-guest_test_restore_snapshot "$vm_name" "$snapshot_id"
+if [[ "$resume_existing_vm" == 1 ]]; then
+  stage existing-vm-resume
+  vm_status="$(prlctl status "$vm_name" 2>/dev/null || true)"
+  if [[ "$vm_status" != *running* ]]; then
+    prlctl start "$vm_name" >/dev/null \
+      || guest_test_fail "The Windows VM could not be started for stateful test recovery."
+  fi
+else
+  stage snapshot-restore
+  guest_test_restore_snapshot "$vm_name" "$snapshot_id"
+fi
 
 stage guest-session
 actual_user=""
@@ -5838,31 +6039,46 @@ POWERSHELL
 done
 [[ -n "$baseline_json" ]] \
   || guest_test_fail "The Windows clean-snapshot preflight returned no guest data."
-EAI_WINDOWS_BASELINE="$baseline_json" EAI_WINDOWS_EXPECTED_USER="$guest_user" node --input-type=module <<'NODE'
+EAI_WINDOWS_BASELINE="$baseline_json" EAI_WINDOWS_EXPECTED_USER="$guest_user" \
+  EAI_WINDOWS_RESUME="$resume_existing_vm" node --input-type=module <<'NODE'
 const value = JSON.parse(process.env.EAI_WINDOWS_BASELINE);
 const expectedUser = process.env.EAI_WINDOWS_EXPECTED_USER.toLowerCase();
+const resuming = process.env.EAI_WINDOWS_RESUME === "1";
 if (!String(value.os).includes("Windows 11")) throw new Error(`Expected Windows 11, found ${value.os}`);
 if (!String(value.osArchitecture).toUpperCase().includes("ARM") || value.processArchitecture !== "ARM64") throw new Error("The Windows guest is not ARM64.");
 if (!String(value.identity).toLowerCase().endsWith(`\\${expectedUser}`) || value.interactive !== true) throw new Error("The Windows guest session identity is invalid.");
 if (value.localAdministrator !== true) throw new Error("The approved Windows release-test user is not a local administrator.");
 if (value.parallelsTools !== true || value.winget !== true) throw new Error("Parallels Tools or WinGet is unavailable.");
-if (value.promptOnSecureDesktopKind !== "DWord" || value.promptOnSecureDesktop !== 0 ||
+if (!resuming && (value.promptOnSecureDesktopKind !== "DWord" || value.promptOnSecureDesktop !== 0 ||
     value.consentPromptBehaviorAdminKind !== "DWord" || value.consentPromptBehaviorAdmin !== 5 ||
-    value.enableLUAKind !== "DWord" || value.enableLUA !== 1) {
+    value.enableLUAKind !== "DWord" || value.enableLUA !== 1)) {
   throw new Error("The approved Windows snapshot does not have the required UAC consent-policy baseline.");
 }
-for (const key of ["edgeProcesses", "git", "node", "npm", "eai", "vscode", "eaiSetup", "userEaiState", "publicTestArtifacts"]) {
-  if (value[key] !== false) throw new Error(`The approved Windows snapshot is not clean: ${key} is already present.`);
+if (!resuming) {
+  for (const key of ["edgeProcesses", "git", "node", "npm", "eai", "vscode", "eaiSetup", "userEaiState", "publicTestArtifacts"]) {
+    if (value[key] !== false) throw new Error(`The approved Windows snapshot is not clean: ${key} is already present.`);
+  }
 }
 NODE
 before_versions='{"git":null,"node":null,"npm":null,"eai":null}'
 stage clean-snapshot-preflight-passed
 
-stage ai-workspace-provision
-EAI_WINDOWS_VM_NAME="$vm_name" EAI_WINDOWS_GUEST_USER="$guest_user" \
-  "$ROOT/scripts/prepare-windows-ai-workspace.sh"
-stage ai-workspace-provision-passed
+if [[ "$resume_phase" == fresh ]]; then
+  stage checkpoint-fresh-run
+else
+  stage checkpoint-resume-"$resume_phase"
+fi
 
+if [[ "$resume_phase" == fresh ]]; then
+  stage ai-workspace-provision
+  EAI_WINDOWS_VM_NAME="$vm_name" EAI_WINDOWS_GUEST_USER="$guest_user" \
+    "$ROOT/scripts/prepare-windows-ai-workspace.sh"
+  stage ai-workspace-provision-passed
+else
+  stage ai-workspace-resume
+fi
+
+if [[ "$resume_phase" == fresh ]]; then
 stage portal-login
 portal_login_attempt=0
 portal_login_status=1
@@ -5897,6 +6113,11 @@ unset portal_login_output
 stage portal-login-passed
 
 host_hash="$(guest_test_host_sha256)"
+if [[ "$resume_existing_vm" == 1 ]]; then
+  stage stateful-artifact-recovery
+  clear_stateful_resume_artifacts \
+    || guest_test_fail "Stale Windows E2E artifacts could not be cleared for stateful recovery."
+fi
 stage installer-bridge-arm
 start_installer_bridge "$host_hash" "$guest_user" \
   || guest_test_fail "The protected current-user installer bridge could not arm before the Defender guardian."
@@ -6078,6 +6299,37 @@ POWERSHELL
 )"
 [[ "$executable_hash" =~ ^[0-9a-f]{64}$ ]] || guest_test_fail "The released Windows executable hash could not be recorded."
 stage native-installer-passed
+else
+stage resume-native-installer-verification
+host_hash="$(guest_test_host_sha256)"
+executable_hash="$(guest_ps_run "$EAI_RELEASE_VERSION" <<'POWERSHELL' | tr -d '\r' | tail -n 1
+$ErrorActionPreference = 'Stop'
+$expectedVersion = [Console]::In.ReadLine()
+$executable = Join-Path $env:LOCALAPPDATA 'EAI Setup\eai-setup.exe'
+if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) { throw 'The previously verified EAI Setup executable is missing.' }
+$entry = @(Get-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*' -ErrorAction SilentlyContinue |
+  Where-Object { $_.DisplayName -eq 'EAI Setup' -and $_.DisplayVersion -eq $expectedVersion })
+if ($entry.Count -ne 1) { throw 'The previously verified EAI Setup uninstall receipt is missing or mismatched.' }
+(Get-FileHash -Algorithm SHA256 -LiteralPath $executable).Hash.ToLowerInvariant()
+POWERSHELL
+)"
+[[ "$executable_hash" =~ ^[0-9a-f]{64}$ ]] || guest_test_fail "The resumed Windows installation could not be independently verified."
+clear_stateful_resume_artifacts \
+  || guest_test_fail "Stale Windows E2E artifacts could not be cleared before UI-node recovery."
+guest_ps_run "$executable_hash"$'\n' <<'POWERSHELL'
+$ErrorActionPreference = 'Stop'
+$expectedHash = [Console]::In.ReadLine()
+if ($expectedHash -cnotmatch '^[0-9a-f]{64}$') { throw 'The resumed executable hash is invalid.' }
+$executable = Join-Path $env:LOCALAPPDATA 'EAI Setup\eai-setup.exe'
+if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) { throw 'The resumed EAI Setup executable is missing.' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $executable).Hash.ToLowerInvariant() -cne $expectedHash) {
+  throw 'The resumed EAI Setup executable changed before app launch.'
+}
+Set-Content -NoNewline -Encoding ASCII -LiteralPath 'C:\Users\Public\eai-setup-e2e-executable.txt' -Value $executable
+POWERSHELL
+stage resume-launch-pointer-restored
+stage resume-native-installer-verified
+fi
 
 stage uac-admin-consent-suppression-arm
 arm_temporary_admin_consent_suppression \
@@ -6085,9 +6337,6 @@ arm_temporary_admin_consent_suppression \
 stage uac-admin-consent-suppression-armed
 
 stage normal-app-launch
-start_prerequisite_uac_watcher
-prerequisite_uac_watcher_alive \
-  || guest_test_fail "The exact-window Windows unexpected-consent-UI watcher did not start."
 launch_guest_app_detached normal "" "$executable_hash" \
   || guest_test_fail "Explorer did not complete the bounded detached normal-app launch."
 validate_guest_app_launch "$guest_normal_pid" "$guest_normal_launch_receipt" "$guest_normal_launch_arm" \
@@ -6106,7 +6355,6 @@ while (( SECONDS < normal_start_deadline )); do
     [[ "$process_state" == 1 ]] \
       || guest_test_fail "The read-only normal-app liveness check could not determine process state."
   fi
-  prerequisite_uac_watcher_alive || break
   sleep 1
 done
 [[ "$normal_started" == 1 ]] || guest_test_fail "The normal released Windows app process did not start."
@@ -6115,11 +6363,14 @@ stage normal-welcome-start
 welcome_started=0
 welcome_advanced=0
 for _ in $(seq 1 30); do
-  if screen_has "Get started"; then
-    # Use the exact process-bound UI Automation element instead of depending
-    # on Parallels granting a guest-control process foreground ownership.
-    invoke_receipt_bound_eai_setup_button "Get started" \
-      || guest_test_fail "The receipt-bound Get started action could not be invoked."
+  # WebView2 can omit accessibility descendants in a Parallels guest even
+  # when its receipt-bound top-level window is present. Focus that exact window
+  # and use the normal keyboard activation of the primary Welcome action.
+  if focus_receipt_bound_eai_setup_window >/dev/null; then
+    start_prerequisite_uac_watcher
+    prerequisite_uac_watcher_alive \
+      || guest_test_fail "The exact-window Windows unexpected-consent-UI watcher did not start."
+    input key enter
     welcome_started=1
     break
   fi
@@ -6133,7 +6384,9 @@ done
 # prerequisite loop; otherwise an unfocused button can turn into a misleading
 # twenty-minute readiness timeout.
 for _ in $(seq 1 30); do
-  if screen_has "Checking this Windows PC"; then
+  # A restored VM can finish the short checking state between polls. The
+  # completed ready state proves the same post-click transition occurred.
+  if screen_has "Checking this Windows PC" || screen_has "This Windows PC is ready"; then
     welcome_advanced=1
     break
   fi
@@ -6141,6 +6394,7 @@ for _ in $(seq 1 30); do
 done
 [[ "$welcome_advanced" == 1 ]] \
   || guest_test_fail "The released Windows app did not begin its device check after Get started."
+stage normal-welcome-start-verified
 
 stage prerequisite-install
 versions=""
@@ -6149,6 +6403,8 @@ liveness_failures=0
 prerequisite_deadline=$((SECONDS + 1200))
 prerequisite_progress_at=$SECONDS
 while (( SECONDS < prerequisite_deadline )); do
+  prerequisites_satisfied=0
+  readiness_visible=0
   if ! prerequisite_uac_watcher_alive; then
     # A real consent signature writes the failure marker above. A Parallels
     # guest-control result loss does not. Keep testing the installer in that
@@ -6168,22 +6424,30 @@ while (( SECONDS < prerequisite_deadline )); do
     liveness_failures=$((liveness_failures + 1))
     [[ "$liveness_failures" -lt 5 ]] || guest_test_fail "The released Windows app exited before prerequisite installation completed."
   fi
-  versions="$(guest_versions_json || true)"
-  if [[ -n "$versions" ]] && versions_satisfy_contract "$versions"; then
-    # The consent monitor has covered the privileged prerequisite period.
-    # Stop it before using the same capture path for readiness. Concurrent
-    # captures can starve OCR even when the completed UI is visibly present.
+  # The ready screen is emitted only after the privileged preparation flow
+  # completes. Stop the observer as soon as that receipt-bound state appears:
+  # otherwise its frequent guest-control polls can starve the version probe.
+  if screen_has "This Windows PC is ready"; then
+    readiness_visible=1
     stop_prerequisite_uac_watcher \
       || guest_test_fail "The Windows unexpected-consent-UI watcher did not close cleanly."
-    if screen_has "This Windows PC is ready"; then
+  fi
+  versions="$(guest_versions_json || true)"
+  if [[ -n "$versions" ]] && versions_satisfy_contract "$versions"; then
+    prerequisites_satisfied=1
+    if [[ "$readiness_visible" == 1 ]]; then
       ready_reads=$((ready_reads + 1))
       [[ "$ready_reads" -ge 2 ]] && break
+    else
+      ready_reads=0
     fi
   else
     ready_reads=0
   fi
   if (( SECONDS - prerequisite_progress_at >= 60 )); then
-    printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" prerequisite-install-still-running
+    printf '%s prerequisite-install-still-running prerequisites=%s readiness=%s versions=%s\n' \
+      "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$prerequisites_satisfied" "$readiness_visible" \
+      "${versions:-missing}"
     prerequisite_progress_at=$SECONDS
   fi
   sleep 5
@@ -6198,7 +6462,9 @@ stage normal-welcome-continue
 # focused primary action directly.
 lets_go_visible=0
 for _ in $(seq 1 30); do
-  if screen_has "Let's go"; then
+  # Coherence can delay this label in the WebView accessibility bridge. The
+  # receipt-bound primary control itself has the stable setupStart identifier.
+  if focus_receipt_bound_eai_setup_window "Let’s go" 0 >/dev/null; then
     lets_go_visible=1
     break
   fi
@@ -6206,8 +6472,10 @@ for _ in $(seq 1 30); do
 done
 [[ "$lets_go_visible" == 1 ]] \
   || guest_test_fail "The released Windows app did not show Let’s go after prerequisite readiness."
-invoke_receipt_bound_eai_setup_button "Let's go" \
+stage normal-welcome-continue-ready
+invoke_receipt_bound_eai_setup_button "Let’s go" \
   || guest_test_fail "The receipt-bound Let’s go action could not be invoked."
+stage normal-signin-wait
 signin_visible=0
 for _ in $(seq 1 30); do
   if screen_has "Sign in with browser"; then
@@ -6218,8 +6486,8 @@ for _ in $(seq 1 30); do
 done
 # If a platform WebView cleared the retained button focus, make one bounded
 # fallback Tab activation only after proving the unchanged Let’s go screen.
-if [[ "$signin_visible" != 1 ]] && screen_has "Let's go"; then
-  invoke_receipt_bound_eai_setup_button "Let's go" \
+if [[ "$signin_visible" != 1 ]] && screen_has "Let’s go"; then
+  invoke_receipt_bound_eai_setup_button "Let’s go" \
     || guest_test_fail "The receipt-bound Let’s go retry could not be invoked."
   for _ in $(seq 1 15); do
     if screen_has "Sign in with browser"; then

@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { initializeCheckpoint, readCheckpoint } from "./release-e2e-checkpoint.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const canonicalV4Adapter = fs.realpathSync(path.join(root, "scripts", "run-v4-app-deprovision.sh"));
@@ -327,10 +328,16 @@ async function downloadAsset({ repo, tag, asset, destination }) {
   const target = path.join(destination, asset);
   if (!commandExists("gh")) throw new Error("gh is required to download the published release asset");
   const result = await run("gh", ["release", "download", tag, "--repo", repo, "--pattern", asset, "--dir", destination, "--clobber"], { role: "release-download", signalEligible: true });
-  if (result.code !== 0 || !fs.existsSync(target)) {
+  if (result.code === 0 && fs.existsSync(target)) return { path: target, source: "github-release" };
+  // Public release assets have a stable GitHub download URL.  Retain the
+  // GitHub CLI as the primary path, but do not let its API rate limit prevent
+  // a guest from testing the same exact published asset.
+  const direct = await run("curl", ["--fail", "--location", "--retry", "2", "--output", target,
+    `https://github.com/${repo}/releases/download/${tag}/${asset}`], { role: "release-download-direct", signalEligible: true });
+  if (direct.code !== 0 || !fs.existsSync(target)) {
     throw new Error(`GitHub release download failed for ${asset}: ${redact(result.stderr || result.stdout)}`);
   }
-  return { path: target, source: "github-release" };
+  return { path: target, source: "github-release-direct" };
 }
 
 async function validateAsset(assetPath, vm) {
@@ -366,6 +373,17 @@ async function runVm({ driver, command, vm, asset, output, release, appName, run
     EAI_HARNESS_TENANT_NAME: tenantName,
     EAI_HARNESS_PUBLIC_API_URL: apiOrigin,
   };
+
+  if (vm === "windows") {
+    const ledgerPath = path.join(root, "artifacts", "release-e2e", release.version, "windows-resume-ledger.json");
+    const binding = { version: release.version, tag: release.tag, assetSha256: asset.sha256 };
+    initializeCheckpoint(ledgerPath, binding);
+    const checkpoint = readCheckpoint(ledgerPath, binding);
+    env.EAI_WINDOWS_CHECKPOINT_LEDGER = ledgerPath;
+    env.EAI_WINDOWS_RESUME_PHASE = checkpoint.phase;
+    env.EAI_WINDOWS_RESUME = checkpoint.phase === "fresh" ? "0" : "1";
+    writeJson(path.join(vmDir, "checkpoint-ledger.json"), checkpoint);
+  }
 
   if (driver !== "command") throw new Error(`Unsupported VM driver: ${driver}`);
 

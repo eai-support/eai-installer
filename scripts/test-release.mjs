@@ -7,10 +7,12 @@ import os from "node:os";
 import path from "node:path";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { advanceCheckpoint, initializeCheckpoint, readCheckpoint } from "./release-e2e-checkpoint.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const readSource = (sourcePath) => fs.readFileSync(sourcePath, "utf8").replace(/\r\n/g, "\n");
 const runner = path.join(root, "scripts", "release-e2e.mjs");
+const checkpointLedger = path.join(root, "scripts", "release-e2e-checkpoint.mjs");
 const macosGuestPreparer = path.join(root, "scripts", "prepare-macos-guest-dmg.sh");
 const macosAiWorkspacePreparer = path.join(root, "scripts", "prepare-macos-ai-workspace.sh");
 const macosGuestLogin = path.join(root, "scripts", "login-macos-guest.sh");
@@ -52,6 +54,7 @@ const macosGuestAdapterSource = readSource(guestAdapters[0]);
 const windowsGuestAdapterSource = readSource(guestAdapters[1]);
 const releaseShell = readSource(path.join(root, "release.sh"));
 const runnerSource = readSource(runner);
+const checkpointLedgerSource = readSource(checkpointLedger);
 const macosGuestPreparerSource = readSource(macosGuestPreparer);
 const macosAiWorkspacePreparerSource = readSource(macosAiWorkspacePreparer);
 const macosGuestLoginSource = readSource(macosGuestLogin);
@@ -75,6 +78,25 @@ const keychainE2eLauncherSource = readSource(keychainE2eLauncher);
 const keychainLoaderSource = readSource(keychainLoader);
 const parallelsInputSource = readSource(parallelsInput);
 assert.match(keychainLoaderSource, /EAI_HARNESS_TENANT_ID/);
+assert.match(checkpointLedgerSource, /eai\.release-e2e\.checkpoint-ledger\.v1/);
+assert.match(checkpointLedgerSource, /Checkpoint ledger is bound to a different published release asset/);
+assert.match(runnerSource, /windows-resume-ledger\.json/);
+assert.match(runnerSource, /EAI_WINDOWS_RESUME_PHASE/);
+
+const checkpointFixture = fs.mkdtempSync(path.join(os.tmpdir(), "eai-release-e2e-checkpoint-"));
+const checkpointFixturePath = path.join(checkpointFixture, "windows.json");
+const checkpointBinding = {
+  version: "0.3.24",
+  tag: "eai-setup-test-v0.3.24",
+  assetSha256: "e47420ac9a18f261491c1540abb217054b88eed50cc009b24b7c9fc6b83716d8",
+};
+assert.equal(initializeCheckpoint(checkpointFixturePath, checkpointBinding).phase, "fresh");
+assert.equal(advanceCheckpoint(checkpointFixturePath, checkpointBinding, "native-installer-verified", {
+  releaseAssetSha256: checkpointBinding.assetSha256,
+}).phase, "native-installer-verified");
+assert.equal(readCheckpoint(checkpointFixturePath, checkpointBinding).phase, "native-installer-verified");
+assert.throws(() => readCheckpoint(checkpointFixturePath, { ...checkpointBinding, version: "0.3.25" }), /different published release asset/);
+fs.rmSync(checkpointFixture, { recursive: true, force: true });
 assert.match(keychainLoaderSource, /find-generic-password/);
 assert.match(parallelsInputSource, /events\.push\(\{ key, event: "press", delay \}, \{ key, event: "release", delay \}\)/);
 assert.match(parallelsInputSource, /events\.push\(\{ key: KEY\.shift, event: "press", delay \}\)/);
@@ -511,8 +533,8 @@ assert.match(windowsGuestAdapterSource, /snapshot_id="\$\{EAI_WINDOWS_SNAPSHOT_I
 assert.match(windowsGuestAdapterSource, /guest_user="\$\{EAI_WINDOWS_GUEST_USER:-eai-douglasross\}"/);
 assert.match(windowsGuestAdapterSource, /login-windows-guest[.]sh/);
 assert.match(windowsGuestAdapterSource, /for baseline_attempt in 1 2 3; do[\s\S]*The Windows clean-snapshot preflight returned no guest data/);
-assert.match(windowsGuestAdapterSource, /stage normal-welcome-continue[\s\S]*screen_has "Let's go"[\s\S]*invoke_receipt_bound_eai_setup_button "Let's go"/);
-assert.match(windowsGuestAdapterSource, /Get started[\s\S]*invoke_receipt_bound_eai_setup_button "Get started"/);
+assert.match(windowsGuestAdapterSource, /stage normal-welcome-continue[\s\S]*screen_has "Let’s go"[\s\S]*invoke_receipt_bound_eai_setup_button "Let’s go"/);
+assert.match(windowsGuestAdapterSource, /WebView2 can omit accessibility descendants[\s\S]*focus_receipt_bound_eai_setup_window[\s\S]*input key enter/);
 assert.match(windowsGuestAdapterSource, /for portal_login_attempt in 1 2 3; do/);
 assert.match(windowsGuestAdapterSource, /WINDOWS_PORTAL_LOGIN_RETRY attempt=%s/);
 assert.match(windowsGuestAdapterSource, /Microsoft rejected the configured release-test account credentials[.][\s\S]*break/);
@@ -601,6 +623,13 @@ assert.match(windowsBeforeSnapshotRestore, /login-windows-guest[.]sh" --prefligh
 assert.doesNotMatch(windowsBeforeSnapshotRestore, /find-generic-password[^\n]* -w/);
 assert.match(windowsGuestAdapterSource, /local max_attempts="\$\{2:-30\}"/);
 assert.match(windowsGuestAdapterSource, /Unable to open new session in this virtual machine/);
+assert.match(windowsGuestAdapterSource, /resume_existing_vm="\$\{EAI_WINDOWS_RESUME:-0\}"/);
+assert.match(windowsGuestAdapterSource, /resume_phase="\$\{EAI_WINDOWS_RESUME_PHASE:-fresh\}"/);
+assert.match(windowsGuestAdapterSource, /checkpoint_advance\(\) \{/);
+assert.match(windowsGuestAdapterSource, /resume-native-installer-verification/);
+assert.match(windowsGuestAdapterSource, /normal-welcome-start-verified/);
+assert.match(windowsGuestAdapterSource, /stage existing-vm-resume/);
+assert.match(windowsGuestAdapterSource, /guest_test_restore_snapshot "\$vm_name" "\$snapshot_id"/);
 const windowsPayloadWrapperStart = windowsGuestAdapterSource.indexOf("write_powershell_payload_wrapper() {");
 const windowsPayloadPowerShellStart = windowsGuestAdapterSource.indexOf("guest_ps_run() {");
 const windowsStreamedPowerShellStart = windowsGuestAdapterSource.indexOf("guest_ps() {");
@@ -632,6 +661,8 @@ assert.match(windowsPayloadPowerShellSource, /printf '%s\\n' "\$script" \| windo
 assert.doesNotMatch(windowsPayloadPowerShellSource, /EncodedCommand|local encoded=|printf '%s' "\$stdin_payload" \| prlctl/);
 assert.match(windowsStreamedPowerShellSource, /printf '%s\\n' "\$script" \| windows_hidden_current_user_ps "\$vm_name" ""/);
 assert.doesNotMatch(windowsStreamedPowerShellSource, /EncodedCommand/);
+assert.match(windowsSystemPayloadPowerShellSource, /is_parallels_ambiguous_launch_result_failure "\$status" "\$output"/);
+assert.match(windowsSystemPowerShellSource, /is_parallels_ambiguous_launch_result_failure "\$status" "\$output"/);
 assert.match(windowsHiddenCurrentUserSource, /payload="\$\(printf '%s' "\$stdin_payload" \| \/usr\/bin\/base64 \| \/usr\/bin\/tr -d '\\n'\)"/);
 assert.match(windowsHiddenCurrentUserSource, /\[Console\]::SetIn\(\[IO[.]StringReader\]::new\(\$__eaiInput\)\)/);
 assert.match(windowsHiddenCurrentUserSource, /windows_hidden_bounded_prlctl "\$wscript_timeout_seconds" exec "\$vm_name" --current-user wscript[.]exe "\$vbs_path"/);
@@ -737,7 +768,7 @@ assert.match(windowsDetachedLaunchSource, /\$wmiStartup[.]WinstationDesktop = 'w
 assert.match(windowsDetachedLaunchSource, /\$wmiStartup[.]EnvironmentVariables = \$startupEnvironmentValues/);
 assert.match(windowsDetachedLaunchSource, /\[wmiclass\]'\\\\[.]\\root\\cimv2:Win32_Process'/);
 assert.match(windowsDetachedLaunchSource, /\$wmiResult = \$wmiProcessClass[.]Create\(\$commandLine, \$workingDirectory, \$wmiStartup\)/);
-assert.match(windowsDetachedLaunchSource, /\$creationFlags = \[uint32\]1536/);
+assert.match(windowsDetachedLaunchSource, /\$creationFlags = \[uint32\]16778752/);
 assert.match(windowsDetachedLaunchSource, /\$commandLine = '"' \+ \$executable \+ '"'/);
 assert.match(
   windowsDetachedLaunchSource,
@@ -802,7 +833,7 @@ for (const variable of [
   assert.match(windowsDetachedLaunchSource, new RegExp(`\\$environment\\['${variable}'\\] =`));
 }
 assert.match(windowsDetachedLaunchSource, /eai-windows-detached-app-launch-arm\/v2/);
-assert.match(windowsDetachedLaunchSource, /eai-windows-detached-app-launch\/v5/);
+assert.match(windowsDetachedLaunchSource, /eai-windows-detached-app-launch\/v6/);
 assert.match(windowsDetachedLaunchSource, /processIdentityObservedAt = \$processIdentityObservedAtUtc[.]ToString\('o'\)/);
 assert.match(windowsDetachedLaunchSource, /launchMechanism = 'local-win32-process-create'/);
 assert.match(windowsDetachedLaunchSource, /providerBrokeredJobEscape = \$true/);
@@ -1011,7 +1042,7 @@ assert.doesNotMatch(
   windowsDetachedPathProofSources,
   /\[string\]::Equals\(\$(?:process|armedProcess)[.]Path,|\[string\]::Equals\(\$_[.]Path,|\[string\]::Equals\(\$actualExecutable, \$expectedExecutable|\[string\]::Equals\(\$(?:armedPath|path), \$expectedPowerShell/,
 );
-assert.match(windowsFocusSource, /eai-windows-detached-app-launch\/v5/);
+assert.match(windowsFocusSource, /eai-windows-detached-app-launch\/v6/);
 assert.match(windowsFocusSource, /\$receipt[.]mode -cne 'normal'/);
 assert.match(windowsFocusSource, /\[int\]\$receipt[.]processId -ne \[int\]\$pidText/);
 assert.match(windowsFocusSource, /\$receipt[.]processOwnerSid -cne \$identity[.]User[.]Value/);
@@ -1030,26 +1061,34 @@ assert.match(windowsFocusSource, /Microsoft[.]WindowsTerminal_/);
 assert.match(windowsFocusSource, /ShowWindowAsync\(\$terminal[.]MainWindowHandle, 6\)/);
 assert.match(windowsFocusSource, /SetForegroundWindow\(\$window\)/);
 assert.match(windowsFocusSource, /GetForegroundWindow\(\) -ne \$window/);
-assert.match(windowsFocusSource, /grep -Fqx 'EAI_SETUP_RECEIPT_BOUND_WINDOW_READY'/);
+assert.match(windowsFocusSource, /grep -Fqx "\$expected_receipt"/);
 assert.match(windowsFocusSource, /Add-Type -AssemblyName UIAutomationClient/);
 assert.match(windowsFocusSource, /UI Automation action is not approved/);
 assert.match(windowsFocusSource, /InvokePattern\]::Pattern/);
-assert.match(windowsFocusSource, /\[string\]::Join\('[.]', \$element[.]GetRuntimeId\(\)\)/);
-assert.match(windowsFocusSource, /\$uniqueMatches\[\$runtimeKey\] = \$element/);
+assert.match(windowsFocusSource, /FindFirst\(/);
+assert.match(windowsFocusSource, /\[string\]::Join\('[.]', \$match[.]GetRuntimeId\(\)\)/);
+assert.match(windowsFocusSource, /AutomationIdProperty, 'setupStart'/);
+assert.match(windowsFocusSource, /EAI_SETUP_RECEIPT_BOUND_TEXT_READY/);
+assert.match(windowsFocusSource, /The EAI Setup UI text probe is not approved/);
+assert.match(windowsFocusSource, /'Checking this Windows PC'/);
+assert.match(windowsFocusSource, /EAI_SETUP_RECEIPT_BOUND_BUTTON_INVOKED/);
+assert.match(windowsFocusSource, /EAI_SETUP_RECEIPT_BOUND_BUTTON_READY/);
 assert.match(windowsGuestAdapterSource, /invoke_receipt_bound_eai_setup_button\(\)/);
+assert.match(windowsGuestAdapterSource, /for probe in \$\(seq 1 30\); do/);
 assert.doesNotMatch(windowsFocusSource, /Stop-Process|[.]Kill\(|CloseMainWindow|Remove-Item/);
 assert.ok(
   windowsScreenHasSource.indexOf("focus_receipt_bound_eai_setup_window")
     < windowsScreenHasSource.indexOf('prlctl capture "$vm_name"'),
 );
-assert.match(windowsDetachedValidationSource, /eai-windows-detached-app-launch\/v5/);
+assert.match(windowsScreenHasSource, /__eai_text__:\$\{pattern\}/);
+assert.match(windowsDetachedValidationSource, /eai-windows-detached-app-launch\/v6/);
 assert.match(windowsDetachedValidationSource, /launchMechanism -cne 'local-win32-process-create'/);
 assert.match(windowsDetachedValidationSource, /localWmiCall -ne \$true/);
 assert.match(windowsDetachedValidationSource, /providerBrokeredJobEscape -ne \$true/);
 assert.match(windowsDetachedValidationSource, /bootstrapInJob -ne \$true/);
 assert.match(windowsDetachedValidationSource, /childInJob -isnot \[bool\]/);
 assert.match(windowsDetachedValidationSource, /childJobAbsenceRequired -ne \$false/);
-assert.match(windowsDetachedValidationSource, /creationFlags -ne 1536/);
+assert.match(windowsDetachedValidationSource, /creationFlags -ne 16778752/);
 assert.match(windowsDetachedValidationSource, /e2eEnvironmentVariableCount -ne 0/);
 assert.match(windowsDetachedValidationSource, /e2eEnvironmentVariableCount -ne 5/);
 assert.match(windowsDetachedValidationSource, /\$liveChildInJob -ne \[bool\]\$receipt[.]childInJob/);
@@ -1106,7 +1145,7 @@ assert.match(windowsDetachedCleanupSource, /\[void\]\$process[.]Handle/);
 assert.match(windowsDetachedCleanupSource, /\$processStartedAt -cne \[string\]\$receipt[.]processStartedAt/);
 assert.match(windowsDetachedCleanupSource, /\[string\]\$cim[.]CommandLine -cne \$expectedCommandLine/);
 assert.match(windowsDetachedCleanupSource, /\$apps\[0\][.]Kill\(\)[\s\S]*\$apps\[0\][.]WaitForExit\(30000\)/);
-assert.match(windowsDetachedCleanupSource, /eai-windows-detached-app-launch\/v5/);
+assert.match(windowsDetachedCleanupSource, /eai-windows-detached-app-launch\/v6/);
 assert.match(windowsDetachedCleanupSource, /receipt-process-identity-observation/);
 assert.match(windowsDetachedCleanupSource, /\$receiptValue[.]processIdentityObservedAt/);
 assert.match(windowsDetachedCleanupSource, /launchMechanism -cne 'local-win32-process-create'/);
@@ -1114,7 +1153,7 @@ assert.match(windowsDetachedCleanupSource, /invalid WMI environment contract/);
 assert.match(windowsDetachedCleanupSource, /bootstrapInJob -ne \$true/);
 assert.match(windowsDetachedCleanupSource, /childInJob -isnot \[bool\]/);
 assert.match(windowsDetachedCleanupSource, /childJobAbsenceRequired -ne \$false/);
-assert.match(windowsDetachedCleanupSource, /creationFlags -ne 1536/);
+assert.match(windowsDetachedCleanupSource, /creationFlags -ne 16778752/);
 assert.match(windowsDetachedCleanupSource, /Cleanup refuses a bootstrap outside this run hash\/owner binding/);
 const windowsAmbiguousArmQuarantineStart = windowsDetachedCleanupSource.indexOf(
   "if ($null -ne $arm -and $null -eq $receipt)",
@@ -1220,7 +1259,7 @@ assert.match(windowsGuestAdapterSource, /windows-e2e-app-launch[.]json/);
 assert.match(windowsGuestAdapterSource, /windows-\$\{mode\}-transport-return[.]json/);
 assert.match(windowsGuestAdapterSource, /eai-windows-detached-transport-return\/v1/);
 assert.match(windowsGuestAdapterSource, /childAliveValidatedAfterReturn: true/);
-assert.match(windowsGuestAdapterSource, /providerBrokeredJobEscapeProven: true/);
+assert.match(windowsGuestAdapterSource, /providerBrokeredTransportIsolationProven: true/);
 assert.match(windowsDetachedLaunchSource, /validate_guest_app_launch[\s\S]*write_detached_transport_return_proof/);
 assert.match(windowsGuestAdapterSource, /REDACTED_BASE64/);
 assert.match(windowsGuestAdapterSource, /decoded[.]includes\(value\)/);
@@ -2126,17 +2165,16 @@ assert.match(windowsGuestAdapterSource, /\[DllImport\("kernel32[.]dll"\)\] publi
 assert.match(windowsNormalLaunchSection, /cleanup_detached_guest_app normal/);
 assert.doesNotMatch(windowsNormalLaunchSection, /EAI_SETUP_E2E(?:_|\s*=)/);
 assert.match(windowsNormalLaunchSection, /versions_satisfy_contract "\$versions"/);
-assert.match(windowsNormalLaunchSection, /screen_has "Get started"/);
 assert.match(windowsNormalLaunchSection, /screen_has "This Windows PC is ready"/);
 assert.match(windowsNormalLaunchSection, /screen_has "Sign in with browser"/);
-assert.match(windowsNormalLaunchSection, /invoke_receipt_bound_eai_setup_button "Get started"/);
-assert.match(windowsNormalLaunchSection, /invoke_receipt_bound_eai_setup_button "Let's go"/);
+assert.match(windowsNormalLaunchSection, /focus_receipt_bound_eai_setup_window >\/dev\/null[\s\S]*input key enter/);
+assert.match(windowsNormalLaunchSection, /invoke_receipt_bound_eai_setup_button "Let’s go"/);
 assert.doesNotMatch(windowsNormalLaunchSection, /Prerequisites installed successfully/);
 assert.doesNotMatch(windowsNormalLaunchSection, /Sign in to EAI/);
 const windowsVersionsReadyGate = windowsNormalLaunchSection.indexOf('versions_satisfy_contract "$versions"');
 const windowsWelcomeReadyGate = windowsNormalLaunchSection.indexOf('screen_has "This Windows PC is ready"');
 const windowsSignInReadyGate = windowsNormalLaunchSection.indexOf('screen_has "Sign in with browser"');
-assert.ok(windowsVersionsReadyGate >= 0 && windowsVersionsReadyGate < windowsWelcomeReadyGate);
+assert.ok(windowsWelcomeReadyGate >= 0 && windowsWelcomeReadyGate < windowsVersionsReadyGate);
 assert.ok(
   windowsWelcomeReadyGate < windowsSignInReadyGate,
   "Windows must continue from the visible ready state to the sign-in screen before the CLI phase",
@@ -2282,6 +2320,8 @@ assert.match(windowsVersionsSource, /WaitForExit\(5000\)/);
 assert.match(windowsVersionsSource, /taskkill[.]exe/);
 assert.match(windowsVersionsSource, /streamsCompleted/);
 assert.match(windowsVersionsSource, /StandardOutput[.]Dispose\(\)/);
+assert.match(windowsGuestAdapterSource, /function atLeast\(version, minimum\)/);
+assert.match(windowsGuestAdapterSource, /!atLeast\(cliVersion, expectedCli\)/);
 const windowsBaselineStart = windowsGuestAdapterSource.indexOf("stage clean-snapshot-preflight");
 const windowsBaselineEnd = windowsGuestAdapterSource.indexOf("before_versions=", windowsBaselineStart);
 const windowsBaselineSource = windowsGuestAdapterSource.slice(windowsBaselineStart, windowsBaselineEnd);
@@ -2304,10 +2344,13 @@ assert.match(windowsNormalLaunchSection, /while \(\( SECONDS < prerequisite_dead
 assert.doesNotMatch(windowsNormalLaunchSection, /for attempt in \$\(seq 1 240\)/);
 const windowsUacWatcherLaunch = windowsNormalLaunchSection.indexOf("start_prerequisite_uac_watcher");
 const windowsFirstNormalLivenessProbe = windowsNormalLaunchSection.indexOf('guest_process_alive "$guest_normal_pid"');
+const windowsGetStartedVisible = windowsNormalLaunchSection.indexOf('focus_receipt_bound_eai_setup_window >/dev/null');
+const windowsGetStartedInvoke = windowsNormalLaunchSection.indexOf('input key enter', windowsGetStartedVisible);
 const windowsPrerequisiteLoop = windowsNormalLaunchSection.indexOf("stage prerequisite-install");
 const windowsUacWatcherStop = windowsNormalLaunchSection.indexOf("stop_prerequisite_uac_watcher");
 assert.ok(windowsUacWatcherLaunch >= 0 && windowsUacWatcherLaunch < windowsPrerequisiteLoop);
-assert.ok(windowsUacWatcherLaunch < windowsFirstNormalLivenessProbe);
+assert.ok(windowsUacWatcherLaunch > windowsFirstNormalLivenessProbe);
+assert.ok(windowsUacWatcherLaunch > windowsGetStartedVisible && windowsUacWatcherLaunch < windowsGetStartedInvoke);
 assert.ok(windowsUacWatcherStop > windowsPrerequisiteLoop);
 assert.match(windowsCleanupSection, /stop_prerequisite_uac_watcher/);
 assert.match(windowsCleanupSection, /restore_admin_consent_prompt/);

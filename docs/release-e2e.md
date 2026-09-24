@@ -299,6 +299,24 @@ that exact snapshot disk with `--skip-resume` and performs a normal boot; it
 never resumes the snapshot's saved memory image. This avoids carrying a stale
 interactive session across Parallels or Windows updates.
 
+### Windows stateful node recovery
+
+During diagnosis, do not restore the snapshot and replay the entire regression
+after a later UI node fails. The controller stores a private, atomic Node-managed
+ledger at `artifacts/release-e2e/<version>/windows-resume-ledger.json`. It is
+bound to the release version, tag, and SHA-256 of the exact GitHub asset, and it
+contains no credential, user, tenant, or application data. Its verified nodes
+are native installation, welcome-start, welcome-ready, sign-in, CLI login, and
+complete E2E.
+
+On the next Windows invocation the adapter first re-verifies the already
+installed version and uninstall receipt, clears only its fixed temporary launch
+artifacts, then restarts at the next unverified node. It may rehydrate the
+ephemeral Welcome screen after launching the app, but it must not re-run portal
+login, guest asset download, native installation, or prerequisite installation.
+The ledger refuses a different release asset or an out-of-order advance. Run a
+fresh snapshot regression only after the stateful path completes end-to-end.
+
 Parallels can nevertheless restore the guest shell in Coherence rather than
 exposing the normal VM console window. After the guest session stabilises, the
 adapter first treats the exact visible VM window as conclusive already-windowed
