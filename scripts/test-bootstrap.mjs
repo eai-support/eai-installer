@@ -499,7 +499,7 @@ if (!/function paint\(\)[\s\S]{0,900}?\breset\(\);/.test(app)) {
    together, rather than stopping at the first. The one exception is a
    tool that needed the failed one: the EAI CLI is installed with npm, so
    blaming it when Node is missing names the wrong thing. */
-if (!/for \(const step of missingSteps\(\)\)[\s\S]{0,600}?failed\.push\(step\)/.test(app)) {
+if (!/const plan = missingSteps\(\);[\s\S]{0,200}?for \(const \[index, step\] of plan\.entries\(\)\)[\s\S]{0,600}?failed\.push\(step\)/.test(app)) {
   throw new Error("wizard: the readiness sweep no longer collects the failures it finds");
 }
 if (!app.includes('raise("prereq", { steps: failed })')) {

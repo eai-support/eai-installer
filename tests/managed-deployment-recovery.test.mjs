@@ -113,3 +113,31 @@ test("readiness does not claim success when the final environment readback fails
   assert.deepEqual(failures.map(({ id }) => id), ["prereq"]);
   assert.equal(failures[0].context.steps[0], "detect");
 });
+
+test("readiness reports independent failures together and skips CLI when Node fails", async () => {
+  let detectCalls = 0;
+  const attempted = [];
+  const failures = [];
+  const sandbox = {
+    readinessInProgress: false,
+    facts: { demo: false, prereqBusy: null, prereqDetail: "", prereqPlan: [], prereqCompleted: 0, failureContext: {}, environment: { tools: [] } },
+    state: { screen: "signin" },
+    machine: { clear: () => {} },
+    listenForBootstrapProgress: async () => {},
+    detect: async () => { detectCalls += 1; return true; },
+    checkConnectivity: async () => ({ ok: true }),
+    missingSteps: () => ["git", "node", "eai-cli"],
+    runBootstrapStep: async (step) => { attempted.push(step); return false; },
+    helpers: { prerequisitesReady: () => false },
+    raise: (id, context) => failures.push({ id, context }),
+    note: () => {},
+    paint: () => {},
+  };
+  assert.equal(await vm.runInNewContext(readiness, sandbox), false);
+  assert.deepEqual(attempted, ["git", "node"]);
+  assert.equal(detectCalls, 2);
+  assert.deepEqual(failures.map(({ id, context }) => ({ id, steps: [...context.steps] })), [
+    { id: "prereq", steps: ["git", "node"] },
+  ]);
+  assert.equal(sandbox.facts.prereqBusy, null);
+});
