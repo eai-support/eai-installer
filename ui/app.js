@@ -1297,9 +1297,10 @@ async function runReadiness() {
        that it could not be installed when the real cause is that Node is
        missing names the wrong thing. */
     const failed = [];
-    facts.prereqPlan = missingSteps();
+    const plan = missingSteps();
+    facts.prereqPlan = plan;
     facts.prereqCompleted = 0;
-    for (const step of missingSteps()) {
+    for (const [index, step] of plan.entries()) {
       if (step === "eai-cli" && failed.includes("node")) {
         note("Skipped the EAI CLI: it is installed with npm, and Node.js is not ready.");
         continue;
@@ -1308,11 +1309,15 @@ async function runReadiness() {
       facts.prereqDetail = "";
       if (state.screen === "signin" || state.screen === "start") paint();
       if (!await runBootstrapStep(step, { collect: true })) failed.push(step);
-      else facts.prereqCompleted = facts.prereqPlan.indexOf(step) + 1;
-      await detect();
+      else facts.prereqCompleted = index + 1;
     }
 
+    const refreshed = plan.length === 0 || await detect();
     facts.prereqBusy = null;
+    if (!refreshed) {
+      raise("prereq", { steps: failed.length ? failed : ["detect"] });
+      return false;
+    }
     if (failed.length) {
       raise("prereq", { steps: failed });
       return false;
