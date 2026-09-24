@@ -131,6 +131,10 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -s \
             -k "$keychain_password" "$keychain" >/dev/null
 
+          # The disposable runner must search this keychain to resolve the
+          # imported identity and intermediate certificates during signing.
+          security list-keychains -d user -s "$keychain"
+
           identities="$(security find-identity -v -p codesigning "$keychain")"
           identity_count="$(printf '%s\n' "$identities" | grep -F -c "\"$APPLE_SIGNING_IDENTITY\"" || true)"
           test "$identity_count" -eq 1 || {
