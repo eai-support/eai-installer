@@ -126,7 +126,7 @@ if [ "$NODE_MAJOR" -lt 24 ]; then echo "Node.js 24 or newer is required; found $
 
 EAI_MANAGED_DEPLOY_READY=0
 if eai_managed_deploy_ready; then EAI_MANAGED_DEPLOY_READY=1; fi
-if [ "$EAI_MANAGED_DEPLOY_READY" != "1" ] || [ "$AUTO_INSTALL" = "1" ]; then
+if [ "$EAI_MANAGED_DEPLOY_READY" != "1" ]; then
   require_auto_install eai
   npm install --global @enterpriseai/cli
   EAI_MANAGED_DEPLOY_READY=0

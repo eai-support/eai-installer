@@ -18,7 +18,7 @@ async function writeExecutable(path, source) {
   await chmod(path, 0o755);
 }
 
-async function createBootstrapHarness({ version, deployReady, sourceReady = deployReady }) {
+async function createBootstrapHarness({ version, deployReady, sourceReady = deployReady, autoInstall = false }) {
   const root = await mkdtemp(join(tmpdir(), "eai-installer-managed-deploy-"));
   const bin = join(root, "bin");
   await mkdir(bin);
@@ -73,7 +73,7 @@ exit 1`,
     encoding: "utf8",
     env: {
       ...environment,
-      EAI_SETUP_AUTO_INSTALL: "0",
+      EAI_SETUP_AUTO_INSTALL: autoInstall ? "1" : "0",
       EAI_TEST_EAI_LOG: eaiLog,
       EAI_TEST_NPM_LOG: npmLog,
       PATH: isWindows ? `${bin}${delimiter}${inheritedPath ?? ""}` : `${bin}:/usr/bin:/bin`,
@@ -97,6 +97,16 @@ test("accepts the minimum CLI only when managed deployment is executable", async
       "--version",
       "deploy app --help",
     ]);
+  } finally {
+    await rm(harness.root, { recursive: true, force: true });
+  }
+});
+
+test("does not reinstall an already capable CLI when automatic installation is allowed", async () => {
+  const harness = await createBootstrapHarness({ version: "3.18.0", deployReady: true, autoInstall: true });
+  try {
+    assert.equal(harness.run.status, 0, harness.run.stderr);
+    await assert.rejects(readFile(harness.npmLog, "utf8"), { code: "ENOENT" });
   } finally {
     await rm(harness.root, { recursive: true, force: true });
   }
