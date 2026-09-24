@@ -1703,6 +1703,28 @@ async function loadSurfaces() {
   }
 }
 
+function e2eProjectCapableSurface() {
+  const canOpenProject = (surface) => surface?.installed
+    && ["project-and-prompt", "project-only"].includes(surface.launchSupport);
+  return facts.surfaces?.surfaces?.find((surface) => surface.id === facts.selectedSurfaceId && canOpenProject(surface))
+    || facts.surfaces?.surfaces?.find(canOpenProject)
+    || null;
+}
+
+async function waitForE2eProjectCapableSurface() {
+  // The companion CLI can finish registering immediately after project
+  // creation. Refresh its read-only inventory for a bounded 30 seconds,
+  // resuming this test node instead of discarding the whole VM run.
+  for (let attempt = 0; attempt < 15; attempt += 1) {
+    if (await loadSurfaces()) {
+      const surface = e2eProjectCapableSurface();
+      if (surface) return surface;
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, 2_000));
+  }
+  return null;
+}
+
 function chooseSurface(surfaceId) {
   facts.selectedSurfaceId = surfaceId;
   facts.waitingForSurfaceId = null;
@@ -1871,8 +1893,7 @@ async function runE2eFlow() {
     await writeE2eReceipt(e2eAppCreated ? "project" : "app", "The EAI app could not be initialised by the desktop bootstrap path.");
     return;
   }
-  const surface = facts.surfaces?.surfaces?.find((item) => item.id === facts.selectedSurfaceId && item.installed)
-    || facts.surfaces?.surfaces?.find((item) => item.installed);
+  const surface = await waitForE2eProjectCapableSurface();
   if (!surface) {
     await writeE2eReceipt("aiHandoff", "No installed AI workspace was available for the release-test handoff.");
     return;
