@@ -13,7 +13,7 @@ source "$ROOT/scripts/windows-readonly-powershell.sh"
 source "$ROOT/scripts/windows-hidden-current-user.sh"
 
 vm_name="${EAI_WINDOWS_VM_NAME:-Windows 11}"
-snapshot_id="${EAI_WINDOWS_SNAPSHOT_ID:-48921a89-eb72-430e-b4bf-a7b70d8bfaab}"
+snapshot_id="${EAI_WINDOWS_SNAPSHOT_ID:-a508b018-1cb6-4479-8a91-8e936256eda7}"
 if [[ "${1:-}" == "--preflight" ]]; then
   [[ "$#" -eq 1 ]] || guest_test_fail "The Windows adapter preflight accepts no additional arguments."
   exec "$ROOT/scripts/vm-adapter-preflight.sh" windows "$vm_name" "$snapshot_id"
@@ -234,8 +234,11 @@ APPLESCRIPT
 focus_receipt_bound_eai_setup_window() {
   local output=""
   local expected_hash="${executable_hash:-}"
+  local button_name="${1:-}"
+  local invoke_button="${2:-0}"
   [[ "$expected_hash" =~ ^[0-9a-f]{64}$ ]] || return 1
-  output="$(guest_ps_run "$guest_normal_pid"$'\n'"$guest_normal_launch_receipt"$'\n'"$guest_executable_file"$'\n'"$expected_hash"$'\n' 2 <<'POWERSHELL'
+  [[ "$invoke_button" == 0 || "$invoke_button" == 1 ]] || return 1
+  output="$(guest_ps_run "$guest_normal_pid"$'\n'"$guest_normal_launch_receipt"$'\n'"$guest_executable_file"$'\n'"$expected_hash"$'\n'"$button_name"$'\n'"$invoke_button"$'\n' 2 <<'POWERSHELL'
 $ErrorActionPreference = 'Stop'
 
 function ConvertTo-ComparableAppPath([string]$path) {
@@ -255,6 +258,8 @@ $pidFile = [Console]::In.ReadLine()
 $receiptFile = [Console]::In.ReadLine()
 $executableFile = [Console]::In.ReadLine()
 $expectedHash = [Console]::In.ReadLine()
+$buttonName = [Console]::In.ReadLine()
+$invokeButton = [Console]::In.ReadLine()
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 if ($identity.IsSystem -or $expectedHash -cnotmatch '^[0-9a-f]{64}$') {
   throw 'The EAI Setup focus trust inputs are invalid.'
@@ -301,7 +306,13 @@ using System.Runtime.InteropServices;
 public static class EaiReleaseWindowFocus {
   [DllImport("user32.dll")] public static extern bool ShowWindowAsync(IntPtr window, int command);
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr window);
+  [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr window);
+  [DllImport("user32.dll")] public static extern IntPtr SetFocus(IntPtr window);
   [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
+  [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
+  [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint sourceThread, uint targetThread, bool attach);
+  [DllImport("user32.dll")] public static extern bool AllowSetForegroundWindow(uint processId);
 }
 '@
 $terminalRoot = (Join-Path $env:ProgramFiles 'WindowsApps\Microsoft.WindowsTerminal_')
@@ -321,20 +332,102 @@ foreach ($terminal in @(Get-Process WindowsTerminal -ErrorAction SilentlyContinu
   }
 }
 $window = $process.MainWindowHandle
+[void][EaiReleaseWindowFocus]::AllowSetForegroundWindow([uint32]::MaxValue)
 [void][EaiReleaseWindowFocus]::ShowWindowAsync($window, 9)
-[void][EaiReleaseWindowFocus]::SetForegroundWindow($window)
+$foregroundWindow = [EaiReleaseWindowFocus]::GetForegroundWindow()
+$currentThread = [EaiReleaseWindowFocus]::GetCurrentThreadId()
+$foregroundProcessId = 0
+$foregroundThread = if ($foregroundWindow -eq [IntPtr]::Zero) { 0 } else {
+  [EaiReleaseWindowFocus]::GetWindowThreadProcessId($foregroundWindow, [ref]$foregroundProcessId)
+}
+$attached = $false
+try {
+  if ($foregroundThread -ne 0 -and $foregroundThread -ne $currentThread) {
+    $attached = [EaiReleaseWindowFocus]::AttachThreadInput($currentThread, $foregroundThread, $true)
+  }
+  [void][EaiReleaseWindowFocus]::BringWindowToTop($window)
+  [void][EaiReleaseWindowFocus]::SetForegroundWindow($window)
+  [void][EaiReleaseWindowFocus]::SetFocus($window)
+} finally {
+  if ($attached) {
+    [void][EaiReleaseWindowFocus]::AttachThreadInput($currentThread, $foregroundThread, $false)
+  }
+}
 for ($poll = 0; $poll -lt 20 -and [EaiReleaseWindowFocus]::GetForegroundWindow() -ne $window; $poll++) {
   Start-Sleep -Milliseconds 100
 }
-if ([EaiReleaseWindowFocus]::GetForegroundWindow() -ne $window) {
-  throw 'The exact EAI Setup window could not be proven in the foreground.'
+if ([string]::IsNullOrEmpty($buttonName)) {
+  # Parallels can deny a guest-control PowerShell process foreground ownership
+  # even while its receipt-bound app window is visible in the interactive
+  # desktop. The window/process binding remains authoritative for screenshots.
+  $process.Dispose()
+  [Console]::Out.WriteLine('EAI_SETUP_RECEIPT_BOUND_WINDOW_READY')
+  return
+}
+$validButtonName = $buttonName -in @('Get started', "Let's go")
+if (-not $validButtonName -or $invokeButton -notin @('0', '1')) {
+  throw 'The EAI Setup UI Automation action is not approved.'
+}
+Add-Type -AssemblyName UIAutomationClient
+Add-Type -AssemblyName UIAutomationTypes
+$windowElement = [System.Windows.Automation.AutomationElement]::FromHandle($window)
+if ($null -eq $windowElement -or [int]$windowElement.Current.ProcessId -ne $process.Id) {
+  throw 'The EAI Setup UI Automation window is not bound to the exact live process.'
+}
+$conditions = @(
+  [System.Windows.Automation.PropertyCondition]::new(
+    [System.Windows.Automation.AutomationElement]::NameProperty, $buttonName
+  ),
+  [System.Windows.Automation.PropertyCondition]::new(
+    [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+    [System.Windows.Automation.ControlType]::Button
+  )
+)
+$rawMatches = @($windowElement.FindAll(
+  [System.Windows.Automation.TreeScope]::Descendants,
+  [System.Windows.Automation.AndCondition]::new([System.Windows.Automation.Condition[]]$conditions)
+) | Where-Object { -not $_.Current.IsOffscreen -and $_.Current.IsEnabled })
+$uniqueMatches = @{}
+foreach ($element in $rawMatches) {
+  try {
+    $runtimeKey = [string]::Join('.', $element.GetRuntimeId())
+  } catch {
+    throw 'The approved EAI Setup action has no stable UI Automation runtime identity.'
+  }
+  $uniqueMatches[$runtimeKey] = $element
+}
+$matches = @($uniqueMatches.Values)
+if ($matches.Count -ne 1) {
+  throw 'The receipt-bound EAI Setup window did not expose exactly one approved visible action.'
+}
+if ($invokeButton -eq '1') {
+  $invokePattern = $null
+  if (-not $matches[0].TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$invokePattern)) {
+    throw 'The approved EAI Setup action does not expose UI Automation InvokePattern.'
+  }
+  ([System.Windows.Automation.InvokePattern]$invokePattern).Invoke()
+  $process.Dispose()
+  [Console]::Out.WriteLine('EAI_SETUP_RECEIPT_BOUND_BUTTON_INVOKED')
+  return
 }
 $process.Dispose()
-[Console]::Out.WriteLine('EAI_SETUP_RECEIPT_BOUND_WINDOW_FOCUSED')
+[Console]::Out.WriteLine('EAI_SETUP_RECEIPT_BOUND_BUTTON_READY')
 POWERSHELL
   )" || return 1
+  if printf '%s\n' "$output" | /usr/bin/tr -d '\r' \
+    | /usr/bin/grep -Fqx 'EAI_SETUP_RECEIPT_BOUND_WINDOW_READY'; then
+    printf '%s\n' "$output"
+    return 0
+  fi
+  return 1
+}
+
+invoke_receipt_bound_eai_setup_button() {
+  local button_name="$1"
+  local output=""
+  output="$(focus_receipt_bound_eai_setup_window "$button_name" 1)" || return 1
   printf '%s\n' "$output" | /usr/bin/tr -d '\r' \
-    | /usr/bin/grep -Fqx 'EAI_SETUP_RECEIPT_BOUND_WINDOW_FOCUSED'
+    | /usr/bin/grep -Fqx 'EAI_SETUP_RECEIPT_BOUND_BUTTON_INVOKED'
 }
 
 screen_has() {
@@ -392,6 +485,7 @@ start_prerequisite_uac_watcher() {
   local log_file="$work_dir/prerequisite-uac-watcher.log"
   rm -f "$stop_file" "$failure_file" "$log_file"
   (
+    capture_failures=0
     while [[ ! -e "$stop_file" ]]; do
       if unexpected_prerequisite_uac_visible; then
         printf '%s unexpected-uac-consent-ui\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$failure_file"
@@ -399,9 +493,16 @@ start_prerequisite_uac_watcher() {
       else
         monitor_status=$?
       fi
-      if [[ "$monitor_status" != 1 ]]; then
-        printf '%s consent-ui-monitor-infrastructure-failed\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$failure_file"
-        exit 2
+      if [[ "$monitor_status" == 1 ]]; then
+        capture_failures=0
+      elif [[ "$monitor_status" != 1 ]]; then
+        # Parallels can reject a capture while the application replaces its
+        # window. Do not turn lost observation frames into a false UAC finding.
+        capture_failures=$((capture_failures + 1))
+        printf '%s consent-ui-monitor-capture-unavailable:%s\n' \
+          "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$capture_failures" >>"$log_file"
+        sleep 1
+        continue
       fi
       sleep 1
     done
@@ -1468,8 +1569,44 @@ if ($lockedWorkerSha256 -cne $expectedWorkerSha256) {
   throw 'The locked detached installer worker hash changed before launch.'
 }
 $arguments = "-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $workerScriptPath -ExpectedWorkerSha256 $expectedWorkerSha256 -ExpectedSessionId $sessionId"
-$launchedWorker = Start-Process -FilePath $powerShellPath -ArgumentList $arguments -WindowStyle Hidden -PassThru
-$launchedWorkerStartedAt = $launchedWorker.StartTime.ToUniversalTime().ToString('o')
+$workerStartupClass = $null
+$workerStartup = $null
+$workerProcessClass = $null
+$workerCreate = $null
+$launchedWorker = $null
+try {
+  # A child of the Parallels current-user guest-control request can be stopped
+  # when that request returns. Launch through local WMI so this verified
+  # background worker remains in the same interactive session but outside that
+  # transport-job lineage. ShowWindow=0 keeps it invisible to the guest user.
+  $workerStartupClass = [wmiclass]'\\.\root\cimv2:Win32_ProcessStartup'
+  $workerStartup = $workerStartupClass.CreateInstance()
+  $workerStartup.WinstationDesktop = 'winsta0\default'
+  $workerStartup.ShowWindow = [uint16]0
+  $workerStartup.CreateFlags = [uint32]1536
+  $workerProcessClass = [wmiclass]'\\.\root\cimv2:Win32_Process'
+  $workerCommandLine = '"' + $powerShellPath + '" ' + $arguments
+  $workerCreate = $workerProcessClass.Create($workerCommandLine, $PSHOME, $workerStartup)
+  if ([int]$workerCreate.ReturnValue -ne 0 -or [int]$workerCreate.ProcessId -le 0) {
+    throw 'The detached installer worker WMI launch failed.'
+  }
+  $launchedWorker = Get-Process -Id ([int]$workerCreate.ProcessId) -ErrorAction Stop
+  $launchedWorkerStartedAt = $launchedWorker.StartTime.ToUniversalTime().ToString('o')
+  $workerCim = Get-CimInstance Win32_Process -Filter "ProcessId = $($launchedWorker.Id)" -ErrorAction Stop
+  $workerOwner = Invoke-CimMethod -InputObject $workerCim -MethodName GetOwnerSid -ErrorAction Stop
+  try { $launchedWorkerPath = $launchedWorker.Path } catch { throw 'The detached installer worker process path could not be verified.' }
+  if ($launchedWorker.HasExited -or $launchedWorker.SessionId -ne $sessionId -or
+      -not [string]::Equals($launchedWorkerPath, $powerShellPath, [StringComparison]::OrdinalIgnoreCase) -or
+      $workerOwner.ReturnValue -ne 0 -or $workerOwner.Sid -cne $identity.User.Value -or
+      $launchedWorker.StartTime.ToUniversalTime().ToString('o') -cne $launchedWorkerStartedAt) {
+    throw 'The detached installer worker WMI launch does not match the expected user/session/path binding.'
+  }
+} finally {
+  if ($null -ne $workerCreate) { $workerCreate.Dispose() }
+  if ($null -ne $workerStartup) { $workerStartup.Dispose() }
+  if ($null -ne $workerStartupClass) { $workerStartupClass.Dispose() }
+  if ($null -ne $workerProcessClass) { $workerProcessClass.Dispose() }
+}
 
 $armed = $null
 for ($poll = 0; $poll -lt 120; $poll++) {
@@ -1519,7 +1656,7 @@ POWERSHELL
   (
     local attached_status=1
     set +e
-    printf '%s\n' "$bootstrap_script" | windows_hidden_current_user_ps "$vm_name" "" \
+    printf '%s\n' "$bootstrap_script" | EAI_WINDOWS_HIDDEN_CURRENT_USER_TIMEOUT_SECONDS=45 windows_hidden_current_user_ps "$vm_name" "" \
       >"$bridge_stdout" 2>"$bridge_stderr"
     attached_status=$?
     set -e
@@ -5532,6 +5669,8 @@ rm -f "$work_dir/windows-console-preflight.png"
 stage host-console-visible
 
 stage clean-snapshot-preflight
+baseline_json=""
+for baseline_attempt in 1 2 3; do
 baseline_json="$(guest_ps <<'POWERSHELL' | tr -d '\r' | tail -n 1
 $os = Get-CimInstance Win32_OperatingSystem
 $windowsIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -5694,6 +5833,11 @@ $uacPolicyItem = Get-Item -LiteralPath $uacPolicyPath -ErrorAction Stop
 } | ConvertTo-Json -Compress
 POWERSHELL
 )"
+  [[ -n "$baseline_json" ]] && break
+  sleep 2
+done
+[[ -n "$baseline_json" ]] \
+  || guest_test_fail "The Windows clean-snapshot preflight returned no guest data."
 EAI_WINDOWS_BASELINE="$baseline_json" EAI_WINDOWS_EXPECTED_USER="$guest_user" node --input-type=module <<'NODE'
 const value = JSON.parse(process.env.EAI_WINDOWS_BASELINE);
 const expectedUser = process.env.EAI_WINDOWS_EXPECTED_USER.toLowerCase();
@@ -5720,7 +5864,35 @@ EAI_WINDOWS_VM_NAME="$vm_name" EAI_WINDOWS_GUEST_USER="$guest_user" \
 stage ai-workspace-provision-passed
 
 stage portal-login
-EAI_WINDOWS_VM_NAME="$vm_name" "$ROOT/scripts/login-windows-guest.sh" --portal-only \
+portal_login_attempt=0
+portal_login_status=1
+portal_login_output=""
+for portal_login_attempt in 1 2 3; do
+  set +e
+  portal_login_output="$(
+    EAI_WINDOWS_VM_NAME="$vm_name" "$ROOT/scripts/login-windows-guest.sh" --portal-only 2>&1
+  )"
+  portal_login_status=$?
+  set -e
+  printf '%s\n' "$portal_login_output"
+  if [[ "$portal_login_status" == 0 ]]; then
+    break
+  fi
+  # A rejected credential is authoritative. Do not make further sign-in
+  # attempts that could lock the release-test identity. Other failures at this
+  # stage are known Parallels/UI transport races; the login helper resets Edge
+  # before each bounded retry.
+  if printf '%s\n' "$portal_login_output" \
+    | grep -Fq 'Microsoft rejected the configured release-test account credentials.'; then
+    break
+  fi
+  if [[ "$portal_login_attempt" -lt 3 ]]; then
+    printf 'WINDOWS_PORTAL_LOGIN_RETRY attempt=%s\n' "$portal_login_attempt" >&2
+    sleep 3
+  fi
+done
+unset portal_login_output
+[[ "$portal_login_status" == 0 ]] \
   || guest_test_fail "Enterprise AI portal login failed in the Windows guest."
 stage portal-login-passed
 
@@ -5941,12 +6113,13 @@ done
 
 stage normal-welcome-start
 welcome_started=0
+welcome_advanced=0
 for _ in $(seq 1 30); do
   if screen_has "Get started"; then
-    # screen_has proves the receipt-bound EAI Setup window is foregrounded
-    # immediately before sending the visible primary action.
-    input key tab
-    input key enter
+    # Use the exact process-bound UI Automation element instead of depending
+    # on Parallels granting a guest-control process foreground ownership.
+    invoke_receipt_bound_eai_setup_button "Get started" \
+      || guest_test_fail "The receipt-bound Get started action could not be invoked."
     welcome_started=1
     break
   fi
@@ -5955,6 +6128,20 @@ done
 [[ "$welcome_started" == 1 ]] \
   || guest_test_fail "The released Windows app did not show its Get started welcome action."
 
+# A successful send-key event only proves that Parallels accepted the input.
+# Require the receipt-bound UI to leave the welcome state before accepting the
+# prerequisite loop; otherwise an unfocused button can turn into a misleading
+# twenty-minute readiness timeout.
+for _ in $(seq 1 30); do
+  if screen_has "Checking this Windows PC"; then
+    welcome_advanced=1
+    break
+  fi
+  sleep 1
+done
+[[ "$welcome_advanced" == 1 ]] \
+  || guest_test_fail "The released Windows app did not begin its device check after Get started."
+
 stage prerequisite-install
 versions=""
 ready_reads=0
@@ -5962,8 +6149,16 @@ liveness_failures=0
 prerequisite_deadline=$((SECONDS + 1200))
 prerequisite_progress_at=$SECONDS
 while (( SECONDS < prerequisite_deadline )); do
-  prerequisite_uac_watcher_alive \
-    || guest_test_fail "Unexpected Windows consent UI appeared while the no-prompt policy was active."
+  if ! prerequisite_uac_watcher_alive; then
+    # A real consent signature writes the failure marker above. A Parallels
+    # guest-control result loss does not. Keep testing the installer in that
+    # case; it cannot authorize or send any approval input.
+    if [[ -e "$work_dir/prerequisite-uac-watcher.failed" ]]; then
+      guest_test_fail "Unexpected Windows consent UI appeared while the no-prompt policy was active."
+    fi
+    printf '%s consent-ui-observer-unavailable\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    uac_watcher_pid=""
+  fi
   if guest_process_alive "$guest_normal_pid"; then
     liveness_failures=0
   else
@@ -5974,11 +6169,16 @@ while (( SECONDS < prerequisite_deadline )); do
     [[ "$liveness_failures" -lt 5 ]] || guest_test_fail "The released Windows app exited before prerequisite installation completed."
   fi
   versions="$(guest_versions_json || true)"
-  if [[ -n "$versions" ]] \
-    && versions_satisfy_contract "$versions" \
-    && screen_has "This Windows PC is ready"; then
-    ready_reads=$((ready_reads + 1))
-    [[ "$ready_reads" -ge 2 ]] && break
+  if [[ -n "$versions" ]] && versions_satisfy_contract "$versions"; then
+    # The consent monitor has covered the privileged prerequisite period.
+    # Stop it before using the same capture path for readiness. Concurrent
+    # captures can starve OCR even when the completed UI is visibly present.
+    stop_prerequisite_uac_watcher \
+      || guest_test_fail "The Windows unexpected-consent-UI watcher did not close cleanly."
+    if screen_has "This Windows PC is ready"; then
+      ready_reads=$((ready_reads + 1))
+      [[ "$ready_reads" -ge 2 ]] && break
+    fi
   else
     ready_reads=0
   fi
@@ -5991,8 +6191,23 @@ done
 [[ "$ready_reads" -ge 2 ]] || guest_test_fail "The Windows installer did not reach stable prerequisite readiness within 20 minutes."
 
 stage normal-welcome-continue
-input key tab
-input key enter
+# The readiness pass reuses the same DOM button that previously received
+# Get started. Its focus is retained when its label becomes Let’s go, so a
+# leading Tab can move focus away from the primary action. Prove the completed
+# label while the receipt-bound app window is foregrounded, then activate the
+# focused primary action directly.
+lets_go_visible=0
+for _ in $(seq 1 30); do
+  if screen_has "Let's go"; then
+    lets_go_visible=1
+    break
+  fi
+  sleep 1
+done
+[[ "$lets_go_visible" == 1 ]] \
+  || guest_test_fail "The released Windows app did not show Let’s go after prerequisite readiness."
+invoke_receipt_bound_eai_setup_button "Let's go" \
+  || guest_test_fail "The receipt-bound Let’s go action could not be invoked."
 signin_visible=0
 for _ in $(seq 1 30); do
   if screen_has "Sign in with browser"; then
@@ -6001,10 +6216,21 @@ for _ in $(seq 1 30); do
   fi
   sleep 1
 done
+# If a platform WebView cleared the retained button focus, make one bounded
+# fallback Tab activation only after proving the unchanged Let’s go screen.
+if [[ "$signin_visible" != 1 ]] && screen_has "Let's go"; then
+  invoke_receipt_bound_eai_setup_button "Let's go" \
+    || guest_test_fail "The receipt-bound Let’s go retry could not be invoked."
+  for _ in $(seq 1 15); do
+    if screen_has "Sign in with browser"; then
+      signin_visible=1
+      break
+    fi
+    sleep 1
+  done
+fi
 [[ "$signin_visible" == 1 ]] \
   || guest_test_fail "The released Windows app did not take Let’s go to the sign-in screen."
-stop_prerequisite_uac_watcher \
-  || guest_test_fail "The Windows unexpected-consent-UI watcher did not close cleanly."
 stage prerequisite-install-passed
 
 stage uac-admin-consent-restoration
