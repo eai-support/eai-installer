@@ -1215,6 +1215,26 @@ fn get_e2e_configuration() -> E2eConfiguration {
     }
 }
 
+fn validate_e2e_template_source(path: &Path) -> Result<String, String> {
+    if !path.is_absolute() || !path.join(".git").is_dir() {
+        return Err("The E2E template source must be an absolute local Git checkout.".to_string());
+    }
+    path.canonicalize()
+        .map(|path| path.to_string_lossy().to_string())
+        .map_err(|error| format!("The E2E template source could not be resolved: {error}"))
+}
+
+fn e2e_template_source() -> Result<Option<String>, String> {
+    if env::var("EAI_SETUP_E2E").ok().as_deref() != Some("1") {
+        return Ok(None);
+    }
+    env::var("EAI_SETUP_E2E_TEMPLATE_SOURCE")
+        .ok()
+        .filter(|value| !value.is_empty())
+        .map(|source| validate_e2e_template_source(Path::new(&source)))
+        .transpose()
+}
+
 #[tauri::command]
 fn verify_e2e_auth() -> Result<(), String> {
     run_program("eai", &["whoami"])
@@ -2058,6 +2078,13 @@ fn run_bootstrap_sync(app: AppHandle, step: String, project_name: Option<String>
             if let Some(app_key) = app_key.filter(|value| !value.trim().is_empty()) {
                 init_args.extend(["--app-key".to_string(), app_key]);
             }
+            match e2e_template_source() {
+                Ok(Some(source)) => {
+                    init_args.extend(["--from".to_string(), source, "--trust-template-scripts".to_string()]);
+                }
+                Ok(None) => {}
+                Err(error) => return command_result("init", false, &error, None, None, true),
+            }
             let init_args_ref = init_args.iter().map(String::as_str).collect::<Vec<_>>();
             emit_progress(
                 &app,
@@ -2277,6 +2304,20 @@ mod tests {
         assert!(!eai_cli_is_compatible((3, 18, 0), false));
         assert!(eai_cli_is_compatible((3, 18, 0), true));
         assert!(eai_cli_is_compatible((4, 0, 0), true));
+    }
+
+    #[test]
+    fn e2e_template_override_requires_an_absolute_local_git_checkout() {
+        assert!(validate_e2e_template_source(Path::new("relative/template")).is_err());
+        let directory = env::temp_dir().join(format!("eai-setup-template-test-{}", Uuid::new_v4()));
+        fs::create_dir(&directory).expect("template test directory should be created");
+        assert!(validate_e2e_template_source(&directory).is_err());
+        fs::create_dir(directory.join(".git")).expect("template test Git directory should be created");
+        assert_eq!(
+            validate_e2e_template_source(&directory).expect("absolute checkout should be accepted"),
+            directory.canonicalize().expect("directory should resolve").to_string_lossy()
+        );
+        fs::remove_dir_all(directory).expect("template test directory should be removed");
     }
 
     #[test]
