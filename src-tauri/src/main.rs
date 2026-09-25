@@ -1299,6 +1299,13 @@ fn checkout_marker_git_dir(path: &Path) -> Option<PathBuf> {
     } else {
         path.join(git_dir)
     };
+    if resolved.ancestors().any(|component| {
+        fs::symlink_metadata(component)
+            .map(|metadata| metadata.file_type().is_symlink())
+            .unwrap_or(true)
+    }) {
+        return None;
+    }
     resolved.canonicalize().ok().filter(|resolved| resolved.is_dir())
 }
 
@@ -2525,6 +2532,8 @@ mod tests {
             validate_e2e_template_source(&worktree).expect("linked worktree should be accepted"),
             worktree.canonicalize().expect("worktree should resolve").to_string_lossy()
         );
+        let valid_marker = fs::read_to_string(worktree.join(".git"))
+            .expect("linked worktree marker should be readable");
         let arbitrary_metadata = root.join("arbitrary-metadata");
         fs::create_dir(&arbitrary_metadata).expect("arbitrary metadata directory should be created");
         fs::write(worktree.join(".git"), "gitdir: ../arbitrary-metadata\n")
@@ -2533,6 +2542,26 @@ mod tests {
         fs::write(worktree.join(".git"), "not-a-gitdir\n")
             .expect("invalid worktree marker should be written");
         assert!(validate_e2e_template_source(&worktree).is_err());
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::symlink;
+            let metadata_link = root.join("metadata-link");
+            symlink(&git_metadata, &metadata_link).expect("metadata symlink should be created");
+            fs::write(worktree.join(".git"), "gitdir: ../metadata-link\n")
+                .expect("symlinked worktree marker should be written");
+            assert!(Command::new(executable("git"))
+                .arg("-C")
+                .arg(&worktree)
+                .args(["rev-parse", "--absolute-git-dir"])
+                .status()
+                .expect("Git should accept the symlinked metadata marker")
+                .success());
+            assert!(validate_e2e_template_source(&worktree).is_err());
+            fs::remove_file(metadata_link).expect("metadata symlink should be removed");
+        }
+        fs::write(worktree.join(".git"), valid_marker)
+            .expect("valid worktree marker should be restored");
+        assert!(validate_e2e_template_source(&worktree).is_ok());
         fs::remove_dir_all(root).expect("template test directories should be removed");
     }
 
