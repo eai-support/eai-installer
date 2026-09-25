@@ -1,8 +1,8 @@
 {
-  "capturedAt": "2026-09-25T04:54:34.503Z",
-  "previewUrl": "http://127.0.0.1:55926/",
+  "capturedAt": "2026-09-25T05:03:09.343Z",
+  "previewUrl": "http://127.0.0.1:56561/",
   "browser": "Chromium 153.0.8010.12",
-  "sourceHead": "be41b80b7d0af784d241fb358e800cc3db2d6e2e",
+  "sourceHead": "84297f8e74cf8d66b7b07a5e04f2a2b6471499f7",
   "sourceHashes": {
     "ui/index.html": "13861740d1b2496b8a389792d75c966eb8af23017f01450f0f2bf125be06e1a9",
     "ui/styles.css": "d53b5902a2ffd92be0c29a74f91dfa768c7bb96bf9e4b3dc852d110a69b88d01",
