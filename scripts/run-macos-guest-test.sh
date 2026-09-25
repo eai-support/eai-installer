@@ -284,6 +284,20 @@ semantic_version_at_least() {
     || (( major == minimum_major && minor == minimum_minor && patch >= minimum_patch ))
 }
 
+exact_semantic_version_at_least() {
+  local value="$1"
+  local minimum_major="$2"
+  local minimum_minor="$3"
+  local minimum_patch="$4"
+  [[ "$value" =~ ^v?([0-9]+)\.([0-9]+)\.([0-9]+)$ ]] || return 1
+  local major="${BASH_REMATCH[1]}"
+  local minor="${BASH_REMATCH[2]}"
+  local patch="${BASH_REMATCH[3]}"
+  (( major > minimum_major )) \
+    || (( major == minimum_major && minor > minimum_minor )) \
+    || (( major == minimum_major && minor == minimum_minor && patch >= minimum_patch ))
+}
+
 guest_git_version() {
   local developer_dir=""
   developer_dir="$(macos_prl_current_user_exec_idempotent /usr/bin/xcode-select -p 2>/dev/null | tr -d '\r\n' || true)"
@@ -330,7 +344,7 @@ prerequisite_versions_satisfy_contract() {
   [[ "$git_version" == git\ version* ]] \
     && semantic_version_at_least "$node_version" 24 0 0 \
     && semantic_version_at_least "$npm_version" 1 0 0 \
-    && semantic_version_at_least "$eai_version" "$expected_cli_major" "$expected_cli_minor" "$expected_cli_patch"
+    && exact_semantic_version_at_least "$eai_version" "$expected_cli_major" "$expected_cli_minor" "$expected_cli_patch"
 }
 
 guest_prerequisites_ready() {

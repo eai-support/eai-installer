@@ -3201,8 +3201,14 @@ assert.match(ubuntuGuestCoreSource, /minimumNodeMajor: 24/);
 assert.match(ubuntuGuestCoreSource, /The Ubuntu EAI CLI minimum must be a semantic version/);
 assert.match(ubuntuGuestCoreSource, /eai_managed_deploy_ready/);
 assert.match(ubuntuGuestCoreSource, /eai_help_has_option/);
+assert.match(ubuntuGuestCoreSource, /exact_semver_at_least "\$eai_value"/);
 assert.match(macosGuestAdapterSource, /guest_eai_help_has_option/);
+assert.match(macosGuestAdapterSource, /exact_semantic_version_at_least "\$eai_version"/);
 assert.match(windowsGuestAdapterSource, /Has-HelpOption/);
+assert.ok(
+  windowsGuestAdapterSource.includes('match(/^v?([0-9]+\\.[0-9]+\\.[0-9]+)$/)?.[1]'),
+  "Windows guest evidence must require exact EAI CLI version output",
+);
 assert.match(ubuntuGuestCoreSource, /managedDeployCapabilityRequired: true/);
 assert.match(ubuntuGuestCoreSource, /managedDeployCapabilityVerified: true/);
 for (const npmProviderCheck of [

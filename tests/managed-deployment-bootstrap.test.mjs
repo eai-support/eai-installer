@@ -150,6 +150,20 @@ test("rejects a CLI below the released baseline without silently replacing it", 
   }
 });
 
+test("rejects ambiguous or wrapped CLI version output", async () => {
+  const harness = await createBootstrapHarness({
+    version: "3.17.0; actual runtime 3.16.0",
+    deployReady: true,
+  });
+  try {
+    assert.equal(harness.run.status, 1, harness.run.stderr);
+    assert.match(harness.run.stderr, incompatibleCliPattern);
+    await assert.rejects(readFile(harness.npmLog, "utf8"), { code: "ENOENT" });
+  } finally {
+    await rm(harness.root, { recursive: true, force: true });
+  }
+});
+
 test("rejects a compatible version when the deploy command is unavailable", async () => {
   const harness = await createBootstrapHarness({ version: "3.17.0", deployReady: false });
   try {

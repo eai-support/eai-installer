@@ -43,8 +43,8 @@ EAI_CLI_VERSION=""
 eai_version_supported() {
   local current=""
   current="$(eai --version 2>/dev/null)" || return 1
+  [[ "$current" =~ ^v?([0-9]+)[.]([0-9]+)[.]([0-9]+)$ ]] || return 1
   EAI_CLI_VERSION="$current"
-  [[ "$current" =~ ^v?([0-9]+)[.]([0-9]+)[.]([0-9]+) ]] || return 1
   local major="${BASH_REMATCH[1]}"
   local minor="${BASH_REMATCH[2]}"
   local patch="${BASH_REMATCH[3]}"

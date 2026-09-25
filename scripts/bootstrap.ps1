@@ -29,8 +29,8 @@ function Has-EaiManagedDeploy {
   $rawVersion = & eai --version 2>$null | Select-Object -First 1
   if (-not $rawVersion) { return $false }
   $versionOutput = ([string]$rawVersion).Trim()
+  if ($versionOutput -notmatch '^v?(\d+)\.(\d+)\.(\d+)$') { return $false }
   $script:EaiCliVersion = $versionOutput
-  if ($versionOutput -notmatch '^v?(\d+)\.(\d+)\.(\d+)') { return $false }
   $currentVersion = [version]::new([int]$Matches[1], [int]$Matches[2], [int]$Matches[3])
   if ($currentVersion -lt [version]::new(3, 17, 0)) { return $false }
   $deployHelp = & eai deploy app --help 2>$null

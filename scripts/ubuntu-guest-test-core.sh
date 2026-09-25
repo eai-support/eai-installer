@@ -89,6 +89,20 @@ semver_at_least() {
     || (( major == wanted_major && minor == wanted_minor && patch >= wanted_patch ))
 }
 
+exact_semver_at_least() {
+  local value="$1"
+  local wanted_major="$2"
+  local wanted_minor="$3"
+  local wanted_patch="$4"
+  [[ "$value" =~ ^v?([0-9]+)\.([0-9]+)\.([0-9]+)$ ]] || return 1
+  local major="${BASH_REMATCH[1]}"
+  local minor="${BASH_REMATCH[2]}"
+  local patch="${BASH_REMATCH[3]}"
+  (( major > wanted_major )) \
+    || (( major == wanted_major && minor > wanted_minor )) \
+    || (( major == wanted_major && minor == wanted_minor && patch >= wanted_patch ))
+}
+
 validate_npm_provider_values() {
   local version="$1"
   local command_path="$2"
@@ -307,7 +321,7 @@ NODE
   [[ "$git_value" == git\ version* ]] \
     && semver_at_least "$node_value" 24 0 0 \
     && semver_at_least "$npm_value" 0 0 0 \
-    && semver_at_least "$eai_value" "$expected_cli_major" "$expected_cli_minor" "$expected_cli_patch" \
+    && exact_semver_at_least "$eai_value" "$expected_cli_major" "$expected_cli_minor" "$expected_cli_patch" \
     && [[ "$eai_managed_deploy" == true ]]
 }
 

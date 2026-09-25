@@ -5604,7 +5604,7 @@ versions_satisfy_contract() {
 const versions = JSON.parse(process.env.EAI_WINDOWS_VERSIONS);
 const nodeMajor = Number.parseInt(String(versions.node || "").replace(/^v/, "").split(".")[0], 10);
 const expectedCli = process.env.EAI_EXPECTED_CLI_VERSION;
-const cliVersion = String(versions.eai || "").match(/[0-9]+\.[0-9]+\.[0-9]+/)?.[0];
+const cliVersion = String(versions.eai || "").match(/^v?([0-9]+\.[0-9]+\.[0-9]+)$/)?.[1];
 const parts = (value) => String(value || "").split(".").map((part) => Number.parseInt(part, 10));
 const atLeast = (value, minimum) => {
   const current = parts(value);

@@ -940,6 +940,18 @@ fn semantic_version(value: &str) -> Option<(u64, u64, u64)> {
     ))
 }
 
+fn exact_semantic_version(value: &str) -> Option<(u64, u64, u64)> {
+    let value = value.trim();
+    let value = value.strip_prefix('v').unwrap_or(value);
+    let mut parts = value.split('.');
+    let version = (
+        parts.next()?.parse().ok()?,
+        parts.next()?.parse().ok()?,
+        parts.next()?.parse().ok()?,
+    );
+    parts.next().is_none().then_some(version)
+}
+
 fn node_version() -> Option<String> {
     let current = version("node", &["--version"])?;
     let current_version = semantic_version(&current)?;
@@ -961,7 +973,7 @@ fn eai_cli_is_compatible(current_version: (u64, u64, u64), deploy_help: &str) ->
 
 fn eai_cli_version_for(program: &str) -> Option<String> {
     let current = version(program, &["--version"])?;
-    let current_version = semantic_version(&current)?;
+    let current_version = exact_semantic_version(&current)?;
     let (stdout, stderr) = run_program(program, &["deploy", "app", "--help"]).ok()?;
     eai_cli_is_compatible(current_version, &format!("{stdout}\n{stderr}")).then_some(current)
 }
@@ -2350,6 +2362,10 @@ mod tests {
 
     #[test]
     fn eai_cli_readiness_requires_the_released_baseline_and_managed_deploy_capability() {
+        assert_eq!(exact_semantic_version("3.17.0"), Some((3, 17, 0)));
+        assert_eq!(exact_semantic_version("v3.17.0"), Some((3, 17, 0)));
+        assert_eq!(exact_semantic_version("3.17.0; actual runtime 3.16.0"), None);
+        assert_eq!(exact_semantic_version("wrapper 3.17.0"), None);
         let complete_help = "--target <target> --source <choice> --github-link-session <id> --target-tenant-id <tenant>";
         assert!(!eai_cli_is_compatible((3, 16, 99), complete_help));
         assert!(!eai_cli_is_compatible((3, 17, 0), ""));
