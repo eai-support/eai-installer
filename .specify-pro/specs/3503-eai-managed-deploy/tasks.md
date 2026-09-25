@@ -9,7 +9,7 @@
 - [x] Gate production publication on an isolated readback of the actual published CLI package and command help (DTE-056, DTE-088).
 - [x] Reject lookalike options and bind both local and protected-workflow publication to the same exact package gate (DTE-056, DTE-088).
 - [x] Update owned tests and traceability.
-- [x] Complete exact-head Rust and bundle validation in required CI after the latest review fixes.
+- [ ] Complete exact-head Rust and bundle validation in required CI after the latest review fixes.
 
 ## Local validation on 2026-09-25
 
@@ -21,4 +21,4 @@
 - `npm run test:journey`: passed, 2 Playwright journeys.
 - Managed-deployment browser capture: passed at 900×680 and 720×540 with the shipped Retry control, keyboard recovery, no overflow, and no browser errors.
 - `bash -n scripts/bootstrap.sh scripts/release-preflight.sh`, `node --check ui/app.js`, and `git diff --check`: passed.
-- Exact-head CI for implementation/evidence head `2e47e758e4a2063532884d0206c16243d3238468` passed CodeQL, `tauri-check`, public hygiene, dependency review, installer download verification, and macOS, Ubuntu, and Windows bundle jobs for both supported architectures. Browser provenance was regenerated from committed source head `db85b0b19019502b63403ba61c033f2e88aeaf06` before the evidence-only commit.
+- Exact-head CI for implementation/evidence head `2e47e758e4a2063532884d0206c16243d3238468` passed CodeQL, `tauri-check`, public hygiene, dependency review, installer download verification, and macOS, Ubuntu, and Windows bundle jobs for both supported architectures. The later source-parent symlink rejection fix requires a fresh exact-head run and browser provenance refresh.

@@ -1272,6 +1272,14 @@ fn git_checkout_path(path: &Path, argument: &str) -> Option<PathBuf> {
     PathBuf::from(value).canonicalize().ok()
 }
 
+fn has_symlinked_path_component(path: &Path) -> bool {
+    path.ancestors().any(|component| {
+        fs::symlink_metadata(component)
+            .map(|metadata| metadata.file_type().is_symlink())
+            .unwrap_or(true)
+    })
+}
+
 fn checkout_marker_git_dir(path: &Path) -> Option<PathBuf> {
     let marker = path.join(".git");
     let metadata = fs::symlink_metadata(&marker).ok()?;
@@ -1299,11 +1307,7 @@ fn checkout_marker_git_dir(path: &Path) -> Option<PathBuf> {
     } else {
         path.join(git_dir)
     };
-    if resolved.ancestors().any(|component| {
-        fs::symlink_metadata(component)
-            .map(|metadata| metadata.file_type().is_symlink())
-            .unwrap_or(true)
-    }) {
+    if has_symlinked_path_component(&resolved) {
         return None;
     }
     resolved.canonicalize().ok().filter(|resolved| resolved.is_dir())
@@ -1326,7 +1330,11 @@ fn validate_e2e_template_source(path: &Path) -> Result<String, String> {
     let source_is_directory = fs::symlink_metadata(path)
         .map(|metadata| metadata.is_dir() && !metadata.file_type().is_symlink())
         .unwrap_or(false);
-    if !path.is_absolute() || !source_is_directory || !is_local_git_checkout(path) {
+    if !path.is_absolute()
+        || has_symlinked_path_component(path)
+        || !source_is_directory
+        || !is_local_git_checkout(path)
+    {
         return Err("The E2E template source must be an absolute local Git checkout.".to_string());
     }
     path.canonicalize()
@@ -2489,7 +2497,10 @@ mod tests {
     #[test]
     fn e2e_template_override_accepts_checkouts_and_linked_worktrees() {
         assert!(validate_e2e_template_source(Path::new("relative/template")).is_err());
-        let root = env::temp_dir().join(format!("eai-setup-template-test-{}", Uuid::new_v4()));
+        let root = env::temp_dir()
+            .canonicalize()
+            .expect("temporary root should resolve")
+            .join(format!("eai-setup-template-test-{}", Uuid::new_v4()));
         let checkout = root.join("checkout");
         fs::create_dir_all(&checkout).expect("template test directory should be created");
         assert!(validate_e2e_template_source(&checkout).is_err());
@@ -2509,6 +2520,14 @@ mod tests {
             let checkout_link = root.join("checkout-link");
             symlink(&checkout, &checkout_link).expect("checkout symlink should be created");
             assert!(validate_e2e_template_source(&checkout_link).is_err());
+
+            let source_parent_link = root
+                .parent()
+                .expect("temporary root should have a parent")
+                .join(format!("eai-setup-template-parent-link-{}", Uuid::new_v4()));
+            symlink(&root, &source_parent_link).expect("source-parent symlink should be created");
+            assert!(validate_e2e_template_source(&source_parent_link.join("checkout")).is_err());
+            fs::remove_file(source_parent_link).expect("source-parent symlink should be removed");
 
             let git_directory = checkout.join(".git");
             let real_git_directory = checkout.join(".git-real");
