@@ -1,10 +1,18 @@
 # Tasks
 
 - [x] Record 2026-09-25 approval and preserved user contract.
-- [ ] Merge current `main` without force-pushing.
-- [ ] Gate local-template overrides behind a test-only build capability (DTE-057).
-- [ ] Accept normal Git worktrees (DTE-058).
-- [ ] Align and test the shipped retry control (DTE-058, DTE-094).
-- [ ] Clarify capability-versus-version release gating (DTE-056, DTE-088).
-- [ ] Update owned tests and traceability.
-- [ ] Run prescribed checks and record exact results.
+- [x] Merge current `main` without force-pushing.
+- [x] Gate local-template overrides behind a test-only build capability (DTE-057).
+- [x] Accept normal Git worktrees (DTE-058).
+- [x] Align and test the shipped retry control (DTE-058, DTE-094).
+- [x] Clarify capability-versus-version release gating (DTE-056, DTE-088).
+- [x] Update owned tests and traceability.
+- [ ] Complete exact-head Rust and bundle validation in required CI.
+
+## Local validation on 2026-09-25
+
+- `npm test`: passed, including 12 managed-deployment tests, 77 scenario states, release-gate contracts, Windows watchdog tests, and production safeguards.
+- `npm run test:journey`: passed, 2 Playwright journeys.
+- Managed-deployment browser capture: passed at 900×680 and 720×540 with the shipped Retry control, keyboard recovery, no overflow, and no browser errors.
+- `bash -n scripts/bootstrap.sh scripts/release-preflight.sh`, `node --check ui/app.js`, and `git diff --check`: passed.
+- Rust is not installed on this workstation. The required CI jobs remain the exact-head Rust compile/test and signed-bundle evidence.
