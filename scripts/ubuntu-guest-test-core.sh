@@ -1292,7 +1292,9 @@ cli_package="$UBUNTU_PRL_HOME/.eai-setup/npm-global/lib/node_modules/@enterprise
 cli_package_version="$(printf '%s\n' \
   "import json; print(json.load(open('$cli_package'))['version'])" \
   | ubuntu_prl_user_exec /usr/bin/python3 2>/dev/null | tr -d '\r\n')"
-executable_cli_version="$(grep -Eo '[0-9]+[.][0-9]+[.][0-9]+' <<<"$after_eai" | head -n 1)"
+[[ "$after_eai" =~ ^v?([0-9]+)[.]([0-9]+)[.]([0-9]+)$ ]] \
+  || guest_test_fail "The EAI CLI executable returned ambiguous version output."
+executable_cli_version="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
 [[ -n "$executable_cli_version" && "$cli_package_version" == "$executable_cli_version" ]] \
   || guest_test_fail "The EAI CLI package metadata does not match its executable version."
 installed_node_package_status="$(prlctl exec "$vm_name" /usr/bin/dpkg-query -W -f='${Status}' nodejs 2>/dev/null | tr -d '\r\n')"

@@ -5576,6 +5576,19 @@ function Read-Command([string]$path, [string]$arguments) {
   }
 }
 function Read-Version([string]$path) { return Read-Command $path '--version' }
+function Read-EaiPackageVersion([string]$path) {
+  if (-not (Test-ProgramPath $path)) { return $null }
+  $packagePath = Join-Path (Split-Path -Parent $path) 'node_modules\@enterpriseai\cli\package.json'
+  try {
+    $item = Get-Item -LiteralPath $packagePath -Force -ErrorAction Stop
+    if ($item.PSIsContainer -or (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) { return $null }
+    $version = [string]((Get-Content -LiteralPath $item.FullName -Raw -ErrorAction Stop | ConvertFrom-Json).version)
+    if ($version -cnotmatch '^[0-9]+[.][0-9]+[.][0-9]+$') { return $null }
+    return $version
+  } catch {
+    return $null
+  }
+}
 function Has-HelpOption([string]$text, [string]$option) {
   $pattern = '(?:^|\s)' + [regex]::Escape($option) + '(?:[=\s]|$)'
   return $text -cmatch $pattern
@@ -5590,6 +5603,7 @@ $eaiManagedDeployHelp = Read-Command $eai 'deploy app --help'
   node = Read-Version $node
   npm = Read-Version $npm
   eai = Read-Version $eai
+  eaiPackageVersion = Read-EaiPackageVersion $eai
   eaiManagedDeploy = [bool]($eaiManagedDeployHelp `
     -and (Has-HelpOption $eaiManagedDeployHelp '--source') `
     -and (Has-HelpOption $eaiManagedDeployHelp '--github-link-session') `
@@ -5605,6 +5619,7 @@ const versions = JSON.parse(process.env.EAI_WINDOWS_VERSIONS);
 const nodeMajor = Number.parseInt(String(versions.node || "").replace(/^v/, "").split(".")[0], 10);
 const expectedCli = process.env.EAI_EXPECTED_CLI_VERSION;
 const cliVersion = String(versions.eai || "").match(/^v?([0-9]+\.[0-9]+\.[0-9]+)$/)?.[1];
+const cliPackageVersion = String(versions.eaiPackageVersion || "");
 const parts = (value) => String(value || "").split(".").map((part) => Number.parseInt(part, 10));
 const atLeast = (value, minimum) => {
   const current = parts(value);
@@ -5615,7 +5630,8 @@ const atLeast = (value, minimum) => {
       || (current[0] === wanted[0] && current[1] === wanted[1] && current[2] >= wanted[2]));
 };
 if (!versions.git || !Number.isInteger(nodeMajor) || nodeMajor < 24 || !versions.npm
-    || !atLeast(cliVersion, expectedCli) || versions.eaiManagedDeploy !== true) {
+    || !atLeast(cliVersion, expectedCli) || cliPackageVersion !== cliVersion
+    || versions.eaiManagedDeploy !== true) {
   process.exitCode = 1;
 }
 NODE

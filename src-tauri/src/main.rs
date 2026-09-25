@@ -1242,34 +1242,70 @@ fn get_e2e_configuration() -> E2eConfiguration {
     }
 }
 
-fn is_local_git_checkout(path: &Path) -> bool {
+fn git_checkout_path(path: &Path, argument: &str) -> Option<PathBuf> {
+    let mut command = Command::new(executable("git"));
+    command
+        .arg("-C")
+        .arg(path)
+        .args(["rev-parse", argument])
+        .env_remove("GIT_DIR")
+        .env_remove("GIT_WORK_TREE")
+        .env_remove("GIT_COMMON_DIR")
+        .env_remove("GIT_CEILING_DIRECTORIES")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null());
+    #[cfg(target_os = "windows")]
+    command.creation_flags(0x08000000);
+    let output = command.output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let value = String::from_utf8(output.stdout).ok()?;
+    let value = value.trim();
+    if value.is_empty() || value.contains(['\r', '\n']) {
+        return None;
+    }
+    PathBuf::from(value).canonicalize().ok()
+}
+
+fn checkout_marker_git_dir(path: &Path) -> Option<PathBuf> {
     let marker = path.join(".git");
     if marker.is_dir() {
-        return true;
+        return marker.canonicalize().ok();
     }
     if !marker.is_file() {
-        return false;
+        return None;
     }
-    let Ok(contents) = fs::read_to_string(&marker) else {
-        return false;
-    };
-    let Some(git_dir) = contents
-        .lines()
-        .next()
-        .and_then(|line| line.strip_prefix("gitdir:"))
-    else {
-        return false;
-    };
+    let contents = fs::read_to_string(&marker).ok()?;
+    let mut lines = contents.lines();
+    let git_dir = lines.next()?.strip_prefix("gitdir:")?;
+    if lines.next().is_some() {
+        return None;
+    }
     let git_dir = Path::new(git_dir.trim());
     if git_dir.as_os_str().is_empty() {
-        return false;
+        return None;
     }
     let resolved = if git_dir.is_absolute() {
         git_dir.to_path_buf()
     } else {
         path.join(git_dir)
     };
-    resolved.is_dir()
+    resolved.canonicalize().ok().filter(|resolved| resolved.is_dir())
+}
+
+fn is_local_git_checkout(path: &Path) -> bool {
+    let Some(checkout) = path.canonicalize().ok() else {
+        return false;
+    };
+    let Some(top_level) = git_checkout_path(&checkout, "--show-toplevel") else {
+        return false;
+    };
+    let Some(git_dir) = git_checkout_path(&checkout, "--absolute-git-dir") else {
+        return false;
+    };
+    checkout == top_level && checkout_marker_git_dir(&checkout).as_ref() == Some(&git_dir)
 }
 
 fn validate_e2e_template_source(path: &Path) -> Result<String, String> {
@@ -2440,7 +2476,12 @@ mod tests {
         let checkout = root.join("checkout");
         fs::create_dir_all(&checkout).expect("template test directory should be created");
         assert!(validate_e2e_template_source(&checkout).is_err());
-        fs::create_dir(checkout.join(".git")).expect("template test Git directory should be created");
+        assert!(Command::new(executable("git"))
+            .args(["init", "--quiet"])
+            .arg(&checkout)
+            .status()
+            .expect("Git should initialize the checkout")
+            .success());
         assert_eq!(
             validate_e2e_template_source(&checkout).expect("absolute checkout should be accepted"),
             checkout.canonicalize().expect("directory should resolve").to_string_lossy()
@@ -2448,14 +2489,22 @@ mod tests {
 
         let worktree = root.join("worktree");
         let git_metadata = root.join("git-metadata");
-        fs::create_dir(&worktree).expect("worktree directory should be created");
-        fs::create_dir(&git_metadata).expect("worktree Git metadata should be created");
-        fs::write(worktree.join(".git"), "gitdir: ../git-metadata\n")
-            .expect("worktree marker should be written");
+        assert!(Command::new(executable("git"))
+            .args(["init", "--quiet", "--separate-git-dir"])
+            .arg(&git_metadata)
+            .arg(&worktree)
+            .status()
+            .expect("Git should initialize the separated checkout")
+            .success());
         assert_eq!(
             validate_e2e_template_source(&worktree).expect("linked worktree should be accepted"),
             worktree.canonicalize().expect("worktree should resolve").to_string_lossy()
         );
+        let arbitrary_metadata = root.join("arbitrary-metadata");
+        fs::create_dir(&arbitrary_metadata).expect("arbitrary metadata directory should be created");
+        fs::write(worktree.join(".git"), "gitdir: ../arbitrary-metadata\n")
+            .expect("invalid worktree marker should be written");
+        assert!(validate_e2e_template_source(&worktree).is_err());
         fs::write(worktree.join(".git"), "not-a-gitdir\n")
             .expect("invalid worktree marker should be written");
         assert!(validate_e2e_template_source(&worktree).is_err());

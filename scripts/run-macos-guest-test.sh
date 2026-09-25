@@ -27,6 +27,7 @@ e2e_pid_file="/tmp/eai-setup-e2e.pid"
 guest_node="/Users/$guest_user/.eai-setup/node/bin/node"
 guest_npm_cli="/Users/$guest_user/.eai-setup/node/lib/node_modules/npm/bin/npm-cli.js"
 guest_cli="/Users/$guest_user/.eai-setup/npm-global/lib/node_modules/@enterpriseai/cli/dist/index.js"
+guest_cli_package="/Users/$guest_user/.eai-setup/npm-global/lib/node_modules/@enterpriseai/cli/package.json"
 input_helper="$ROOT/scripts/parallels-input.mjs"
 ocr_binary="${TMPDIR:-/tmp}/eai-installer-macos-ocr-match"
 work_dir="$(mktemp -d)"
@@ -321,6 +322,13 @@ guest_eai_version() {
   macos_prl_current_user_exec_idempotent "$guest_node" "$guest_cli" --version 2>/dev/null | tr -d '\r\n'
 }
 
+guest_eai_package_version() {
+  macos_prl_current_user_exec_idempotent /bin/test -f "$guest_cli_package" >/dev/null 2>&1 || return 1
+  macos_prl_current_user_exec_idempotent "$guest_node" -e \
+    'const fs=require("node:fs"); const value=JSON.parse(fs.readFileSync(process.argv[1],"utf8")).version; if(!/^[0-9]+\.[0-9]+\.[0-9]+$/.test(value)){process.exit(1)} process.stdout.write(value)' \
+    "$guest_cli_package" 2>/dev/null | tr -d '\r\n'
+}
+
 guest_eai_help_has_option() {
   local help_text="$1"
   local option="$2"
@@ -341,10 +349,12 @@ prerequisite_versions_satisfy_contract() {
   local node_version="$2"
   local npm_version="$3"
   local eai_version="$4"
+  local eai_package_version="$5"
   [[ "$git_version" == git\ version* ]] \
     && semantic_version_at_least "$node_version" 24 0 0 \
     && semantic_version_at_least "$npm_version" 1 0 0 \
-    && exact_semantic_version_at_least "$eai_version" "$expected_cli_major" "$expected_cli_minor" "$expected_cli_patch"
+    && exact_semantic_version_at_least "$eai_version" "$expected_cli_major" "$expected_cli_minor" "$expected_cli_patch" \
+    && [[ "${eai_version#v}" == "$eai_package_version" ]]
 }
 
 guest_prerequisites_ready() {
@@ -352,11 +362,13 @@ guest_prerequisites_ready() {
   local node_version=""
   local npm_version=""
   local eai_version=""
+  local eai_package_version=""
   git_version="$(guest_git_version || true)"
   node_version="$(guest_node_version || true)"
   npm_version="$(guest_npm_version || true)"
   eai_version="$(guest_eai_version || true)"
-  prerequisite_versions_satisfy_contract "$git_version" "$node_version" "$npm_version" "$eai_version" \
+  eai_package_version="$(guest_eai_package_version || true)"
+  prerequisite_versions_satisfy_contract "$git_version" "$node_version" "$npm_version" "$eai_version" "$eai_package_version" \
     && guest_eai_managed_deploy_ready
 }
 
@@ -697,7 +709,8 @@ after_git="$(guest_git_version)"
 after_node="$(guest_node_version)"
 after_npm="$(guest_npm_version)"
 after_eai="$(guest_eai_version)"
-prerequisite_versions_satisfy_contract "$after_git" "$after_node" "$after_npm" "$after_eai" \
+after_eai_package="$(guest_eai_package_version)"
+prerequisite_versions_satisfy_contract "$after_git" "$after_node" "$after_npm" "$after_eai" "$after_eai_package" \
   || guest_test_fail "Installed prerequisite versions do not satisfy the release contract."
 guest_eai_managed_deploy_ready \
   || guest_test_fail "The installed EAI CLI does not expose source choice, GitHub-link handoff, and target-tenant binding."
@@ -929,9 +942,9 @@ export EAI_VM_AI_HANDOFF_PROCESS_VERIFIED=1
 export EAI_VM_AI_HANDOFF_SCREENSHOT_VERIFIED=1
 
 guest_hash="$(macos_prl_current_user_exec_idempotent /usr/bin/shasum -a 256 /tmp/eai-setup-under-test.dmg | /usr/bin/awk '{print $1}')"
-versions="$(node --input-type=module - "$after_git" "$after_node" "$after_npm" "$after_eai" <<'NODE'
-const [git, node, npm, eai] = process.argv.slice(2);
-process.stdout.write(JSON.stringify({ git, node, npm, eai }));
+versions="$(node --input-type=module - "$after_git" "$after_node" "$after_npm" "$after_eai" "$after_eai_package" <<'NODE'
+const [git, node, npm, eai, eaiPackage] = process.argv.slice(2);
+process.stdout.write(JSON.stringify({ git, node, npm, eai, eaiPackage }));
 NODE
 )"
 before_versions="$(node --input-type=module - "$before_git" "$before_node" "$before_npm" "$before_eai" <<'NODE'

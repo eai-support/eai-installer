@@ -3202,9 +3202,15 @@ assert.match(ubuntuGuestCoreSource, /The Ubuntu EAI CLI minimum must be a semant
 assert.match(ubuntuGuestCoreSource, /eai_managed_deploy_ready/);
 assert.match(ubuntuGuestCoreSource, /eai_help_has_option/);
 assert.match(ubuntuGuestCoreSource, /exact_semver_at_least "\$eai_value"/);
+assert.match(ubuntuGuestCoreSource, /EAI CLI executable returned ambiguous version output/);
+assert.doesNotMatch(ubuntuGuestCoreSource, /grep -Eo '[^']*0-9[^']*' <<<"\$after_eai"/);
 assert.match(macosGuestAdapterSource, /guest_eai_help_has_option/);
 assert.match(macosGuestAdapterSource, /exact_semantic_version_at_least "\$eai_version"/);
+assert.match(macosGuestAdapterSource, /guest_eai_package_version/);
+assert.match(macosGuestAdapterSource, /eai_version#v/);
 assert.match(windowsGuestAdapterSource, /Has-HelpOption/);
+assert.match(windowsGuestAdapterSource, /Read-EaiPackageVersion/);
+assert.match(windowsGuestAdapterSource, /cliPackageVersion !== cliVersion/);
 assert.ok(
   windowsGuestAdapterSource.includes('match(/^v?([0-9]+\\.[0-9]+\\.[0-9]+)$/)?.[1]'),
   "Windows guest evidence must require exact EAI CLI version output",
