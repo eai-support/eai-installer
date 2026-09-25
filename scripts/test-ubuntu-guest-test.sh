@@ -143,7 +143,7 @@ for (const marker of [
   "tenantWideEnumerationPerformed: false", "noEmitTypecheckPassed",
   "eai-setup-test-v", "eai-setup-ubuntu-arm64.deb",
   "ubuntu-prerequisite-contract.json", "minimumNodeMajor: 24",
-  "The Ubuntu diagnostic harness is pinned to EAI CLI 3.18.0",
+  "The Ubuntu diagnostic harness is pinned to EAI CLI 3.17.0",
   "eai.ubuntu-remote-app-checkpoint.v1", "remote-mutation-cleanup-armed",
   "remoteAppCheckpointUncertain", "resourceIdSha256", "createdDuringThisRun",
   "processCwdVerified: true", "processArgumentsInspected: true", 'bindingSource: "exact-process-cwd"',

@@ -5,13 +5,24 @@ import vm from "node:vm";
 
 const source = (await readFile(new URL("../ui/app.js", import.meta.url), "utf8"))
   .replace(/\r\n/g, "\n");
-const readinessStart = source.indexOf("async function runReadiness() {");
+const markup = await readFile(new URL("../ui/index.html", import.meta.url), "utf8");
+const preview = await readFile(new URL("../scripts/preview-managed-deploy.mjs", import.meta.url), "utf8");
+const readinessStart = source.indexOf("function raiseReadinessFault(faultId, context) {");
 const readinessEnd = source.indexOf("\n}\n\n/**\n * One prerequisite.", readinessStart) + 2;
 assert(
   readinessStart >= 0 && readinessEnd > readinessStart,
-  "The actual installer readiness flow must remain available to the test.",
+  "The actual installer readiness and failure-routing flow must remain available to the test.",
 );
 const readiness = `${source.slice(readinessStart, readinessEnd)}\nrunReadiness()`;
+
+test("managed CLI recovery uses the retry control shipped in the installer", () => {
+  assert.match(markup, /id="setupCreate"/);
+  assert.doesNotMatch(markup, /id="retry-install"/);
+  assert.match(source, /el\("setupCreate"\)\.textContent = "Retry"/);
+  assert.match(source, /el\("setupCreate"\)\.addEventListener\("click", \(\) => \{\s*if \(machine\.faultsInForce\(state\)\.length\) return runReadiness\(\);/);
+  assert.match(preview, /page\.locator\("#setupCreate"\)/);
+  assert.doesNotMatch(preview, /#retry-install/);
+});
 
 test("managed CLI recovery completes readiness and offers the sign-in step", async () => {
   const trace = [];
@@ -61,6 +72,33 @@ test("managed CLI recovery completes readiness and offers the sign-in step", asy
   vm.runInNewContext(continuation, transitionSandbox);
   await startHandler();
   assert.equal(trace.at(-1), "signin");
+});
+
+test("an initial readiness failure reaches the screen that owns Retry", async () => {
+  const failures = [];
+  const state = { screen: "start" };
+  const sandbox = {
+    readinessInProgress: false,
+    facts: { demo: false, prereqBusy: null, prereqDetail: "", prereqPlan: [], prereqCompleted: 0, failureContext: {}, environment: { tools: [] } },
+    state,
+    machine: {
+      clear: () => {},
+      goTo: (current, screen) => { current.screen = screen; },
+    },
+    listenForBootstrapProgress: async () => {},
+    detect: async () => true,
+    checkConnectivity: async () => ({ ok: true }),
+    missingSteps: () => ["eai-cli"],
+    runBootstrapStep: async () => false,
+    helpers: { prerequisitesReady: () => false },
+    raise: (id, context) => failures.push({ id, context }),
+    note: () => {},
+    paint: () => {},
+  };
+  assert.equal(await vm.runInNewContext(readiness, sandbox), false);
+  assert.equal(state.screen, "signin");
+  assert.deepEqual(failures.map(({ id }) => id), ["prereq"]);
+  assert.deepEqual([...failures[0].context.steps], ["eai-cli"]);
 });
 
 test("readiness batches three prerequisite installs into one final environment readback", async () => {

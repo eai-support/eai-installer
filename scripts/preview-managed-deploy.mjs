@@ -25,13 +25,14 @@ const bridge = `
     core: { async invoke(command, args = {}) {
       window.__eaiPreviewCalls.push({ command, args });
       if (command === "get_e2e_configuration") return { enabled: false };
+      if (command === "check_connectivity") return { ok: true, host: "api.au.myenterprise.ai" };
       if (command === "detect_environment") return {
         platform: "macos", architecture: "arm64", package_manager: null,
         tools: [
           { command: "git", version: "git version 2.50.0" },
           { command: "node", version: "v24.8.0" },
           { command: "npm", version: "11.6.0" },
-          { command: "eai", version: installed ? "3.18.0" : null },
+          { command: "eai", version: installed ? "3.17.0" : null },
         ],
       };
       if (command === "run_bootstrap" && args.step === "eai-cli") {
@@ -93,21 +94,26 @@ if (args.includes("--capture")) {
       const errors = [];
       page.on("pageerror", (error) => errors.push(error.message));
       await page.goto(url);
-      await page.locator("#retry-install").waitFor({ state: "visible" });
-      assert.equal(await page.locator("#output").textContent(), `${message} Next: ${recovery}`);
-      assert.equal(await page.locator("#activity-title").textContent(), "EAI CLI setup failed");
-      assert.equal(await page.locator('[data-stage="eai-cli"]').getAttribute("data-state"), "error");
+      await page.locator("#setupStart").click();
+      const retry = page.locator("#setupCreate");
+      await retry.waitFor({ state: "visible" });
+      assert.equal(await retry.textContent(), "Retry");
+      assert.match(await page.locator("#checkRows").textContent(), /EAI CLI could not be installed/);
+      assert.equal(await page.locator("#setupSignin").isDisabled(), true);
       assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
-      await page.locator("#retry-install").focus();
-      assert(await page.locator("#retry-install").evaluate((button) => button === document.activeElement));
+      await retry.focus();
+      assert(await retry.evaluate((button) => button === document.activeElement));
       const failureName = `managed-deploy-incompatible-${viewport.width}x${viewport.height}.png`;
       await page.screenshot({ path: resolve(previewDirectory, failureName), fullPage: true });
       screenshots.push(`${feature}/preview/${failureName}`);
       await page.keyboard.press("Enter");
-      await page.waitForFunction(() => document.querySelector("#activity-title")?.textContent === "Installation complete");
-      assert.equal(await page.locator("#retry-install").isVisible(), false);
-      assert.equal(await page.locator('[data-stage="eai-cli"]').getAttribute("data-state"), "done");
-      assert.equal(await page.locator("#signin-title").isVisible(), true);
+      await page.waitForFunction(() => {
+        const signIn = document.querySelector("#setupSignin");
+        return signIn && !signIn.disabled;
+      });
+      assert.equal(await retry.textContent(), "Create an EAI account");
+      assert.match(await page.locator("#checkRows").textContent(), /is ready/i);
+      assert.equal(await page.locator("#setupSignin").isDisabled(), false);
       const calls = await page.evaluate(() => window.__eaiPreviewCalls);
       assert.equal(calls.filter((call) => call.command === "run_bootstrap").length, 2);
       assert.equal(calls.some((call) => ["login", "init"].includes(call.args.step)), false);
@@ -115,8 +121,8 @@ if (args.includes("--capture")) {
       const recoveryName = `managed-deploy-recovered-${viewport.width}x${viewport.height}.png`;
       await page.screenshot({ path: resolve(previewDirectory, recoveryName), fullPage: true });
       screenshots.push(`${feature}/preview/${recoveryName}`);
-      assertions.push({ viewport, exactRustFailureText: true, recoveryCommandVisible: true, noHorizontalOverflow: true,
-        keyboardRetryWorks: true, retryClearsFailure: true, signInReached: true, nativeBootstrapCalls: 2, browserErrors: errors });
+      assertions.push({ viewport, shippedRetryControlVisible: true, recoveryGuidanceVisible: true, noHorizontalOverflow: true,
+        keyboardRetryWorks: true, retryClearsFailure: true, signInEnabled: true, nativeBootstrapCalls: 2, browserErrors: errors });
       await page.close();
     }
     const sourceHashes = {};
@@ -125,7 +131,7 @@ if (args.includes("--capture")) {
     }
     const evidence = { capturedAt: new Date().toISOString(), previewUrl: url, browser: `Chromium ${browser.version()}`,
       sourceHead: execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim(),
-      sourceHashes, fixture: "Actual installer UI, controlled Tauri bridge; failure text extracted from Rust. No native install or cloud calls.",
+      sourceHashes, fixture: "Actual installer UI with a controlled Tauri bridge. The failed native result is extracted from Rust and rendered through the shipped state-machine guidance. No native install or cloud calls.",
       assertions, screenshots };
     await writeFile(resolve(previewDirectory, "browser-evidence.json"), `${JSON.stringify(evidence, null, 2)}\n`);
     console.log(JSON.stringify(evidence, null, 2));

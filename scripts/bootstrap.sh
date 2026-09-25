@@ -48,7 +48,7 @@ eai_version_supported() {
   local major="${BASH_REMATCH[1]}"
   local minor="${BASH_REMATCH[2]}"
   local patch="${BASH_REMATCH[3]}"
-  (( major > 3 )) || (( major == 3 && minor > 18 )) || (( major == 3 && minor == 18 && patch >= 0 ))
+  (( major > 3 )) || (( major == 3 && minor > 17 )) || (( major == 3 && minor == 17 && patch >= 0 ))
 }
 eai_managed_deploy_ready() {
   has eai && eai_version_supported || return 1
@@ -134,7 +134,7 @@ if [ "$EAI_MANAGED_DEPLOY_READY" != "1" ]; then
 fi
 
 if [ "$EAI_MANAGED_DEPLOY_READY" != "1" ]; then
-  echo "EAI CLI 3.18.0 or newer with source choice and GitHub-link handoff is required." >&2
+  echo "EAI CLI 3.17.0 or newer with source choice and GitHub-link handoff is required." >&2
   exit 1
 fi
 

@@ -19,7 +19,7 @@ if [[ "${1:-}" == "--preflight" ]]; then
   exec "$ROOT/scripts/vm-adapter-preflight.sh" windows "$vm_name" "$snapshot_id"
 fi
 guest_user="${EAI_WINDOWS_GUEST_USER:-eai-douglasross}"
-expected_cli_version="${EAI_EXPECTED_CLI_VERSION:-3.18.0}"
+expected_cli_version="${EAI_EXPECTED_CLI_VERSION:-3.17.0}"
 guest_normal_pid='C:\Users\Public\eai-setup-normal.pid'
 guest_e2e_pid='C:\Users\Public\eai-setup-e2e.pid'
 guest_normal_launch_receipt='C:\Users\Public\eai-setup-normal-launch.json'

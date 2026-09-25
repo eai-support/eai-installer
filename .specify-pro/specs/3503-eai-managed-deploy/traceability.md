@@ -1,5 +1,8 @@
 # Traceability
 
+Cross-repository requirement definitions and ownership are canonical in the
+[Issue #3503 specification](https://github.com/enterpriseaigroup/Issues2025/issues/3503#issuecomment-5826177803).
+
 | Requirement | Planned implementation | Owned evidence |
 | --- | --- | --- |
 | DTE-056, DTE-088 | manifest, bootstrap scripts, release safeguards | bootstrap, manifest, release tests |

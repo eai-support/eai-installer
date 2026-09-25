@@ -12,7 +12,7 @@ vm_name="${EAI_UBUNTU_VM_NAME:-Ubuntu 24.04.3 ARM64}"
 snapshot_id="${EAI_UBUNTU_SNAPSHOT_ID:-2119c623-791d-411a-b599-087dfc5eb9fb}"
 guest_user="${EAI_UBUNTU_GUEST_USER:-parallels}"
 autologin_user="${EAI_UBUNTU_AUTOLOGIN_USER:-$guest_user}"
-expected_cli_version="${EAI_EXPECTED_CLI_VERSION:-3.18.0}"
+expected_cli_version="${EAI_EXPECTED_CLI_VERSION:-3.17.0}"
 admin_service="${EAI_UBUNTU_ADMIN_KEYCHAIN_SERVICE:-eai-release-ubuntu-vm}"
 guest_deb="/tmp/eai-setup-under-test.deb"
 guest_receipt="/tmp/eai-setup-e2e-receipt.json"
@@ -829,8 +829,8 @@ expected_download_url="https://github.com/eai-support/eai-installer/releases/dow
 [[ "$(basename "$EAI_VM_ASSET")" == "$expected_asset_name" \
   && "$EAI_VM_DOWNLOAD_URL" == "$expected_download_url" ]] \
   || guest_test_fail "The Ubuntu adapter requires the exact published ARM64 prerelease asset URL and filename."
-[[ "$expected_cli_version" == 3.18.0 ]] \
-  || guest_test_fail "The Ubuntu diagnostic harness is pinned to EAI CLI 3.18.0."
+[[ "$expected_cli_version" == 3.17.0 ]] \
+  || guest_test_fail "The Ubuntu diagnostic harness is pinned to EAI CLI 3.17.0."
 [[ "$guest_user" =~ ^[a-z_][a-z0-9_-]*[$]?$ && "$autologin_user" == "$guest_user" ]] \
   || guest_test_fail "The Ubuntu test and automatic-login users must be the same valid local account."
 [[ -f "$input_helper" && -f "$ocr_source" ]] \
@@ -981,7 +981,7 @@ const evidence = {
   status: "pinned", platform: "ubuntu", minimumNodeMajor: 24,
   npmRequired: true, npmMinimumVersionImposedByHarness: false,
   expectedCliVersion: process.env.EAI_UBUNTU_EXPECTED_CLI,
-  expectedCliVersionPinned: process.env.EAI_UBUNTU_EXPECTED_CLI === "3.18.0",
+  expectedCliVersionPinned: process.env.EAI_UBUNTU_EXPECTED_CLI === "3.17.0",
   aptCandidatePredictedByHarness: false, aptIndexesRefreshedByHarness: false,
   repositoryAddedByHarness: false,
   noHarnessPrerequisiteRepair: true, verifiedAt: new Date().toISOString(),
@@ -1284,7 +1284,7 @@ const evidence = {status: "verified", platform: "ubuntu", normalReleasedAppLaunc
     ownerPackageStatus: "install ok installed"},
   npmSeparateDebPackageRequired: false,
   expectedCliVersion: process.env.EAI_EXPECTED_CLI,
-  expectedCliVersionPinned: process.env.EAI_EXPECTED_CLI === "3.18.0", packageOwnershipVerified: true,
+  expectedCliVersionPinned: process.env.EAI_EXPECTED_CLI === "3.17.0", packageOwnershipVerified: true,
   eaiUserPrefixVerified: true, graphicalPolkitApprovalCount: Number(process.env.EAI_POLKIT_APPROVALS),
   verifiedAt: new Date().toISOString(), sanitized: true, diagnostic: true, productionGate: false};
 fs.writeFileSync(process.env.EAI_UBUNTU_PREREQ_FILE, `${JSON.stringify(evidence, null, 2)}\n`);

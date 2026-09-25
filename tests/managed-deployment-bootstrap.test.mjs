@@ -87,10 +87,10 @@ exit 1`,
 }
 
 test("accepts the minimum CLI only when managed deployment is executable", async () => {
-  const harness = await createBootstrapHarness({ version: "3.18.0", deployReady: true });
+  const harness = await createBootstrapHarness({ version: "3.17.0", deployReady: true });
   try {
     assert.equal(harness.run.status, 0, harness.run.stderr);
-    assert.match(harness.run.stdout, /^(?:EAI CLI: )?3\.18\.0\s*$/m);
+    assert.match(harness.run.stdout, /^(?:EAI CLI: )?3\.17\.0\s*$/m);
     assert.match(harness.run.stdout, /Use 'eai deploy app --help' when you are ready to choose hosting/);
     await assert.rejects(readFile(harness.npmLog, "utf8"), { code: "ENOENT" });
     assert.deepEqual((await readFile(harness.eaiLog, "utf8")).trim().split(/\r?\n/), [
@@ -103,7 +103,7 @@ test("accepts the minimum CLI only when managed deployment is executable", async
 });
 
 test("does not reinstall an already capable CLI when automatic installation is allowed", async () => {
-  const harness = await createBootstrapHarness({ version: "3.18.0", deployReady: true, autoInstall: true });
+  const harness = await createBootstrapHarness({ version: "3.17.0", deployReady: true, autoInstall: true });
   try {
     assert.equal(harness.run.status, 0, harness.run.stderr);
     await assert.rejects(readFile(harness.npmLog, "utf8"), { code: "ENOENT" });
@@ -112,8 +112,8 @@ test("does not reinstall an already capable CLI when automatic installation is a
   }
 });
 
-test("rejects a pre-managed-deploy CLI without silently replacing it", async () => {
-  const harness = await createBootstrapHarness({ version: "3.17.9", deployReady: true });
+test("rejects a CLI below the released baseline without silently replacing it", async () => {
+  const harness = await createBootstrapHarness({ version: "3.16.99", deployReady: true });
   try {
     assert.equal(harness.run.status, 1, harness.run.stderr);
     assert.match(harness.run.stderr, missingCliPattern);
@@ -124,7 +124,7 @@ test("rejects a pre-managed-deploy CLI without silently replacing it", async () 
 });
 
 test("rejects a compatible version when the deploy command is unavailable", async () => {
-  const harness = await createBootstrapHarness({ version: "3.18.0", deployReady: false });
+  const harness = await createBootstrapHarness({ version: "3.17.0", deployReady: false });
   try {
     assert.equal(harness.run.status, 1, harness.run.stderr);
     assert.match(harness.run.stderr, missingCliPattern);
@@ -135,7 +135,7 @@ test("rejects a compatible version when the deploy command is unavailable", asyn
 });
 
 test("rejects customer-only CLI help that lacks source choice and GitHub-link handoff", async () => {
-  const harness = await createBootstrapHarness({ version: "3.18.0", deployReady: true, sourceReady: false });
+  const harness = await createBootstrapHarness({ version: "3.17.0", deployReady: true, sourceReady: false });
   try {
     assert.equal(harness.run.status, 1, harness.run.stderr);
     assert.match(harness.run.stderr, missingCliPattern);

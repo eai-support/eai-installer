@@ -425,7 +425,7 @@ exact scoped package name privately on the host, preserve richer receipts, and e
 boolean failure checkpoint without enumerating tenant resources.
 
 The Ubuntu static contract additionally proves that the expected CLI is pinned
-to `3.18.0`, Node.js 24+ is verified after the released product runs without a
+to `3.17.0`, Node.js 24+ is verified after the released product runs without a
 harness repair, and an executable npm is resolved to a root-owned target owned
 by the fully installed `nodejs` package without requiring a separate `npm`
 Debian package. A host-only provider fixture covers the NodeSource-style layout
@@ -433,7 +433,7 @@ where `npm --version` succeeds while `dpkg-query -W npm` does not.
 
 Both checkpoint and final Resource API queries execute from the exact generated
 project, use the scalar `{"verticalKey":"<exact-app-key>"}` filter expected by
-CLI 3.18.0, and parse its `{resources,totalDocs}` envelope. Static checks reject
+CLI 3.17.0, and parse its `{resources,totalDocs}` envelope. Static checks reject
 the earlier nested `equals` filter and require both query sites to remain scalar.
 The adapter enforces the write-ahead
 order `cleanup arm -> durable app state -> mutating E2E launch`, retains the arm

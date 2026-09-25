@@ -1,7 +1,7 @@
 ---
 feature: 3503-eai-managed-deploy
 created: 2026-09-23
-updated: 2026-09-23
+updated: 2026-09-25
 workflowProfile: enterpriseai
 status: active
 ---
@@ -19,8 +19,8 @@ status: active
 
 | Change shown | Evidence | Feedback | Next change | Open UX issues |
 | --- | --- | --- | --- | --- |
-| Exact minimum-version failure and Try again action | Four screenshots at native default/minimum viewport sizes | Agent confirmed text wraps and keyboard focus is visible | Successful retry now reaches sign-in instead of leaving an empty panel | none |
+| Existing EAI CLI failure row and shipped Retry action | Four screenshots at native default/minimum viewport sizes | Agent confirmed text wraps, keyboard focus is visible, and browser sign-in is enabled after retry | Initial readiness failures now reach the sign-in screen that owns Retry | none |
 
-The existing installer layout, logo, colors and copy were preserved. This is an installer surface, so the EAI app-template baseline, Storybook stories, package lanes and theme overrides are not applicable. Browser assertions prove no horizontal overflow, visible recovery, keyboard activation, terminal prerequisite state and absence of page errors. Existing live-region markup is retained.
+The existing installer layout, logo, colors and copy were preserved. This is an installer surface, so the EAI app-template baseline, Storybook stories, package lanes and theme overrides are not applicable. Browser assertions prove no horizontal overflow, visible recovery through `#setupCreate`, keyboard activation, terminal prerequisite state and absence of page errors. Existing status-region markup is retained.
 
-User feedback is pending: review whether the minimum-version recovery instruction is clear. No additional visual issue remains in the tested scope. Visible native browser presentation could not be completed because the computer-use capture service was unavailable; screenshot presentation and automated Chromium rendering succeeded.
+No additional visual issue remains in the tested scope. The controlled browser proof does not replace the separate signed-bundle and live Installer-first release gates.

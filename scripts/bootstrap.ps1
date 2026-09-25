@@ -27,7 +27,7 @@ function Has-EaiManagedDeploy {
   $script:EaiCliVersion = $versionOutput
   if ($versionOutput -notmatch '^v?(\d+)\.(\d+)\.(\d+)') { return $false }
   $currentVersion = [version]::new([int]$Matches[1], [int]$Matches[2], [int]$Matches[3])
-  if ($currentVersion -lt [version]::new(3, 18, 0)) { return $false }
+  if ($currentVersion -lt [version]::new(3, 17, 0)) { return $false }
   $deployHelp = & eai deploy app --help 2>$null
   if ($LASTEXITCODE -ne 0) { return $false }
   $helpText = $deployHelp -join "`n"
@@ -61,7 +61,7 @@ if (-not $eaiManagedDeployReady) {
 }
 
 if (-not $eaiManagedDeployReady) {
-  throw "EAI CLI 3.18.0 or newer with source choice and GitHub-link handoff is required."
+  throw "EAI CLI 3.17.0 or newer with source choice and GitHub-link handoff is required."
 }
 
 Write-Host (git --version)

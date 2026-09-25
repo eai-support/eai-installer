@@ -1,3 +1,6 @@
+#[cfg(all(feature = "e2e-local-template", not(debug_assertions)))]
+compile_error!("the e2e-local-template feature is restricted to debug and test builds");
+
 use serde::{Deserialize, Serialize};
 use std::cmp::Reverse;
 #[cfg(unix)]
@@ -223,11 +226,10 @@ struct E2eConfiguration {
 
 const EAI_SIGNUP_URL: &str = "https://www.enterpriseaigroup.com/signup/developer";
 
-// This is the minimum CLI version known to be compatible with this installer
-// release. The installer updates an older CLI during bootstrap, but local
-// readiness must not depend on a live npm metadata request: an offline check
-// must distinguish "not compatible yet" from "not installed" deterministically.
-const MIN_EAI_CLI_VERSION: (u64, u64, u64) = (3, 18, 0);
+// Keep the current released baseline until the coordinated deployment CLI is
+// published. The executable help check below is the feature gate, so an
+// unreleased version number never becomes part of the installer contract.
+const MIN_EAI_CLI_VERSION: (u64, u64, u64) = (3, 17, 0);
 const MIN_NODE_MAJOR_VERSION: u64 = 24;
 
 fn usable_home_path(path: PathBuf) -> Option<PathBuf> {
@@ -1217,8 +1219,38 @@ fn get_e2e_configuration() -> E2eConfiguration {
     }
 }
 
+fn is_local_git_checkout(path: &Path) -> bool {
+    let marker = path.join(".git");
+    if marker.is_dir() {
+        return true;
+    }
+    if !marker.is_file() {
+        return false;
+    }
+    let Ok(contents) = fs::read_to_string(&marker) else {
+        return false;
+    };
+    let Some(git_dir) = contents
+        .lines()
+        .next()
+        .and_then(|line| line.strip_prefix("gitdir:"))
+    else {
+        return false;
+    };
+    let git_dir = Path::new(git_dir.trim());
+    if git_dir.as_os_str().is_empty() {
+        return false;
+    }
+    let resolved = if git_dir.is_absolute() {
+        git_dir.to_path_buf()
+    } else {
+        path.join(git_dir)
+    };
+    resolved.is_dir()
+}
+
 fn validate_e2e_template_source(path: &Path) -> Result<String, String> {
-    if !path.is_absolute() || !path.join(".git").is_dir() {
+    if !path.is_absolute() || !path.is_dir() || !is_local_git_checkout(path) {
         return Err("The E2E template source must be an absolute local Git checkout.".to_string());
     }
     path.canonicalize()
@@ -1230,11 +1262,16 @@ fn e2e_template_source() -> Result<Option<String>, String> {
     if env::var("EAI_SETUP_E2E").ok().as_deref() != Some("1") {
         return Ok(None);
     }
-    env::var("EAI_SETUP_E2E_TEMPLATE_SOURCE")
+    let source = env::var("EAI_SETUP_E2E_TEMPLATE_SOURCE")
         .ok()
-        .filter(|value| !value.is_empty())
-        .map(|source| validate_e2e_template_source(Path::new(&source)))
-        .transpose()
+        .filter(|value| !value.is_empty());
+    let Some(source) = source else {
+        return Ok(None);
+    };
+    if !cfg!(any(test, feature = "e2e-local-template")) {
+        return Err("Local E2E template overrides are unavailable in production builds.".to_string());
+    }
+    validate_e2e_template_source(Path::new(&source)).map(Some)
 }
 
 #[tauri::command]
@@ -2026,7 +2063,7 @@ fn run_bootstrap_sync(app: AppHandle, step: String, project_name: Option<String>
                     }
                     emit_progress(&app, "eai-cli", "EAI CLI ready", "Verifying the eai command.", Some(90), Some(5));
                     if eai_cli_version().is_none() {
-                        return command_result("eai-cli", false, "npm finished, but the installed EAI CLI is missing the compatible Deploy to EAI command.", Some("Choose Try again. EAI Setup requires EAI CLI 3.18.0 or newer with `eai deploy app --source` and GitHub-link handoff."), Some(format!("{stdout}\n{stderr}")), true);
+                        return command_result("eai-cli", false, "npm finished, but the installed EAI CLI is missing the compatible Deploy to EAI command.", Some("Choose Try again. EAI Setup requires EAI CLI 3.17.0 or newer with `eai deploy app --source` and GitHub-link handoff."), Some(format!("{stdout}\n{stderr}")), true);
                     }
                     let command = if cfg!(target_os = "windows") {
                         "npm install --global --prefix %APPDATA%\\npm @enterpriseai/cli"
@@ -2301,28 +2338,43 @@ mod tests {
     use std::io::Cursor;
 
     #[test]
-    fn eai_cli_readiness_requires_version_3_18_and_managed_deploy_capability() {
+    fn eai_cli_readiness_requires_the_released_baseline_and_managed_deploy_capability() {
         let complete_help = "--target <target> --source <choice> --github-link-session <id>";
-        assert!(!eai_cli_is_compatible((3, 17, 99), complete_help));
-        assert!(!eai_cli_is_compatible((3, 18, 0), ""));
-        assert!(!eai_cli_is_compatible((3, 18, 0), "--source <choice>"));
-        assert!(!eai_cli_is_compatible((3, 18, 0), "--github-link-session <id>"));
-        assert!(eai_cli_is_compatible((3, 18, 0), complete_help));
+        assert!(!eai_cli_is_compatible((3, 16, 99), complete_help));
+        assert!(!eai_cli_is_compatible((3, 17, 0), ""));
+        assert!(!eai_cli_is_compatible((3, 17, 0), "--source <choice>"));
+        assert!(!eai_cli_is_compatible((3, 17, 0), "--github-link-session <id>"));
+        assert!(eai_cli_is_compatible((3, 17, 0), complete_help));
         assert!(eai_cli_is_compatible((4, 0, 0), complete_help));
     }
 
     #[test]
-    fn e2e_template_override_requires_an_absolute_local_git_checkout() {
+    fn e2e_template_override_accepts_checkouts_and_linked_worktrees() {
         assert!(validate_e2e_template_source(Path::new("relative/template")).is_err());
-        let directory = env::temp_dir().join(format!("eai-setup-template-test-{}", Uuid::new_v4()));
-        fs::create_dir(&directory).expect("template test directory should be created");
-        assert!(validate_e2e_template_source(&directory).is_err());
-        fs::create_dir(directory.join(".git")).expect("template test Git directory should be created");
+        let root = env::temp_dir().join(format!("eai-setup-template-test-{}", Uuid::new_v4()));
+        let checkout = root.join("checkout");
+        fs::create_dir_all(&checkout).expect("template test directory should be created");
+        assert!(validate_e2e_template_source(&checkout).is_err());
+        fs::create_dir(checkout.join(".git")).expect("template test Git directory should be created");
         assert_eq!(
-            validate_e2e_template_source(&directory).expect("absolute checkout should be accepted"),
-            directory.canonicalize().expect("directory should resolve").to_string_lossy()
+            validate_e2e_template_source(&checkout).expect("absolute checkout should be accepted"),
+            checkout.canonicalize().expect("directory should resolve").to_string_lossy()
         );
-        fs::remove_dir_all(directory).expect("template test directory should be removed");
+
+        let worktree = root.join("worktree");
+        let git_metadata = root.join("git-metadata");
+        fs::create_dir(&worktree).expect("worktree directory should be created");
+        fs::create_dir(&git_metadata).expect("worktree Git metadata should be created");
+        fs::write(worktree.join(".git"), "gitdir: ../git-metadata\n")
+            .expect("worktree marker should be written");
+        assert_eq!(
+            validate_e2e_template_source(&worktree).expect("linked worktree should be accepted"),
+            worktree.canonicalize().expect("worktree should resolve").to_string_lossy()
+        );
+        fs::write(worktree.join(".git"), "not-a-gitdir\n")
+            .expect("invalid worktree marker should be written");
+        assert!(validate_e2e_template_source(&worktree).is_err());
+        fs::remove_dir_all(root).expect("template test directories should be removed");
     }
 
     #[test]

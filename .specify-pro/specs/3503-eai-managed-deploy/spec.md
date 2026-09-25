@@ -1,5 +1,8 @@
 # Issue #3503: Installer managed-deployment capability gate
 
+The coordinated 95-requirement deployment specification is recorded in
+[Issue #3503](https://github.com/enterpriseaigroup/Issues2025/issues/3503#issuecomment-5826177803).
+
 ## Approval and scope
 
 The owner approved this hardening scope on 2026-09-25. It covers reviewed Installer capability, test-isolation, worktree, and recovery fixes while preserving successful setup and both source journeys. It does not authorize merge, release, deployment, activation, billing, or destructive live tests.
@@ -23,7 +26,7 @@ The owner approved this hardening scope on 2026-09-25. It covers reviewed Instal
 ## Acceptance
 
 1. Production builds ignore or reject ordinary environment-only local-template overrides.
-2. Test builds can opt into a bounded local template through an explicit compile-time/test capability.
+2. Debug/test builds can opt into a bounded local template through the explicit `e2e-local-template` compile feature; release builds reject that feature and runtime-only overrides.
 3. Normal repositories and linked Git worktrees both pass template validation.
 4. Recovery automation selects an element that exists in the shipped UI, and an owned test proves the retry interaction.
 5. Bootstrap scripts reject a version-compatible CLI that lacks the managed deployment flags.
