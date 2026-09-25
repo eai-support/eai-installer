@@ -2497,10 +2497,13 @@ mod tests {
     #[test]
     fn e2e_template_override_accepts_checkouts_and_linked_worktrees() {
         assert!(validate_e2e_template_source(Path::new("relative/template")).is_err());
-        let root = env::temp_dir()
+        #[cfg(unix)]
+        let temporary_root = env::temp_dir()
             .canonicalize()
-            .expect("temporary root should resolve")
-            .join(format!("eai-setup-template-test-{}", Uuid::new_v4()));
+            .expect("temporary root should resolve");
+        #[cfg(not(unix))]
+        let temporary_root = env::temp_dir();
+        let root = temporary_root.join(format!("eai-setup-template-test-{}", Uuid::new_v4()));
         let checkout = root.join("checkout");
         fs::create_dir_all(&checkout).expect("template test directory should be created");
         assert!(validate_e2e_template_source(&checkout).is_err());
