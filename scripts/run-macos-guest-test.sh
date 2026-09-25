@@ -26,8 +26,8 @@ normal_pid_file="/tmp/eai-setup-normal.pid"
 e2e_pid_file="/tmp/eai-setup-e2e.pid"
 guest_node="/Users/$guest_user/.eai-setup/node/bin/node"
 guest_npm_cli="/Users/$guest_user/.eai-setup/node/lib/node_modules/npm/bin/npm-cli.js"
-guest_cli="/Users/$guest_user/.eai-setup/npm-global/lib/node_modules/@enterpriseai/cli/dist/index.js"
-guest_cli_package="/Users/$guest_user/.eai-setup/npm-global/lib/node_modules/@enterpriseai/cli/package.json"
+guest_cli_package_root="/Users/$guest_user/.eai-setup/npm-global/lib/node_modules/@enterpriseai/cli"
+guest_cli_package="$guest_cli_package_root/package.json"
 input_helper="$ROOT/scripts/parallels-input.mjs"
 ocr_binary="${TMPDIR:-/tmp}/eai-installer-macos-ocr-match"
 work_dir="$(mktemp -d)"
@@ -317,8 +317,13 @@ guest_npm_version() {
   macos_prl_current_user_exec_idempotent "$guest_node" "$guest_npm_cli" --version 2>/dev/null | tr -d '\r\n'
 }
 
+guest_eai_entrypoint() {
+  macos_prl_current_user_eai_cli_entrypoint "$guest_node" "$guest_cli_package_root" 2>/dev/null
+}
+
 guest_eai_version() {
-  macos_prl_current_user_exec_idempotent /bin/test -f "$guest_cli" >/dev/null 2>&1 || return 1
+  local guest_cli=""
+  guest_cli="$(guest_eai_entrypoint)" || return 1
   macos_prl_current_user_exec_idempotent "$guest_node" "$guest_cli" --version 2>/dev/null | tr -d '\r\n'
 }
 
@@ -336,7 +341,9 @@ guest_eai_help_has_option() {
 }
 
 guest_eai_managed_deploy_ready() {
+  local guest_cli=""
   local deploy_help=""
+  guest_cli="$(guest_eai_entrypoint)" || return 1
   deploy_help="$(macos_prl_current_user_exec_idempotent "$guest_node" "$guest_cli" deploy app --help 2>/dev/null)" \
     || return 1
   guest_eai_help_has_option "$deploy_help" --source \

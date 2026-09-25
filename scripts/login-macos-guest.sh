@@ -240,10 +240,12 @@ guest_user="$MACOS_PRL_CURRENT_USER_NAME"
 guest_home="$MACOS_PRL_CURRENT_USER_HOME"
 [[ "$guest_home" == /Users/* ]] || fail "The signed-in guest home directory could not be resolved."
 guest_node="$guest_home/.eai-setup/node/bin/node"
-guest_cli="$guest_home/.eai-setup/npm-global/lib/node_modules/@enterpriseai/cli/dist/index.js"
+guest_cli_package_root="$guest_home/.eai-setup/npm-global/lib/node_modules/@enterpriseai/cli"
 macos_prl_current_user_exec_idempotent /bin/test -x "$guest_node" >/dev/null 2>&1 \
   || fail "The EAI-managed Node runtime required for CLI login is not installed."
-macos_prl_current_user_exec_idempotent /bin/test -f "$guest_cli" >/dev/null 2>&1 \
+guest_cli="$(macos_prl_current_user_eai_cli_entrypoint "$guest_node" "$guest_cli_package_root" 2>/dev/null)" \
+  || fail "The EAI CLI required for login is not installed."
+[[ "$guest_cli" == "$guest_cli_package_root"/* ]] \
   || fail "The EAI CLI required for login is not installed."
 
 cli_identity_is_active() {
