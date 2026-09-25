@@ -1263,7 +1263,7 @@ fn git_checkout_path(path: &Path, argument: &str) -> Option<PathBuf> {
     }
     let value = String::from_utf8(output.stdout).ok()?;
     let value = value.trim();
-    if value.is_empty() || value.contains(['\r', '\n']) {
+    if value.is_empty() || value.contains('\r') || value.contains('\n') {
         return None;
     }
     PathBuf::from(value).canonicalize().ok()
