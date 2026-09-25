@@ -1,29 +1,29 @@
 {
-  "capturedAt": "2026-09-22T21:40:26.251Z",
-  "previewUrl": "http://127.0.0.1:43183/",
-  "browser": "Chromium 147.0.7727.15",
-  "sourceHead": "d638cd0e93156b6ca9af5705e68b66e19d32e6a1",
+  "capturedAt": "2026-09-25T04:06:40.317Z",
+  "previewUrl": "http://127.0.0.1:53311/",
+  "browser": "Chromium 153.0.8010.12",
+  "sourceHead": "dea0b7e8e9ae0e9e83fae11785efeb8cdb264291",
   "sourceHashes": {
-    "ui/index.html": "3db36e41f32bac0eeddf44be356f67508f8e15c8209dd29e0ab3838b63f60b95",
-    "ui/styles.css": "af005bb1fd3ed88dc2c335db523c17b49024a5e37017ab3a6e7a7c9a89837648",
-    "ui/app.js": "1ebe0e40c249ca8266d38cc3a88b52c9e72014b9f1650d724fef8e055a1e9c31",
-    "ui/wizard-state.js": "d18967fdfae90f993d0029b348e31e03d169b93996f4765acc639243560cbc4d",
-    "src-tauri/src/main.rs": "e01a161db2c5e285eb28cbcebe167fdf5e26224dc0bf8a9522046e2f897b3d1a",
-    "scripts/preview-managed-deploy.mjs": "9bb7af429b6e3ce77dfae6a1c8da662b16540a76d201a52d10b9fd37e5651760"
+    "ui/index.html": "13861740d1b2496b8a389792d75c966eb8af23017f01450f0f2bf125be06e1a9",
+    "ui/styles.css": "d53b5902a2ffd92be0c29a74f91dfa768c7bb96bf9e4b3dc852d110a69b88d01",
+    "ui/app.js": "e5e042303e7c3c06db487111cf99b83b3a6af660d069d71a0c56d628fac00c6c",
+    "ui/wizard-state.js": "88538e941e482ae19c2969c73213a672e4c4227f1447e3deb2ca6e56ae452104",
+    "src-tauri/src/main.rs": "1cab8858a8632b87886c8f1e3fffea67104e90eb403d14f6e67cad0b6b663e95",
+    "scripts/preview-managed-deploy.mjs": "6a1ac518cece03527ef9131396e29af6e8e2a841ae37a7d258fb14a017738d42"
   },
-  "fixture": "Actual installer UI, controlled Tauri bridge; failure text extracted from Rust. No native install or cloud calls.",
+  "fixture": "Actual installer UI with a controlled Tauri bridge. The failed native result is extracted from Rust and rendered through the shipped state-machine guidance. No native install or cloud calls.",
   "assertions": [
     {
       "viewport": {
         "width": 900,
         "height": 680
       },
-      "exactRustFailureText": true,
-      "recoveryCommandVisible": true,
+      "shippedRetryControlVisible": true,
+      "recoveryGuidanceVisible": true,
       "noHorizontalOverflow": true,
       "keyboardRetryWorks": true,
       "retryClearsFailure": true,
-      "signInReached": true,
+      "signInEnabled": true,
       "nativeBootstrapCalls": 2,
       "browserErrors": []
     },
@@ -32,12 +32,12 @@
         "width": 720,
         "height": 540
       },
-      "exactRustFailureText": true,
-      "recoveryCommandVisible": true,
+      "shippedRetryControlVisible": true,
+      "recoveryGuidanceVisible": true,
       "noHorizontalOverflow": true,
       "keyboardRetryWorks": true,
       "retryClearsFailure": true,
-      "signInReached": true,
+      "signInEnabled": true,
       "nativeBootstrapCalls": 2,
       "browserErrors": []
     }
