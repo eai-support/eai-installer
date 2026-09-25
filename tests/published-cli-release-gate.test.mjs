@@ -6,7 +6,7 @@ import test from "node:test";
 
 import { verifyInstalledCliPackage } from "../scripts/verify-published-cli.mjs";
 
-async function createCliFixture({ version = "3.17.0", versionOutput = version, help = "--source --github-link-session --target-tenant-id", bin = { eai: "dist/index.js" } } = {}) {
+async function createCliFixture({ version = "3.17.0", versionOutput = version, versionError = "", help = "--source --github-link-session --target-tenant-id", bin = { eai: "dist/index.js" } } = {}) {
   const root = await mkdtemp(join(tmpdir(), "eai-installer-published-cli-"));
   const dist = join(root, "dist");
   await mkdir(dist);
@@ -18,7 +18,10 @@ async function createCliFixture({ version = "3.17.0", versionOutput = version, h
   }, null, 2)}\n`);
   await writeFile(join(dist, "index.js"), `
 const args = process.argv.slice(2);
-if (args.length === 1 && args[0] === "--version") console.log(${JSON.stringify(versionOutput)});
+if (args.length === 1 && args[0] === "--version") {
+  console.log(${JSON.stringify(versionOutput)});
+  process.stderr.write(${JSON.stringify(versionError)});
+}
 else if (args.join(" ") === "deploy app --help") console.log(${JSON.stringify(help)});
 else process.exitCode = 2;
 `);
@@ -84,6 +87,15 @@ test("rejects lookalike option names", async () => {
 
 test("rejects extra or mismatched version text", async () => {
   const fixture = await createCliFixture({ versionOutput: "wrapper 3.17.0; actual runtime 3.16.0" });
+  try {
+    await assert.rejects(verifyInstalledCliPackage(fixture, "3.17.0"), /executable version does not match/);
+  } finally {
+    await rm(fixture, { recursive: true, force: true });
+  }
+});
+
+test("rejects a version that also writes to stderr", async () => {
+  const fixture = await createCliFixture({ versionError: "unexpected wrapper warning\\n" });
   try {
     await assert.rejects(verifyInstalledCliPackage(fixture, "3.17.0"), /executable version does not match/);
   } finally {

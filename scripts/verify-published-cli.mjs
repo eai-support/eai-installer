@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtemp, mkdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
@@ -61,13 +61,24 @@ function isolatedNpmEnvironment(home, cache, userConfig) {
 }
 
 function runCli(entrypoint, args, home) {
-  return execFileSync(process.execPath, [entrypoint, ...args], {
+  const result = spawnSync(process.execPath, [entrypoint, ...args], {
     encoding: "utf8",
     env: isolatedCliEnvironment(home),
     timeout: 30_000,
     maxBuffer: 4 * 1024 * 1024,
     stdio: ["ignore", "pipe", "pipe"],
   });
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    throw new Error(`Published ${packageName} command failed: ${(result.stderr || result.stdout || "no output").trim()}`);
+  }
+  return { stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
+}
+
+function combinedOutput({ stdout, stderr }) {
+  if (!stdout) return stderr;
+  if (!stderr) return stdout;
+  return `${stdout}\n${stderr}`;
 }
 
 export async function verifyInstalledCliPackage(packageRoot, minimumVersion, home = packageRoot) {
@@ -92,12 +103,12 @@ export async function verifyInstalledCliPackage(packageRoot, minimumVersion, hom
   }
   if (!(await stat(entrypoint)).isFile()) throw new Error(`Published ${packageName} eai executable is not a regular file.`);
 
-  const versionOutput = runCli(entrypoint, ["--version"], home).trim();
+  const versionOutput = combinedOutput(runCli(entrypoint, ["--version"], home)).trim();
   const executableVersion = versionOutput.startsWith("v") ? versionOutput.slice(1) : versionOutput;
   if (!/^\d+\.\d+\.\d+$/.test(executableVersion) || executableVersion !== manifest.version) {
     throw new Error(`Published ${packageName} executable version does not match package ${manifest.version}.`);
   }
-  const help = runCli(entrypoint, ["deploy", "app", "--help"], home);
+  const help = combinedOutput(runCli(entrypoint, ["deploy", "app", "--help"], home));
   for (const flag of ["--source", "--github-link-session", "--target-tenant-id"]) {
     if (!helpHasOption(help, flag)) throw new Error(`Published ${packageName} ${manifest.version} lacks ${flag} in eai deploy app --help.`);
   }

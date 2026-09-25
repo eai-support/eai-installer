@@ -1003,7 +1003,14 @@ fn eai_cli_is_compatible(current_version: (u64, u64, u64), deploy_help: &str) ->
 }
 
 fn eai_cli_version_for(program: &str) -> Option<String> {
-    let current = version(program, &["--version"])?;
+    let (stdout, stderr) = run_program(program, &["--version"]).ok()?;
+    let current = if stdout.is_empty() {
+        stderr
+    } else if stderr.is_empty() {
+        stdout
+    } else {
+        format!("{stdout}\n{stderr}")
+    };
     let current_version = exact_semantic_version(&current)?;
     let (stdout, stderr) = run_program(program, &["deploy", "app", "--help"]).ok()?;
     eai_cli_is_compatible(current_version, &format!("{stdout}\n{stderr}")).then_some(current)
@@ -2538,6 +2545,20 @@ mod tests {
 
         let program = fixture.to_string_lossy().to_string();
         assert_eq!(eai_cli_version_for(&program).as_deref(), Some("3.17.0"));
+
+        #[cfg(unix)]
+        fs::write(
+            &fixture,
+            "#!/bin/sh\nif [ \"${1:-}\" = --version ]; then echo 3.17.0; echo unexpected >&2; exit 0; fi\nif [ \"$*\" = \"deploy app --help\" ]; then echo '--source <choice> --github-link-session <id> --target-tenant-id <tenant>'; exit 0; fi\nexit 1\n",
+        )
+        .expect("ambiguous CLI probe fixture should be written");
+        #[cfg(target_os = "windows")]
+        fs::write(
+            &fixture,
+            "@echo off\r\nif \"%~1\"==\"--version\" (echo 3.17.0& echo unexpected 1>&2& exit /b 0)\r\nif \"%*\"==\"deploy app --help\" (echo --source ^<choice^> --github-link-session ^<id^> --target-tenant-id ^<tenant^>& exit /b 0)\r\nexit /b 1\r\n",
+        )
+        .expect("ambiguous CLI probe fixture should be written");
+        assert_eq!(eai_cli_version_for(&program), None);
 
         #[cfg(unix)]
         fs::write(
