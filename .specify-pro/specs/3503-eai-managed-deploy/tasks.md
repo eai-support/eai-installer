@@ -13,11 +13,11 @@
 
 ## Local validation on 2026-09-25
 
-- `npm test`: passed on the final local source, including 22 owned tests, 77 scenario states, release-gate contracts, Windows watchdog tests, and production safeguards.
-- Focused managed-deployment tests: 16 passed, covering distinct missing/incompatible CLI diagnostics, exact version output, exact matching for all three required command options, and real Retry control recovery.
+- `npm test`: passed on the final local source, including 25 owned tests, 77 scenario states, release-gate contracts, Windows watchdog tests, and production safeguards.
+- Focused managed-deployment tests: 18 passed, covering distinct missing/incompatible CLI diagnostics, exact complete version output and exit status, exact matching for all three required command options, and real Retry control recovery.
 - Bootstrap, desktop, and cross-platform release evidence now reject wrapped or ambiguous CLI version output; the successful exact-version flow is unchanged.
 - The test-only local template override requires Git to recognize the exact checkout and metadata directory, and all three VM adapters bind exact executable output to the installed CLI package version.
-- Published-package gate fixtures: 6 passed, covering the released baseline, exact version output, and exact command option tokens. Live readback failed closed as intended because npm `@enterpriseai/cli@3.18.1` lacks `--source`; Installer publication stays blocked until the CLI producer releases the feature.
+- Published-package gate fixtures: 7 passed, covering the released baseline, exact `eai` bin ownership, exact version output, and exact command option tokens. Live readback failed closed as intended because npm `@enterpriseai/cli@3.18.1` lacks `--source`; Installer publication stays blocked until the CLI producer releases the feature.
 - `npm run test:journey`: passed, 2 Playwright journeys.
 - Managed-deployment browser capture: passed at 900×680 and 720×540 with the shipped Retry control, keyboard recovery, no overflow, and no browser errors.
 - `bash -n scripts/bootstrap.sh scripts/release-preflight.sh`, `node --check ui/app.js`, and `git diff --check`: passed.

@@ -1271,10 +1271,14 @@ fn git_checkout_path(path: &Path, argument: &str) -> Option<PathBuf> {
 
 fn checkout_marker_git_dir(path: &Path) -> Option<PathBuf> {
     let marker = path.join(".git");
-    if marker.is_dir() {
+    let metadata = fs::symlink_metadata(&marker).ok()?;
+    if metadata.file_type().is_symlink() {
+        return None;
+    }
+    if metadata.is_dir() {
         return marker.canonicalize().ok();
     }
-    if !marker.is_file() {
+    if !metadata.is_file() {
         return None;
     }
     let contents = fs::read_to_string(&marker).ok()?;
@@ -1309,7 +1313,10 @@ fn is_local_git_checkout(path: &Path) -> bool {
 }
 
 fn validate_e2e_template_source(path: &Path) -> Result<String, String> {
-    if !path.is_absolute() || !path.is_dir() || !is_local_git_checkout(path) {
+    let source_is_directory = fs::symlink_metadata(path)
+        .map(|metadata| metadata.is_dir() && !metadata.file_type().is_symlink())
+        .unwrap_or(false);
+    if !path.is_absolute() || !source_is_directory || !is_local_git_checkout(path) {
         return Err("The E2E template source must be an absolute local Git checkout.".to_string());
     }
     path.canonicalize()
@@ -2486,6 +2493,21 @@ mod tests {
             validate_e2e_template_source(&checkout).expect("absolute checkout should be accepted"),
             checkout.canonicalize().expect("directory should resolve").to_string_lossy()
         );
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::symlink;
+            let checkout_link = root.join("checkout-link");
+            symlink(&checkout, &checkout_link).expect("checkout symlink should be created");
+            assert!(validate_e2e_template_source(&checkout_link).is_err());
+
+            let git_directory = checkout.join(".git");
+            let real_git_directory = checkout.join(".git-real");
+            fs::rename(&git_directory, &real_git_directory).expect("Git directory should move");
+            symlink(&real_git_directory, &git_directory).expect("Git directory symlink should be created");
+            assert!(validate_e2e_template_source(&checkout).is_err());
+            fs::remove_file(&git_directory).expect("Git directory symlink should be removed");
+            fs::rename(&real_git_directory, &git_directory).expect("Git directory should be restored");
+        }
 
         let worktree = root.join("worktree");
         let git_metadata = root.join("git-metadata");

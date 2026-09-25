@@ -21,7 +21,7 @@ async function writeExecutable(path, source) {
   await chmod(path, 0o755);
 }
 
-async function createBootstrapHarness({ version = "", deployReady = false, sourceReady = deployReady, targetTenantReady = sourceReady, lookalikeOptions = false, autoInstall = false, installed = true }) {
+async function createBootstrapHarness({ version = "", versionExitCode = 0, deployReady = false, sourceReady = deployReady, targetTenantReady = sourceReady, lookalikeOptions = false, autoInstall = false, installed = true }) {
   const root = await mkdtemp(join(tmpdir(), "eai-installer-managed-deploy-"));
   const bin = join(root, "bin");
   await mkdir(bin);
@@ -42,7 +42,10 @@ async function createBootstrapHarness({ version = "", deployReady = false, sourc
       node: 'if "%~1"=="-p" (echo 24 & exit /b 0)\nif "%~1"=="--version" (echo v24.8.0 & exit /b 0)\nexit /b 1',
       npm: 'if "%~1"=="--version" (echo 10.9.0 & exit /b 0)\necho %*>> "%EAI_TEST_NPM_LOG%"\nexit /b 0',
       eai: `echo %*>> "%EAI_TEST_EAI_LOG%"
-if "%~1"=="--version" (echo ${version} & exit /b 0)
+if "%~1"=="--version" (
+${String(version).split(/\r?\n/).map((line) => `echo ${line}`).join("\n")}
+exit /b ${versionExitCode}
+)
 if "%~1"=="deploy" if "%~2"=="app" if "%~3"=="--help" (echo ${windowsHelp} & exit /b ${deployReady ? 0 : 7})
 exit /b 1`,
     };
@@ -67,7 +70,7 @@ exit /b 1`,
       await writeExecutable(
         join(bin, "eai"),
         `printf "%s\\n" "$*" >> "$EAI_TEST_EAI_LOG"
-if [ "\${1:-}" = "--version" ]; then echo "${version}"; exit 0; fi
+if [ "\${1:-}" = "--version" ]; then echo "${version}"; exit ${versionExitCode}; fi
 if [ "\${1:-}" = "deploy" ] && [ "\${2:-}" = "app" ] && [ "\${3:-}" = "--help" ]; then echo "${posixHelp}"; exit ${deployReady ? 0 : 7}; fi
 exit 1`,
       );
@@ -159,6 +162,33 @@ test("rejects ambiguous or wrapped CLI version output", async () => {
     assert.equal(harness.run.status, 1, harness.run.stderr);
     assert.match(harness.run.stderr, incompatibleCliPattern);
     await assert.rejects(readFile(harness.npmLog, "utf8"), { code: "ENOENT" });
+  } finally {
+    await rm(harness.root, { recursive: true, force: true });
+  }
+});
+
+test("rejects multiline CLI version output", async () => {
+  const harness = await createBootstrapHarness({
+    version: "3.17.0\nactual runtime 3.16.0",
+    deployReady: true,
+  });
+  try {
+    assert.equal(harness.run.status, 1, harness.run.stderr);
+    assert.match(harness.run.stderr, incompatibleCliPattern);
+  } finally {
+    await rm(harness.root, { recursive: true, force: true });
+  }
+});
+
+test("rejects a version command that exits unsuccessfully", async () => {
+  const harness = await createBootstrapHarness({
+    version: "3.17.0",
+    versionExitCode: 7,
+    deployReady: true,
+  });
+  try {
+    assert.equal(harness.run.status, 1, harness.run.stderr);
+    assert.match(harness.run.stderr, incompatibleCliPattern);
   } finally {
     await rm(harness.root, { recursive: true, force: true });
   }

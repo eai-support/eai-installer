@@ -6,7 +6,7 @@ import test from "node:test";
 
 import { verifyInstalledCliPackage } from "../scripts/verify-published-cli.mjs";
 
-async function createCliFixture({ version = "3.17.0", versionOutput = version, help = "--source --github-link-session --target-tenant-id" } = {}) {
+async function createCliFixture({ version = "3.17.0", versionOutput = version, help = "--source --github-link-session --target-tenant-id", bin = { eai: "dist/index.js" } } = {}) {
   const root = await mkdtemp(join(tmpdir(), "eai-installer-published-cli-"));
   const dist = join(root, "dist");
   await mkdir(dist);
@@ -14,7 +14,7 @@ async function createCliFixture({ version = "3.17.0", versionOutput = version, h
     name: "@enterpriseai/cli",
     version,
     type: "module",
-    bin: { eai: "dist/index.js" },
+    bin,
   }, null, 2)}\n`);
   await writeFile(join(dist, "index.js"), `
 const args = process.argv.slice(2);
@@ -39,6 +39,15 @@ test("rejects a package that predates the released baseline", async () => {
   const fixture = await createCliFixture({ version: "3.16.99" });
   try {
     await assert.rejects(verifyInstalledCliPackage(fixture, "3.17.0"), /below the Installer minimum/);
+  } finally {
+    await rm(fixture, { recursive: true, force: true });
+  }
+});
+
+test("rejects npm bin shorthand without the required eai command name", async () => {
+  const fixture = await createCliFixture({ bin: "dist/index.js" });
+  try {
+    await assert.rejects(verifyInstalledCliPackage(fixture, "3.17.0"), /does not declare a relative eai executable/);
   } finally {
     await rm(fixture, { recursive: true, force: true });
   }

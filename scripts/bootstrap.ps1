@@ -26,9 +26,10 @@ function Has-HelpOption([string]$Text, [string]$Option) {
 
 function Has-EaiManagedDeploy {
   if (-not (Has-Command "eai")) { return $false }
-  $rawVersion = & eai --version 2>$null | Select-Object -First 1
-  if (-not $rawVersion) { return $false }
-  $versionOutput = ([string]$rawVersion).Trim()
+  $rawVersion = @(& eai --version 2>$null)
+  $versionExitCode = $LASTEXITCODE
+  if ($versionExitCode -ne 0 -or $rawVersion.Count -eq 0) { return $false }
+  $versionOutput = (($rawVersion | ForEach-Object { [string]$_ }) -join "`n").Trim()
   if ($versionOutput -notmatch '^v?(\d+)\.(\d+)\.(\d+)$') { return $false }
   $script:EaiCliVersion = $versionOutput
   $currentVersion = [version]::new([int]$Matches[1], [int]$Matches[2], [int]$Matches[3])

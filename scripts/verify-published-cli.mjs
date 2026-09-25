@@ -78,7 +78,9 @@ export async function verifyInstalledCliPackage(packageRoot, minimumVersion, hom
     throw new Error(`Published ${packageName} ${manifest.version} is below the Installer minimum ${minimumVersion}.`);
   }
 
-  const bin = typeof manifest.bin === "string" ? manifest.bin : manifest.bin?.eai;
+  const bin = manifest.bin && typeof manifest.bin === "object" && !Array.isArray(manifest.bin)
+    ? manifest.bin.eai
+    : undefined;
   if (typeof bin !== "string" || !bin || isAbsolute(bin)) {
     throw new Error(`Published ${packageName} does not declare a relative eai executable.`);
   }
