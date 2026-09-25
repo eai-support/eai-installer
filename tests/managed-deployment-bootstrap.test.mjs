@@ -12,13 +12,16 @@ const bootstrapPath = join(repositoryRoot, "scripts", isWindows ? "bootstrap.ps1
 const missingCliPattern = isWindows
   ? /Missing EAI CLI[\s\S]*-AutoInstall/
   : /Missing eai\. Re-run with EAI_SETUP_AUTO_INSTALL=1/;
+const incompatibleCliPattern = isWindows
+  ? /installed EAI CLI is incompatible[\s\S]*-AutoInstall/i
+  : /installed EAI CLI is incompatible[\s\S]*EAI_SETUP_AUTO_INSTALL=1/i;
 
 async function writeExecutable(path, source) {
   await writeFile(path, `#!/bin/sh\nset -eu\n${source}\n`);
   await chmod(path, 0o755);
 }
 
-async function createBootstrapHarness({ version, deployReady, sourceReady = deployReady, autoInstall = false }) {
+async function createBootstrapHarness({ version = "", deployReady = false, sourceReady = deployReady, autoInstall = false, installed = true }) {
   const root = await mkdtemp(join(tmpdir(), "eai-installer-managed-deploy-"));
   const bin = join(root, "bin");
   await mkdir(bin);
@@ -33,6 +36,7 @@ if "%~1"=="--version" (echo ${version} & exit /b 0)
 if "%~1"=="deploy" if "%~2"=="app" if "%~3"=="--help" (echo ${sourceReady ? "--source ^<choice^> --github-link-session ^<id^>" : "--repo ^<owner/name^>"} & exit /b ${deployReady ? 0 : 7})
 exit /b 1`,
     };
+    if (!installed) delete fixtures.eai;
     for (const [name, source] of Object.entries(fixtures)) {
       await writeFile(join(bin, `${name}.cmd`), `@echo off\n${source}\n`.replaceAll("\n", "\r\n"));
     }
@@ -49,13 +53,15 @@ exit /b 1`,
       join(bin, "npm"),
       'if [ "${1:-}" = "--version" ]; then echo "10.9.0"; exit 0; fi\nprintf "%s\\n" "$*" >> "$EAI_TEST_NPM_LOG"\nexit 0',
     );
-    await writeExecutable(
-      join(bin, "eai"),
-      `printf "%s\\n" "$*" >> "$EAI_TEST_EAI_LOG"
+    if (installed) {
+      await writeExecutable(
+        join(bin, "eai"),
+        `printf "%s\\n" "$*" >> "$EAI_TEST_EAI_LOG"
 if [ "\${1:-}" = "--version" ]; then echo "${version}"; exit 0; fi
 if [ "\${1:-}" = "deploy" ] && [ "\${2:-}" = "app" ] && [ "\${3:-}" = "--help" ]; then echo "${sourceReady ? "--source <choice> --github-link-session <id>" : "--repo <owner/name>"}"; exit ${deployReady ? 0 : 7}; fi
 exit 1`,
-    );
+      );
+    }
   }
 
   const npmLog = join(root, "npm.log");
@@ -112,11 +118,22 @@ test("does not reinstall an already capable CLI when automatic installation is a
   }
 });
 
+test("reports a missing CLI separately from an incompatible installed CLI", async () => {
+  const harness = await createBootstrapHarness({ installed: false });
+  try {
+    assert.equal(harness.run.status, 1, harness.run.stderr);
+    assert.match(harness.run.stderr, missingCliPattern);
+    await assert.rejects(readFile(harness.npmLog, "utf8"), { code: "ENOENT" });
+  } finally {
+    await rm(harness.root, { recursive: true, force: true });
+  }
+});
+
 test("rejects a CLI below the released baseline without silently replacing it", async () => {
   const harness = await createBootstrapHarness({ version: "3.16.99", deployReady: true });
   try {
     assert.equal(harness.run.status, 1, harness.run.stderr);
-    assert.match(harness.run.stderr, missingCliPattern);
+    assert.match(harness.run.stderr, incompatibleCliPattern);
     await assert.rejects(readFile(harness.npmLog, "utf8"), { code: "ENOENT" });
   } finally {
     await rm(harness.root, { recursive: true, force: true });
@@ -127,7 +144,7 @@ test("rejects a compatible version when the deploy command is unavailable", asyn
   const harness = await createBootstrapHarness({ version: "3.17.0", deployReady: false });
   try {
     assert.equal(harness.run.status, 1, harness.run.stderr);
-    assert.match(harness.run.stderr, missingCliPattern);
+    assert.match(harness.run.stderr, incompatibleCliPattern);
     await assert.rejects(readFile(harness.npmLog, "utf8"), { code: "ENOENT" });
   } finally {
     await rm(harness.root, { recursive: true, force: true });
@@ -138,7 +155,7 @@ test("rejects customer-only CLI help that lacks source choice and GitHub-link ha
   const harness = await createBootstrapHarness({ version: "3.17.0", deployReady: true, sourceReady: false });
   try {
     assert.equal(harness.run.status, 1, harness.run.stderr);
-    assert.match(harness.run.stderr, missingCliPattern);
+    assert.match(harness.run.stderr, incompatibleCliPattern);
     await assert.rejects(readFile(harness.npmLog, "utf8"), { code: "ENOENT" });
   } finally {
     await rm(harness.root, { recursive: true, force: true });

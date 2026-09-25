@@ -11,7 +11,8 @@
 
 ## Local validation on 2026-09-25
 
-- `npm test`: passed, including 12 managed-deployment tests, 77 scenario states, release-gate contracts, Windows watchdog tests, and production safeguards.
+- `npm test`: passed on the final local source, including 13 managed-deployment tests, 77 scenario states, release-gate contracts, Windows watchdog tests, and production safeguards; required cross-platform CI remains pending.
+- Focused managed-deployment tests: 13 passed, including distinct missing/incompatible CLI diagnostics and real Retry control recovery.
 - `npm run test:journey`: passed, 2 Playwright journeys.
 - Managed-deployment browser capture: passed at 900×680 and 720×540 with the shipped Retry control, keyboard recovery, no overflow, and no browser errors.
 - `bash -n scripts/bootstrap.sh scripts/release-preflight.sh`, `node --check ui/app.js`, and `git diff --check`: passed.

@@ -55,13 +55,16 @@ if ($nodeMajor -lt 24) { throw "Node.js 24 or newer is required." }
 
 $eaiManagedDeployReady = Has-EaiManagedDeploy
 if (-not $eaiManagedDeployReady) {
+  if ((Has-Command "eai") -and -not $AutoInstall) {
+    throw "The installed EAI CLI is incompatible. EAI Setup requires version 3.17.0 or newer with source choice and GitHub-link handoff. Re-run with -AutoInstall to update it."
+  }
   Require-AutoInstall "EAI CLI"
   npm install --global @enterpriseai/cli
   $eaiManagedDeployReady = Has-EaiManagedDeploy
 }
 
 if (-not $eaiManagedDeployReady) {
-  throw "EAI CLI 3.17.0 or newer with source choice and GitHub-link handoff is required."
+  throw "The installed EAI CLI is incompatible. EAI Setup requires version 3.17.0 or newer with source choice and GitHub-link handoff."
 }
 
 Write-Host (git --version)

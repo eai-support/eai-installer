@@ -127,6 +127,10 @@ if [ "$NODE_MAJOR" -lt 24 ]; then echo "Node.js 24 or newer is required; found $
 EAI_MANAGED_DEPLOY_READY=0
 if eai_managed_deploy_ready; then EAI_MANAGED_DEPLOY_READY=1; fi
 if [ "$EAI_MANAGED_DEPLOY_READY" != "1" ]; then
+  if has eai && [ "$AUTO_INSTALL" != "1" ]; then
+    echo "The installed EAI CLI is incompatible. EAI Setup requires version 3.17.0 or newer with source choice and GitHub-link handoff. Re-run with EAI_SETUP_AUTO_INSTALL=1 to update it." >&2
+    exit 1
+  fi
   require_auto_install eai
   npm install --global @enterpriseai/cli
   EAI_MANAGED_DEPLOY_READY=0
@@ -134,7 +138,7 @@ if [ "$EAI_MANAGED_DEPLOY_READY" != "1" ]; then
 fi
 
 if [ "$EAI_MANAGED_DEPLOY_READY" != "1" ]; then
-  echo "EAI CLI 3.17.0 or newer with source choice and GitHub-link handoff is required." >&2
+  echo "The installed EAI CLI is incompatible. EAI Setup requires version 3.17.0 or newer with source choice and GitHub-link handoff." >&2
   exit 1
 fi
 

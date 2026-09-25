@@ -952,11 +952,15 @@ fn eai_cli_is_compatible(current_version: (u64, u64, u64), deploy_help: &str) ->
         && deploy_help.contains("--github-link-session")
 }
 
-fn eai_cli_version() -> Option<String> {
-    let current = version("eai", &["--version"])?;
+fn eai_cli_version_for(program: &str) -> Option<String> {
+    let current = version(program, &["--version"])?;
     let current_version = semantic_version(&current)?;
-    let (stdout, stderr) = run_program("eai", &["deploy", "app", "--help"]).ok()?;
+    let (stdout, stderr) = run_program(program, &["deploy", "app", "--help"]).ok()?;
     eai_cli_is_compatible(current_version, &format!("{stdout}\n{stderr}")).then_some(current)
+}
+
+fn eai_cli_version() -> Option<String> {
+    eai_cli_version_for("eai")
 }
 
 fn macos_git_ready() -> bool {
@@ -2346,6 +2350,56 @@ mod tests {
         assert!(!eai_cli_is_compatible((3, 17, 0), "--github-link-session <id>"));
         assert!(eai_cli_is_compatible((3, 17, 0), complete_help));
         assert!(eai_cli_is_compatible((4, 0, 0), complete_help));
+    }
+
+    #[test]
+    fn desktop_cli_probe_executes_version_and_managed_deploy_help() {
+        let directory = env::temp_dir().join(format!("eai-setup-cli-probe-{}", Uuid::new_v4()));
+        fs::create_dir(&directory).expect("CLI probe directory should be created");
+
+        #[cfg(unix)]
+        let fixture = {
+            use std::os::unix::fs::PermissionsExt;
+            let path = directory.join("eai");
+            fs::write(
+                &path,
+                "#!/bin/sh\nif [ \"${1:-}\" = --version ]; then echo 3.17.0; exit 0; fi\nif [ \"$*\" = \"deploy app --help\" ]; then echo '--source <choice> --github-link-session <id>'; exit 0; fi\nexit 1\n",
+            )
+            .expect("CLI probe fixture should be written");
+            let mut permissions = fs::metadata(&path).expect("CLI probe metadata should be readable").permissions();
+            permissions.set_mode(0o700);
+            fs::set_permissions(&path, permissions).expect("CLI probe fixture should be executable");
+            path
+        };
+
+        #[cfg(target_os = "windows")]
+        let fixture = {
+            let path = directory.join("eai.cmd");
+            fs::write(
+                &path,
+                "@echo off\r\nif \"%~1\"==\"--version\" (echo 3.17.0& exit /b 0)\r\nif \"%*\"==\"deploy app --help\" (echo --source ^<choice^> --github-link-session ^<id^>& exit /b 0)\r\nexit /b 1\r\n",
+            )
+            .expect("CLI probe fixture should be written");
+            path
+        };
+
+        let program = fixture.to_string_lossy().to_string();
+        assert_eq!(eai_cli_version_for(&program).as_deref(), Some("3.17.0"));
+
+        #[cfg(unix)]
+        fs::write(
+            &fixture,
+            "#!/bin/sh\nif [ \"${1:-}\" = --version ]; then echo 3.17.0; exit 0; fi\nif [ \"$*\" = \"deploy app --help\" ]; then echo '--repo <owner/name>'; exit 0; fi\nexit 1\n",
+        )
+        .expect("incompatible CLI probe fixture should be written");
+        #[cfg(target_os = "windows")]
+        fs::write(
+            &fixture,
+            "@echo off\r\nif \"%~1\"==\"--version\" (echo 3.17.0& exit /b 0)\r\nif \"%*\"==\"deploy app --help\" (echo --repo ^<owner/name^>& exit /b 0)\r\nexit /b 1\r\n",
+        )
+        .expect("incompatible CLI probe fixture should be written");
+        assert_eq!(eai_cli_version_for(&program), None);
+        fs::remove_dir_all(directory).expect("CLI probe directory should be removed");
     }
 
     #[test]

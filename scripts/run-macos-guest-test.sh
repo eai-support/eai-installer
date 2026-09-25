@@ -307,6 +307,13 @@ guest_eai_version() {
   macos_prl_current_user_exec_idempotent "$guest_node" "$guest_cli" --version 2>/dev/null | tr -d '\r\n'
 }
 
+guest_eai_managed_deploy_ready() {
+  local deploy_help=""
+  deploy_help="$(macos_prl_current_user_exec_idempotent "$guest_node" "$guest_cli" deploy app --help 2>/dev/null)" \
+    || return 1
+  [[ "$deploy_help" == *"--source"* && "$deploy_help" == *"--github-link-session"* ]]
+}
+
 prerequisite_versions_satisfy_contract() {
   local git_version="$1"
   local node_version="$2"
@@ -315,7 +322,7 @@ prerequisite_versions_satisfy_contract() {
   [[ "$git_version" == git\ version* ]] \
     && semantic_version_at_least "$node_version" 24 0 0 \
     && semantic_version_at_least "$npm_version" 1 0 0 \
-    && semantic_version_at_least "$eai_version" 3 15 10
+    && semantic_version_at_least "$eai_version" "$expected_cli_major" "$expected_cli_minor" "$expected_cli_patch"
 }
 
 guest_prerequisites_ready() {
@@ -327,7 +334,8 @@ guest_prerequisites_ready() {
   node_version="$(guest_node_version || true)"
   npm_version="$(guest_npm_version || true)"
   eai_version="$(guest_eai_version || true)"
-  prerequisite_versions_satisfy_contract "$git_version" "$node_version" "$npm_version" "$eai_version"
+  prerequisite_versions_satisfy_contract "$git_version" "$node_version" "$npm_version" "$eai_version" \
+    && guest_eai_managed_deploy_ready
 }
 
 guest_current_command_exists() {
@@ -497,8 +505,11 @@ guest_test_require prlctl
 guest_test_require node
 guest_test_require security
 guest_test_require_environment
-[[ "$expected_cli_version" == 3.17.0 ]] \
-  || guest_test_fail "The macOS release harness is pinned to EAI CLI 3.17.0."
+[[ "$expected_cli_version" =~ ^([0-9]+)[.]([0-9]+)[.]([0-9]+)$ ]] \
+  || guest_test_fail "The macOS EAI CLI minimum must be a semantic version."
+expected_cli_major="${BASH_REMATCH[1]}"
+expected_cli_minor="${BASH_REMATCH[2]}"
+expected_cli_patch="${BASH_REMATCH[3]}"
 [[ -f "$input_helper" ]] || guest_test_fail "The Parallels input helper is missing."
 [[ "$guest_user" == "$mac_admin_account" ]] \
   || guest_test_fail "The controlled macOS release guest must use the testmac account."
@@ -666,6 +677,8 @@ after_npm="$(guest_npm_version)"
 after_eai="$(guest_eai_version)"
 prerequisite_versions_satisfy_contract "$after_git" "$after_node" "$after_npm" "$after_eai" \
   || guest_test_fail "Installed prerequisite versions do not satisfy the release contract."
+guest_eai_managed_deploy_ready \
+  || guest_test_fail "The installed EAI CLI does not expose both managed deployment source choices."
 stage prerequisite-install-passed
 
 stage normal-app-stop

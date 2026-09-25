@@ -920,8 +920,9 @@ contract but does not predict the result of the product's later `apt-get
 update`, refresh apt indexes itself, add a repository, install, upgrade, or
 repair those prerequisites. After the product runs, package ownership is proved,
 Node.js must be version 24 or newer, npm must be available with a parseable
-version, and the Ubuntu diagnostic contract requires EAI CLI `3.17.0` exactly
-from both the executable and its package metadata.
+version, and the Ubuntu diagnostic contract requires EAI CLI `3.17.0` or newer.
+The executable and package metadata must report the same version, and
+`eai deploy app --help` must expose both source choice and GitHub-link handoff.
 
 The approved Node.js 24 repository can supply npm from the installed `nodejs`
 package rather than a separate Debian package named `npm`. The adapter therefore
@@ -1488,7 +1489,7 @@ exception to verified deletion, and its report cannot be used as production
 release evidence.
 
 The adapter resolves one canonical executable EAI CLI, requires at least the
-`eai-cli` version pinned in `installer-manifest.json` (currently `3.17.0`), and
+`eai-cli` minimum in `installer-manifest.json` (currently `3.17.0`), and
 binds every command to the approved PublicAPI origin. The adapter deliberately
 has no draft-enrollment deletion,
 generic Resource API mutation, admin-portal, or diagnostic fallback. A missing

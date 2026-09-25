@@ -424,8 +424,8 @@ use only its fixed receipt and exact non-symlink project/package paths, parse an
 exact scoped package name privately on the host, preserve richer receipts, and emit a
 boolean failure checkpoint without enumerating tenant resources.
 
-The Ubuntu static contract additionally proves that the expected CLI is pinned
-to `3.17.0`, Node.js 24+ is verified after the released product runs without a
+The Ubuntu static contract additionally proves the released `3.17.0` CLI
+minimum plus the managed-deploy help flags, while Node.js 24+ is verified after the released product runs without a
 harness repair, and an executable npm is resolved to a root-owned target owned
 by the fully installed `nodejs` package without requiring a separate `npm`
 Debian package. A host-only provider fixture covers the NodeSource-style layout

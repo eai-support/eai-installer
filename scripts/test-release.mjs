@@ -3189,7 +3189,10 @@ assert.match(ubuntuGuestCoreSource, /Released-product prerequisite defect/);
 assert.match(ubuntuGuestCoreSource, /noHarnessPrerequisiteRepair: true/);
 assert.match(ubuntuGuestCoreSource, /prerequisite-contract-validation/);
 assert.match(ubuntuGuestCoreSource, /minimumNodeMajor: 24/);
-assert.match(ubuntuGuestCoreSource, /pinned to EAI CLI 3[.]17[.]0/);
+assert.match(ubuntuGuestCoreSource, /The Ubuntu EAI CLI minimum must be a semantic version/);
+assert.match(ubuntuGuestCoreSource, /eai_managed_deploy_ready/);
+assert.match(ubuntuGuestCoreSource, /managedDeployCapabilityRequired: true/);
+assert.match(ubuntuGuestCoreSource, /managedDeployCapabilityVerified: true/);
 for (const npmProviderCheck of [
   /validate_npm_provider_values\(\)/,
   /installed_node_package_status=/,

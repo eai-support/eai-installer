@@ -5,7 +5,7 @@ Cross-repository requirement definitions and ownership are canonical in the
 
 | Requirement | Planned implementation | Owned evidence |
 | --- | --- | --- |
-| DTE-056, DTE-088 | manifest, bootstrap scripts, release safeguards | bootstrap, manifest, release tests |
+| DTE-056, DTE-088 | manifest, bootstrap scripts, desktop executable probe, and cross-platform guest capability readback | bootstrap, manifest, Rust fixture, guest adapter, and release tests |
 | DTE-057 | Tauri compile-time/test capability and local-template loader | Rust tests and production safeguard tests |
 | DTE-058 | Git worktree resolver and shipped retry control | managed bootstrap/recovery tests |
 | DTE-094 | preview selector plus UI DOM/interaction assertions | recovery test and browser evidence script |
