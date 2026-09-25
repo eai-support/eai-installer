@@ -129,6 +129,7 @@ export async function verifyPublishedCli() {
       workspace,
       `${packageName}@latest`,
     ], {
+      cwd: workspace,
       encoding: "utf8",
       env: npmEnvironment,
       timeout: 120_000,
