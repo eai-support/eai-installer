@@ -1,14 +1,14 @@
 {
-  "capturedAt": "2026-09-25T06:50:59.482Z",
+  "capturedAt": "2026-09-25T06:58:00.674Z",
   "previewUrl": "http://127.0.0.1:43183/",
   "browser": "Chromium 153.0.8010.12",
-  "sourceHead": "da38a54175043c6aa34bcfa23beeb00cc29bc523",
+  "sourceHead": "3ab182d4f558b55563c6ba595aad9625b455870b",
   "sourceHashes": {
     "ui/index.html": "13861740d1b2496b8a389792d75c966eb8af23017f01450f0f2bf125be06e1a9",
     "ui/styles.css": "d53b5902a2ffd92be0c29a74f91dfa768c7bb96bf9e4b3dc852d110a69b88d01",
     "ui/app.js": "e5e042303e7c3c06db487111cf99b83b3a6af660d069d71a0c56d628fac00c6c",
     "ui/wizard-state.js": "88538e941e482ae19c2969c73213a672e4c4227f1447e3deb2ca6e56ae452104",
-    "src-tauri/src/main.rs": "600e7d8c9e5366fd5745c86e869701bc0a84afe155fda41ff4e9f851534a25ce",
+    "src-tauri/src/main.rs": "fd69ee0f434af48d886b8c9a28cb4978f41e39e7a650ec1d4ce2a286e7e2058c",
     "scripts/preview-managed-deploy.mjs": "6a1ac518cece03527ef9131396e29af6e8e2a841ae37a7d258fb14a017738d42"
   },
   "fixture": "Actual installer UI with a controlled Tauri bridge. The failed native result is extracted from Rust and rendered through the shipped state-machine guidance. No native install or cloud calls.",
