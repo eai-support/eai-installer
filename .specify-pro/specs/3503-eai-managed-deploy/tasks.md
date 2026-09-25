@@ -9,11 +9,11 @@
 - [x] Gate production publication on an isolated readback of the actual published CLI package and command help (DTE-056, DTE-088).
 - [x] Reject lookalike options and bind both local and protected-workflow publication to the same exact package gate (DTE-056, DTE-088).
 - [x] Update owned tests and traceability.
-- [ ] Complete exact-head Rust and bundle validation in required CI after the latest review fixes.
+- [x] Complete exact-head Rust and bundle validation in required CI after the latest review fixes.
 
 ## Local validation on 2026-09-25
 
-- `npm test`: passed on the final local source, including 25 owned tests, 77 scenario states, release-gate contracts, Windows watchdog tests, and production safeguards.
+- `npm test`: passed on the final local source, including 26 owned tests, 77 scenario states, release-gate contracts, Windows watchdog tests, and production safeguards.
 - Focused managed-deployment tests: 18 passed, covering distinct missing/incompatible CLI diagnostics, exact complete version output and exit status, exact matching for all three required command options, and real Retry control recovery.
 - Bootstrap, desktop, and cross-platform release evidence now reject wrapped or ambiguous CLI version output; the successful exact-version flow is unchanged.
 - The test-only local template override requires Git to recognize the exact checkout and metadata directory, and all three VM adapters bind exact executable output to the installed CLI package version.
@@ -21,4 +21,4 @@
 - `npm run test:journey`: passed, 2 Playwright journeys.
 - Managed-deployment browser capture: passed at 900×680 and 720×540 with the shipped Retry control, keyboard recovery, no overflow, and no browser errors.
 - `bash -n scripts/bootstrap.sh scripts/release-preflight.sh`, `node --check ui/app.js`, and `git diff --check`: passed.
-- Exact-head CI for implementation/evidence head `2e47e758e4a2063532884d0206c16243d3238468` passed CodeQL, `tauri-check`, public hygiene, dependency review, installer download verification, and macOS, Ubuntu, and Windows bundle jobs for both supported architectures. The later source-parent symlink rejection fix requires a fresh exact-head run and browser provenance refresh.
+- Exact-head CI for evidence head `f6ff748` passed CodeQL, `tauri-check`, public hygiene, dependency review, installer download verification, and macOS, Ubuntu, and Windows bundle jobs for both supported architectures. It validates implementation head `8c065a3`, including declared in-package CLI bin resolution on macOS and exact combined stdout/stderr version checks.
