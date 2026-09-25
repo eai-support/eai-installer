@@ -9,14 +9,14 @@
 - [x] Gate production publication on an isolated readback of the actual published CLI package and command help (DTE-056, DTE-088).
 - [x] Reject lookalike options and bind both local and protected-workflow publication to the same exact package gate (DTE-056, DTE-088).
 - [x] Update owned tests and traceability.
-- [ ] Complete exact-head Rust and bundle validation in required CI.
+- [x] Complete exact-head Rust and bundle validation in required CI.
 
 ## Local validation on 2026-09-25
 
-- `npm test`: passed on the final local source, including 21 owned tests, 77 scenario states, release-gate contracts, Windows watchdog tests, and production safeguards; required cross-platform CI remains pending.
+- `npm test`: passed on the final local source, including 21 owned tests, 77 scenario states, release-gate contracts, Windows watchdog tests, and production safeguards.
 - Focused managed-deployment tests: 15 passed, covering distinct missing/incompatible CLI diagnostics, exact matching for all three required command options, and real Retry control recovery.
 - Published-package gate fixtures: 6 passed, covering the released baseline, exact version output, and exact command option tokens. Live readback failed closed as intended because npm `@enterpriseai/cli@3.18.1` lacks `--source`; Installer publication stays blocked until the CLI producer releases the feature.
 - `npm run test:journey`: passed, 2 Playwright journeys.
 - Managed-deployment browser capture: passed at 900×680 and 720×540 with the shipped Retry control, keyboard recovery, no overflow, and no browser errors.
 - `bash -n scripts/bootstrap.sh scripts/release-preflight.sh`, `node --check ui/app.js`, and `git diff --check`: passed.
-- Rust is not installed on this workstation. The required CI jobs remain the exact-head Rust compile/test and signed-bundle evidence.
+- Exact-head CI for `23aa16ea1b00c503b353e0736c716cf7492b3ca5`: passed, including Rust CodeQL, `tauri-check`, public hygiene, dependency review, and macOS, Ubuntu, and Windows bundle jobs for both supported architectures.
