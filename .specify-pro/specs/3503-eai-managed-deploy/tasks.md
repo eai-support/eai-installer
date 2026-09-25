@@ -9,7 +9,7 @@
 - [x] Gate production publication on an isolated readback of the actual published CLI package and command help (DTE-056, DTE-088).
 - [x] Reject lookalike options and bind both local and protected-workflow publication to the same exact package gate (DTE-056, DTE-088).
 - [x] Update owned tests and traceability.
-- [ ] Complete exact-head Rust and bundle validation in required CI after the latest review fixes.
+- [x] Complete exact-head Rust and bundle validation in required CI after the latest review fixes.
 
 ## Local validation on 2026-09-25
 
@@ -21,4 +21,4 @@
 - `npm run test:journey`: passed, 2 Playwright journeys.
 - Managed-deployment browser capture: passed at 900×680 and 720×540 with the shipped Retry control, keyboard recovery, no overflow, and no browser errors.
 - `bash -n scripts/bootstrap.sh scripts/release-preflight.sh`, `node --check ui/app.js`, and `git diff --check`: passed.
-- Required exact-head CI must rerun after the latest review fixes. The preceding implementation head passed Rust CodeQL, `tauri-check`, public hygiene, dependency review, and macOS, Ubuntu, and Windows bundle jobs for both supported architectures.
+- Exact-head CI for implementation commit `e0f4d350ac33d3798f15480727c42db9896bd0df` passed Rust CodeQL, `tauri-check`, public hygiene, dependency review, installer download verification, and macOS, Ubuntu, and Windows bundle jobs for both supported architectures.
