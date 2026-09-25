@@ -140,6 +140,9 @@ if (rust.includes("latest_eai_cli_requirement") || rust.includes('version("npm",
   throw new Error("Tauri adapter must not use live npm metadata to decide whether the installed EAI CLI is ready");
 }
 const eaiResolver = rust.slice(rust.indexOf("fn executable"), rust.indexOf("fn run_program"));
+if (!eaiResolver.includes("Path::new(program).is_absolute()")) {
+  throw new Error("Tauri executable resolution does not preserve an exact absolute program path");
+}
 if (eaiResolver.indexOf("user_npm_global_exec_dirs") > eaiResolver.indexOf("user_node_bin_dirs")) {
   throw new Error("Tauri adapter must prefer the user npm-prefix EAI launcher over stale Node-directory launchers");
 }

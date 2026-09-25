@@ -474,6 +474,9 @@ fn user_npm_global_exec_dirs() -> Vec<PathBuf> {
 }
 
 fn executable(program: &str) -> String {
+    if Path::new(program).is_absolute() {
+        return program.to_string();
+    }
     if cfg!(unix) && matches!(program, "node" | "npm" | "eai") {
         let mut directories = if program == "eai" {
             // npm's user prefix is authoritative for the CLI. A previous
