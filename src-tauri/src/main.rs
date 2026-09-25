@@ -903,11 +903,39 @@ fn user_npm_prefix() -> Option<PathBuf> {
 fn eai_cli_script() -> Option<PathBuf> {
     let prefix = user_npm_prefix()?;
     [
-        prefix.join("node_modules/@enterpriseai/cli/dist/index.js"),
-        prefix.join("lib/node_modules/@enterpriseai/cli/dist/index.js"),
+        prefix.join("node_modules/@enterpriseai/cli"),
+        prefix.join("lib/node_modules/@enterpriseai/cli"),
     ]
     .into_iter()
-    .find(|script| script.is_file())
+    .find_map(|package_root| eai_cli_package_entrypoint(&package_root))
+}
+
+fn eai_cli_package_entrypoint(package_root: &Path) -> Option<PathBuf> {
+    let package_root = package_root.canonicalize().ok()?;
+    if !package_root.is_dir() {
+        return None;
+    }
+    let manifest: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(package_root.join("package.json")).ok()?,
+    )
+    .ok()?;
+    if manifest.get("name").and_then(serde_json::Value::as_str) != Some("@enterpriseai/cli") {
+        return None;
+    }
+    let bin = manifest
+        .get("bin")
+        .and_then(serde_json::Value::as_object)
+        .and_then(|bin| bin.get("eai"))
+        .and_then(serde_json::Value::as_str)?;
+    let bin = Path::new(bin);
+    if bin.as_os_str().is_empty() || bin.is_absolute() {
+        return None;
+    }
+    let entrypoint = package_root.join(bin).canonicalize().ok()?;
+    if !entrypoint.starts_with(&package_root) || !entrypoint.is_file() {
+        return None;
+    }
+    Some(entrypoint)
 }
 
 fn expose_user_npm_bin() -> Result<(), String> {
@@ -2420,6 +2448,39 @@ mod tests {
     use super::*;
     use std::cell::Cell;
     use std::io::Cursor;
+
+    #[test]
+    fn eai_cli_package_entrypoint_uses_the_declared_in_package_bin() {
+        let root = env::temp_dir().join(format!("eai-setup-cli-package-test-{}", Uuid::new_v4()));
+        let entrypoint = root.join("cli/eai.js");
+        fs::create_dir_all(entrypoint.parent().expect("entrypoint should have a parent"))
+            .expect("CLI package directory should be created");
+        fs::write(&entrypoint, "process.exit(0);\n").expect("CLI entrypoint should be written");
+        fs::write(
+            root.join("package.json"),
+            r#"{"name":"@enterpriseai/cli","bin":{"eai":"cli/eai.js"}}"#,
+        )
+        .expect("CLI manifest should be written");
+        assert_eq!(
+            eai_cli_package_entrypoint(&root),
+            Some(entrypoint.canonicalize().expect("entrypoint should resolve"))
+        );
+
+        let outside_name = format!("eai-setup-cli-package-outside-{}.js", Uuid::new_v4());
+        let outside = root
+            .parent()
+            .expect("CLI package root should have a parent")
+            .join(&outside_name);
+        fs::write(&outside, "process.exit(0);\n").expect("outside entrypoint should be written");
+        fs::write(
+            root.join("package.json"),
+            format!(r#"{{"name":"@enterpriseai/cli","bin":{{"eai":"../{outside_name}"}}}}"#),
+        )
+        .expect("outside CLI manifest should be written");
+        assert_eq!(eai_cli_package_entrypoint(&root), None);
+        fs::remove_file(outside).expect("outside entrypoint should be removed");
+        fs::remove_dir_all(root).expect("CLI package test directory should be removed");
+    }
 
     #[test]
     fn eai_cli_readiness_requires_the_released_baseline_and_managed_deploy_capability() {
