@@ -431,6 +431,11 @@ by the fully installed `nodejs` package without requiring a separate `npm`
 Debian package. A host-only provider fixture covers the NodeSource-style layout
 where `npm --version` succeeds while `dpkg-query -W npm` does not.
 
+The production release preflight separately downloads the current canonical
+CLI package into an isolated, script-disabled npm prefix and executes its exact
+entry point with a minimal environment. Fixture tests prove that the gate
+rejects an old package or one missing any required managed-deployment flag.
+
 Both checkpoint and final Resource API queries execute from the exact generated
 project, use the scalar `{"verticalKey":"<exact-app-key>"}` filter expected by
 CLI 3.17.0, and parse its `{resources,totalDocs}` envelope. Static checks reject

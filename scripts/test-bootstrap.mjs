@@ -33,6 +33,10 @@ const powershell = await readFile(new URL("../scripts/bootstrap.ps1", import.met
 for (const value of ["Has-EaiManagedDeploy", "[version]::new(3, 17, 0)", "eai deploy app --help", "--source", "--github-link-session"]) {
   if (!powershell.includes(value)) throw new Error(`bootstrap.ps1: combined EAI CLI readiness is missing: ${value}`);
 }
+const releasePreflight = await readFile(new URL("../scripts/release-preflight.sh", import.meta.url), "utf8");
+if (!releasePreflight.includes("node scripts/verify-published-cli.mjs")) {
+  throw new Error("release preflight does not execute the published CLI capability gate");
+}
 
 const manifest = JSON.parse(await readFile(new URL("../installer-manifest.json", import.meta.url), "utf8"));
 const coverageMap = JSON.parse(

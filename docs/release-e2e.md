@@ -1500,6 +1500,15 @@ no success receipt and fails the production gate closed. The platform must there
 issue an ownership manifest for every app created by the production E2E path;
 the diagnostic cleanup tools cannot substitute for that platform contract.
 
+Before production publication can reach the VM preflight or tag creation, the
+release gate installs `@enterpriseai/cli@latest` from the public npm registry
+into an isolated temporary prefix with lifecycle scripts disabled. It reads the
+installed package version and executes that package's exact entry point with a
+minimal environment. The version must meet the manifest minimum and match the
+package metadata, while `eai deploy app --help` must expose `--source`,
+`--github-link-session`, and `--target-tenant-id`. A static version string or a
+locally installed CLI cannot satisfy this producer-before-consumer gate.
+
 Receipt publication is fail-closed: the adapter creates a private temporary
 receipt and uses an atomic no-overwrite hard link. A path created between the
 last safety check and publication causes failure and is never overwritten. The

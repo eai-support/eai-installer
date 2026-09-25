@@ -2528,6 +2528,8 @@ for (const source of [releaseWorkflow, releaseReadinessWorkflow]) {
   );
 }
 assert.match(publishSection, /canonical_deprovision="\$ROOT\/scripts\/run-v4-app-deprovision\.sh"/);
+assert.match(publishSection, /node scripts\/verify-published-cli\.mjs/);
+assert.ok(publishSection.indexOf("verify-published-cli.mjs") < publishSection.indexOf("release-e2e.mjs"));
 assert.match(publishSection, /--driver command --vms macos,windows,ubuntu --deprovision api --preflight/);
 assert.match(publishSection, /--driver command --vms macos,windows,ubuntu --deprovision api/);
 assert.match(publishSection, /gh workflow run release-readiness\.yml/);

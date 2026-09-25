@@ -130,6 +130,7 @@ publish_release() {
   git show-ref --verify --quiet "refs/tags/$tag" && die "Local tag already exists: $tag"
   git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1 && die "Remote tag already exists: $tag"
   npm test
+  node scripts/verify-published-cli.mjs
   local canonical_deprovision="$ROOT/scripts/run-v4-app-deprovision.sh"
   if [[ -n "${EAI_APP_DEPROVISION_COMMAND:-}" && "$EAI_APP_DEPROVISION_COMMAND" != "$canonical_deprovision" ]]; then
     die "Production publish only accepts the repository V4 deprovision adapter"
