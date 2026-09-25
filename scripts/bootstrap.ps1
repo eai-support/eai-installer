@@ -7,6 +7,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$script:EaiCliVersion = $null
 
 function Has-Command([string]$Name) {
   return $null -ne (Get-Command $Name -ErrorAction SilentlyContinue)
@@ -16,6 +17,29 @@ function Require-AutoInstall([string]$Name) {
   if (-not $AutoInstall) {
     throw "Missing $Name. Re-run this script with -AutoInstall after reviewing the fixed WinGet steps."
   }
+}
+
+function Has-HelpOption([string]$Text, [string]$Option) {
+  $pattern = '(?:^|\s)' + [regex]::Escape($Option) + '(?:[=\s]|$)'
+  return $Text -cmatch $pattern
+}
+
+function Has-EaiManagedDeploy {
+  if (-not (Has-Command "eai")) { return $false }
+  $rawVersion = @(& eai --version 2>$null)
+  $versionExitCode = $LASTEXITCODE
+  if ($versionExitCode -ne 0 -or $rawVersion.Count -eq 0) { return $false }
+  $versionOutput = (($rawVersion | ForEach-Object { [string]$_ }) -join "`n").Trim()
+  if ($versionOutput -notmatch '^v?(\d+)\.(\d+)\.(\d+)$') { return $false }
+  $script:EaiCliVersion = $versionOutput
+  $currentVersion = [version]::new([int]$Matches[1], [int]$Matches[2], [int]$Matches[3])
+  if ($currentVersion -lt [version]::new(3, 17, 0)) { return $false }
+  $deployHelp = & eai deploy app --help 2>$null
+  if ($LASTEXITCODE -ne 0) { return $false }
+  $helpText = $deployHelp -join "`n"
+  return (Has-HelpOption $helpText "--source") `
+    -and (Has-HelpOption $helpText "--github-link-session") `
+    -and (Has-HelpOption $helpText "--target-tenant-id")
 }
 
 if (-not (Has-Command "git")) {
@@ -37,15 +61,24 @@ if (-not (Has-Command "node") -or -not (Has-Command "npm")) {
 $nodeMajor = [int]((node -p "process.versions.node.split('.')[0]").Trim())
 if ($nodeMajor -lt 24) { throw "Node.js 24 or newer is required." }
 
-if (-not (Has-Command "eai")) {
+$eaiManagedDeployReady = Has-EaiManagedDeploy
+if (-not $eaiManagedDeployReady) {
+  if ((Has-Command "eai") -and -not $AutoInstall) {
+    throw "The installed EAI CLI is incompatible. EAI Setup requires version 3.17.0 or newer with source choice, GitHub-link handoff, and target-tenant binding. Re-run with -AutoInstall to update it."
+  }
   Require-AutoInstall "EAI CLI"
   npm install --global @enterpriseai/cli
+  $eaiManagedDeployReady = Has-EaiManagedDeploy
+}
+
+if (-not $eaiManagedDeployReady) {
+  throw "The installed EAI CLI is incompatible. EAI Setup requires version 3.17.0 or newer with source choice, GitHub-link handoff, and target-tenant binding."
 }
 
 Write-Host (git --version)
 Write-Host (node --version)
 Write-Host (npm --version)
-Write-Host (eai --version)
+Write-Host $script:EaiCliVersion
 
 if ($ProjectName) {
   if ($ProjectName -notmatch '^[a-z0-9]+(?:-[a-z0-9]+)*$') { throw "Project name must be kebab-case." }
@@ -58,5 +91,5 @@ if ($ProjectName) {
     try { eai init $ProjectName --current-dir } finally { Pop-Location }
   }
 } else {
-  Write-Host "Next: eai login, eai whoami, then eai init <project-name>."
+  Write-Host "Next: eai login, eai whoami, then eai init <project-name>. Use 'eai deploy app --help' when you are ready to choose hosting. EAI hosting verifies your linked GitHub identity, then offers EAI-maintained or customer-owned source."
 }

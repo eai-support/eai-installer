@@ -5533,17 +5533,18 @@ function Resolve-Program([string]$name, [string[]]$relativePaths) {
   }
   return $null
 }
-function Read-Version([string]$path) {
+function Read-Command([string]$path, [string]$arguments) {
   if (-not (Test-ProgramPath $path)) { return $null }
+  if ($arguments -notin @('--version', 'deploy app --help')) { return $null }
   $path = (Get-Item -LiteralPath $path -Force).FullName
   if ($path -match '[\r\n"&|<>^]') { return $null }
   $startInfo = [Diagnostics.ProcessStartInfo]::new()
   if ([IO.Path]::GetExtension($path) -ieq '.cmd') {
     $startInfo.FileName = $env:ComSpec
-    $startInfo.Arguments = '/D /S /C ""' + $path + '" --version"'
+    $startInfo.Arguments = '/D /S /C ""' + $path + '" ' + $arguments + '"'
   } else {
     $startInfo.FileName = $path
-    $startInfo.Arguments = '--version'
+    $startInfo.Arguments = $arguments
   }
   $startInfo.UseShellExecute = $false
   $startInfo.CreateNoWindow = $true
@@ -5574,15 +5575,39 @@ function Read-Version([string]$path) {
     $process.Dispose()
   }
 }
+function Read-Version([string]$path) { return Read-Command $path '--version' }
+function Read-EaiPackageVersion([string]$path) {
+  if (-not (Test-ProgramPath $path)) { return $null }
+  $packagePath = Join-Path (Split-Path -Parent $path) 'node_modules\@enterpriseai\cli\package.json'
+  try {
+    $item = Get-Item -LiteralPath $packagePath -Force -ErrorAction Stop
+    if ($item.PSIsContainer -or (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0)) { return $null }
+    $version = [string]((Get-Content -LiteralPath $item.FullName -Raw -ErrorAction Stop | ConvertFrom-Json).version)
+    if ($version -cnotmatch '^[0-9]+[.][0-9]+[.][0-9]+$') { return $null }
+    return $version
+  } catch {
+    return $null
+  }
+}
+function Has-HelpOption([string]$text, [string]$option) {
+  $pattern = '(?:^|\s)' + [regex]::Escape($option) + '(?:[=\s]|$)'
+  return $text -cmatch $pattern
+}
 $git = Resolve-Program git.exe @('Git\cmd\git.exe', 'Programs\Git\cmd\git.exe')
 $node = Resolve-Program node.exe @('nodejs\node.exe', 'Programs\nodejs\node.exe')
 $npm = Resolve-Program npm.cmd @('nodejs\npm.cmd', 'Programs\nodejs\npm.cmd', 'npm\npm.cmd')
 $eai = Resolve-Program eai.cmd @('npm\eai.cmd', 'EAI Setup\npm-global\eai.cmd')
+$eaiManagedDeployHelp = Read-Command $eai 'deploy app --help'
 [ordered]@{
   git = Read-Version $git
   node = Read-Version $node
   npm = Read-Version $npm
   eai = Read-Version $eai
+  eaiPackageVersion = Read-EaiPackageVersion $eai
+  eaiManagedDeploy = [bool]($eaiManagedDeployHelp `
+    -and (Has-HelpOption $eaiManagedDeployHelp '--source') `
+    -and (Has-HelpOption $eaiManagedDeployHelp '--github-link-session') `
+    -and (Has-HelpOption $eaiManagedDeployHelp '--target-tenant-id'))
 } | ConvertTo-Json -Compress
 POWERSHELL
 }
@@ -5593,8 +5618,20 @@ versions_satisfy_contract() {
 const versions = JSON.parse(process.env.EAI_WINDOWS_VERSIONS);
 const nodeMajor = Number.parseInt(String(versions.node || "").replace(/^v/, "").split(".")[0], 10);
 const expectedCli = process.env.EAI_EXPECTED_CLI_VERSION;
-const cliVersion = String(versions.eai || "").match(/[0-9]+\.[0-9]+\.[0-9]+/)?.[0];
-if (!versions.git || !Number.isInteger(nodeMajor) || nodeMajor < 24 || !versions.npm || cliVersion !== expectedCli) {
+const cliVersion = String(versions.eai || "").match(/^v?([0-9]+\.[0-9]+\.[0-9]+)$/)?.[1];
+const cliPackageVersion = String(versions.eaiPackageVersion || "");
+const parts = (value) => String(value || "").split(".").map((part) => Number.parseInt(part, 10));
+const atLeast = (value, minimum) => {
+  const current = parts(value);
+  const wanted = parts(minimum);
+  return current.length === 3 && wanted.length === 3 && current.every(Number.isInteger) && wanted.every(Number.isInteger)
+    && (current[0] > wanted[0]
+      || (current[0] === wanted[0] && current[1] > wanted[1])
+      || (current[0] === wanted[0] && current[1] === wanted[1] && current[2] >= wanted[2]));
+};
+if (!versions.git || !Number.isInteger(nodeMajor) || nodeMajor < 24 || !versions.npm
+    || !atLeast(cliVersion, expectedCli) || cliPackageVersion !== cliVersion
+    || versions.eaiManagedDeploy !== true) {
   process.exitCode = 1;
 }
 NODE
@@ -5611,6 +5648,8 @@ guest_test_require osascript
 guest_test_require_environment
 [[ "${EAI_RELEASE_VERSION:-}" =~ ^[0-9]+[.][0-9]+[.][0-9]+$ ]] \
   || guest_test_fail "EAI_RELEASE_VERSION must be a semantic version."
+[[ "$expected_cli_version" =~ ^[0-9]+[.][0-9]+[.][0-9]+$ ]] \
+  || guest_test_fail "The Windows EAI CLI minimum must be a semantic version."
 [[ -f "$ocr_source" ]] || guest_test_fail "The screenshot OCR helper is missing."
 [[ -f "$window_id_source" ]] || guest_test_fail "The Parallels window lookup helper is missing."
 [[ "$guest_user" =~ ^[A-Za-z0-9._-]+$ ]] || guest_test_fail "The Windows guest user is invalid."

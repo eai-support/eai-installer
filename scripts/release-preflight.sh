@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 npm test
+node scripts/verify-published-cli.mjs
 if command -v cargo >/dev/null 2>&1; then
   cargo check --manifest-path src-tauri/Cargo.toml
 else

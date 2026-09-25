@@ -920,8 +920,10 @@ contract but does not predict the result of the product's later `apt-get
 update`, refresh apt indexes itself, add a repository, install, upgrade, or
 repair those prerequisites. After the product runs, package ownership is proved,
 Node.js must be version 24 or newer, npm must be available with a parseable
-version, and the Ubuntu diagnostic contract requires EAI CLI `3.17.0` exactly
-from both the executable and its package metadata.
+version, and the Ubuntu diagnostic contract requires EAI CLI `3.17.0` or newer.
+The executable and package metadata must report the same version, and
+`eai deploy app --help` must expose source choice, GitHub-link handoff, and
+explicit target-tenant binding.
 
 The approved Node.js 24 repository can supply npm from the installed `nodejs`
 package rather than a separate Debian package named `npm`. The adapter therefore
@@ -1488,7 +1490,7 @@ exception to verified deletion, and its report cannot be used as production
 release evidence.
 
 The adapter resolves one canonical executable EAI CLI, requires at least the
-`eai-cli` version pinned in `installer-manifest.json` (currently `3.17.0`), and
+`eai-cli` minimum in `installer-manifest.json` (currently `3.17.0`), and
 binds every command to the approved PublicAPI origin. The adapter deliberately
 has no draft-enrollment deletion,
 generic Resource API mutation, admin-portal, or diagnostic fallback. A missing
@@ -1498,6 +1500,18 @@ manifest-owned record, pagination ambiguity, or a failed absence query produces
 no success receipt and fails the production gate closed. The platform must therefore
 issue an ownership manifest for every app created by the production E2E path;
 the diagnostic cleanup tools cannot substitute for that platform contract.
+
+Before production publication can reach the VM preflight or tag creation, the
+release gate installs `@enterpriseai/cli@latest` from the public npm registry
+into an isolated temporary prefix with lifecycle scripts disabled. It reads the
+installed package version and executes that package's exact entry point with a
+minimal environment. The version must meet the manifest minimum and match the
+package metadata, while `eai deploy app --help` must expose `--source`,
+`--github-link-session`, and `--target-tenant-id`. A static version string or a
+locally installed CLI cannot satisfy this producer-before-consumer gate.
+Each option is matched as a complete help token, so lookalike option names do
+not pass. Both the local production command and the protected tag/dispatch
+workflow run this same gate before any platform build can publish an asset.
 
 Receipt publication is fail-closed: the adapter creates a private temporary
 receipt and uses an atomic no-overwrite hard link. A path created between the

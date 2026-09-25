@@ -1,0 +1,70 @@
+{
+  "schema": "eai.test_coverage_map.v1",
+  "repositories": {
+    "eai-installer": {
+      "intentional_skipped_tests": [],
+      "features": [
+        {
+          "id": "managed-deployment-cli-bootstrap",
+          "description": "Every setup path accepts only an EAI CLI release that exposes the EAI-managed deployment command, explicit source choice, actor-bound GitHub-link continuation, and target-tenant binding, then preserves both source journeys and exact-operation recovery commands in the installer manifest.",
+          "owned_paths": [
+            ".eai/test-coverage.json",
+            "docs/release-e2e.md",
+            "docs/testing.md",
+            ".github/workflows/release.yml",
+            "installer-manifest.json",
+            "package.json",
+            "scripts/bootstrap.sh",
+            "scripts/bootstrap.ps1",
+            "scripts/run-macos-guest-test.sh",
+            "scripts/run-windows-guest-test.sh",
+            "scripts/test-bootstrap.mjs",
+            "scripts/test-release.mjs",
+            "scripts/verify-published-cli.mjs",
+            "scripts/test-production-release-safeguards.mjs",
+            "scripts/test-ubuntu-guest-test.sh",
+            "scripts/ubuntu-guest-test-core.sh",
+            "tests/managed-deployment-bootstrap.test.mjs",
+            "tests/managed-deployment-recovery.test.mjs",
+            "tests/published-cli-release-gate.test.mjs",
+            "scripts/preview-managed-deploy.mjs",
+            "ui/app.js",
+            ".specify-pro/specs/3503-eai-managed-deploy/**",
+            "src-tauri/src/main.rs",
+            "src-tauri/Cargo.toml",
+            "src-tauri/tauri.conf.json"
+          ],
+          "required_repo_tests": [
+            "scripts/verify-version.mjs",
+            "scripts/verify-manifest.mjs",
+            "scripts/test-bootstrap.mjs",
+            "tests/managed-deployment-bootstrap.test.mjs",
+            "tests/managed-deployment-recovery.test.mjs",
+            "tests/published-cli-release-gate.test.mjs",
+            "scripts/test-release.mjs",
+            "scripts/test-production-release-safeguards.mjs"
+          ],
+          "required_ci_checks": [
+            "public-hygiene",
+            "tauri-check"
+          ],
+          "required_cross_service_surfaces": [
+            "eai-cli",
+            "eai-managed-deploy"
+          ],
+          "required_deployed_contracts": [
+            {
+              "repository": "eai-testing-dev",
+              "path": "tests/cross-service/contracts/eai-cli/eai-managed-deploy.spec.ts"
+            },
+            {
+              "repository": "eai-testing-dev",
+              "path": "tests/cross-service/contracts/eai-cli/eai-managed-deploy-mutation.spec.ts"
+            }
+          ],
+          "required_config_checks": []
+        }
+      ]
+    }
+  }
+}

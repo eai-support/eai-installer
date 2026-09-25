@@ -6,6 +6,8 @@ for (const file of files) {
   if (!text.includes("@enterpriseai/cli")) throw new Error(`${file}: canonical CLI install is missing`);
   if (!text.includes("eai login")) throw new Error(`${file}: login handoff is missing`);
   if (!text.includes("eai init")) throw new Error(`${file}: init handoff is missing`);
+  if (!text.includes("eai deploy app --help")) throw new Error(`${file}: managed deploy capability check is missing`);
+  if (!text.includes("3.17.0") && !text.includes("3, 17, 0")) throw new Error(`${file}: released CLI baseline check is missing`);
   if (!text.includes("EAI_SETUP_AUTO_INSTALL") && !text.includes("AutoInstall")) {
     throw new Error(`${file}: explicit install opt-in is missing`);
   }
@@ -24,8 +26,48 @@ for (const value of ["--install-homebrew", "EAI_SETUP_INSTALL_HOMEBREW", "raw.gi
 if (!shell.includes('INSTALL_HOMEBREW="${EAI_SETUP_INSTALL_HOMEBREW:-0}"')) {
   throw new Error("bootstrap.sh: Homebrew installation is not opt-in");
 }
+for (const value of ["eai_version_supported", "eai_help_has_option", "eai_managed_deploy_ready", "major == 3 && minor == 17", "eai deploy app --help", "--source", "--github-link-session", "--target-tenant-id"]) {
+  if (!shell.includes(value)) throw new Error(`bootstrap.sh: combined EAI CLI readiness is missing: ${value}`);
+}
+const powershell = await readFile(new URL("../scripts/bootstrap.ps1", import.meta.url), "utf8");
+for (const value of ["Has-HelpOption", "Has-EaiManagedDeploy", "[version]::new(3, 17, 0)", "eai deploy app --help", "--source", "--github-link-session", "--target-tenant-id"]) {
+  if (!powershell.includes(value)) throw new Error(`bootstrap.ps1: combined EAI CLI readiness is missing: ${value}`);
+}
+for (const value of ['$rawVersion = @(', "$versionExitCode = $LASTEXITCODE", '-join "`n"']) {
+  if (!powershell.includes(value)) throw new Error(`bootstrap.ps1: exact complete CLI version evidence is missing: ${value}`);
+}
+const releasePreflight = await readFile(new URL("../scripts/release-preflight.sh", import.meta.url), "utf8");
+if (!releasePreflight.includes("node scripts/verify-published-cli.mjs")) {
+  throw new Error("release preflight does not execute the published CLI capability gate");
+}
 
 const manifest = JSON.parse(await readFile(new URL("../installer-manifest.json", import.meta.url), "utf8"));
+const coverageMap = JSON.parse(
+  await readFile(new URL("../.eai/test-coverage.json", import.meta.url), "utf8"),
+);
+const managedDeployCoverage = coverageMap.repositories?.["eai-installer"]?.features?.find(
+  (feature) => feature.id === "managed-deployment-cli-bootstrap",
+);
+if (!managedDeployCoverage) {
+  throw new Error("coverage: managed deployment installer ownership is missing");
+}
+for (const ownedPath of [
+  "installer-manifest.json",
+  "scripts/bootstrap.sh",
+  "scripts/bootstrap.ps1",
+  "src-tauri/src/main.rs",
+]) {
+  if (!managedDeployCoverage.owned_paths?.includes(ownedPath)) {
+    throw new Error(`coverage: managed deployment owner is missing ${ownedPath}`);
+  }
+}
+if (!managedDeployCoverage.required_deployed_contracts?.some(
+  (contract) =>
+    contract.repository === "eai-testing-dev" &&
+    contract.path === "tests/cross-service/contracts/eai-cli/eai-managed-deploy.spec.ts",
+)) {
+  throw new Error("coverage: managed deployment deployed contract is missing");
+}
 if (manifest.sources.cliRepository !== "https://github.com/eai-support/eai.git" || manifest.sources.goferRepository !== "https://github.com/eai-support/eai-gofer.git") {
   throw new Error("manifest: CLI and Gofer repositories must use the current public repositories");
 }
@@ -47,7 +89,17 @@ if (node?.minimumVersion !== "24") {
 }
 const eaiCli = manifest.prerequisites.find((item) => item.id === "eai-cli");
 if (eaiCli?.minimumVersion !== "3.17.0") {
-  throw new Error("manifest: EAI CLI minimum must include the Configurator Plus handoff in 3.17.0");
+  throw new Error("manifest: keep the released 3.17.0 baseline until a feature-bearing CLI is published");
+}
+for (const command of [
+  "eai deploy app <app-key> --target eai --tenant-id <tenant-id> --target-tenant-id <target-tenant-id> --source eai-managed",
+  "eai deploy app <app-key> --target eai --tenant-id <tenant-id> --target-tenant-id <target-tenant-id> --source customer-owned --repo <owner/name> --installation-id <id>",
+  "eai deploy app <app-key> --target eai --tenant-id <tenant-id> --target-tenant-id <target-tenant-id> --source eai-managed --github-link-session <session-id>",
+  "eai deploy app <app-key> --target eai --tenant-id <tenant-id> --target-tenant-id <target-tenant-id> --source eai-managed --resume <operation-id>",
+]) {
+  if (!manifest.runtime?.userCommands?.includes(command)) {
+    throw new Error(`manifest: missing managed deployment onboarding command: ${command}`);
+  }
 }
 const nodeMacInstaller = node?.installers?.macos ?? "";
 const nodeMacUrls = nodeMacInstaller.match(/https:\/\/[^\s]+/g) ?? [];
@@ -78,13 +130,19 @@ if ((rust.match(/env::var_os\("HOME"\)/g) ?? []).length !== 1 || rust.includes('
 for (const value of ['command.env("HOME", &home)', 'command.env("npm_config_cache", home.join(".eai-setup/npm-cache"))', 'command.env_remove("HOME")', 'command.env_remove("npm_config_cache")']) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter lets a GUI child process inherit an invalid home: ${value}`);
 }
-for (const value of ["const MIN_EAI_CLI_VERSION: (u64, u64, u64) = (3, 17, 0)", "MIN_NODE_MAJOR_VERSION: u64 = 24", "fn node_version()", "@enterpriseai/cli", "eai_cli_version()", "user_npm_global_exec_dirs", "current_version >= MIN_EAI_CLI_VERSION", "fn eai_cli_script", "APPDATA", "run_program_in_directory_with_env(\"node\", &node_args, directory, environment)"] ) {
+for (const value of ["const MIN_EAI_CLI_VERSION: (u64, u64, u64) = (3, 17, 0)", "MIN_NODE_MAJOR_VERSION: u64 = 24", "fn node_version()", "@enterpriseai/cli", "eai_cli_version()", "fn eai_cli_version_for", "fn deploy_help_has_option", "fn eai_cli_is_compatible", "current_version >= MIN_EAI_CLI_VERSION", 'deploy_help_has_option(deploy_help, "--source")', 'deploy_help_has_option(deploy_help, "--github-link-session")', 'deploy_help_has_option(deploy_help, "--target-tenant-id")', 'run_program(program, &["deploy", "app", "--help"])', "desktop_cli_probe_executes_version_and_managed_deploy_help", "user_npm_global_exec_dirs", "fn eai_cli_script", "fn eai_cli_package_entrypoint", '.get("bin")', "eai_cli_package_entrypoint_uses_the_declared_in_package_bin", "APPDATA", "run_program_in_directory_with_env(\"node\", &node_args, directory, environment)"] ) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter does not verify the canonical EAI CLI release: ${value}`);
+}
+for (const value of ["fn git_checkout_path", '"--show-toplevel"', '"--absolute-git-dir"', "fn has_symlinked_path_component", "path.ancestors()", "fn checkout_marker_git_dir", "symlink_metadata", "file_type().is_symlink()", "checkout-link", "parent-link", "metadata-link", "arbitrary-metadata"]) {
+  if (!rust.includes(value)) throw new Error(`Tauri E2E override does not prove an actual Git checkout: ${value}`);
 }
 if (rust.includes("latest_eai_cli_requirement") || rust.includes('version("npm", &["view", "@enterpriseai/cli"')) {
   throw new Error("Tauri adapter must not use live npm metadata to decide whether the installed EAI CLI is ready");
 }
 const eaiResolver = rust.slice(rust.indexOf("fn executable"), rust.indexOf("fn run_program"));
+if (!eaiResolver.includes("Path::new(program).is_absolute()")) {
+  throw new Error("Tauri executable resolution does not preserve an exact absolute program path");
+}
 if (eaiResolver.indexOf("user_npm_global_exec_dirs") > eaiResolver.indexOf("user_node_bin_dirs")) {
   throw new Error("Tauri adapter must prefer the user npm-prefix EAI launcher over stale Node-directory launchers");
 }
@@ -187,7 +245,7 @@ for (const value of [
 for (const value of ["Homebrew.pkg", "/usr/sbin/pkgutil", "--check-signature", "with administrator privileges", "--stdinpass", "No Terminal window will open"]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing native macOS installation control: ${value}`);
 }
-for (const value of ["windows_package_bin_dirs", "windows_resolved_path", "env::split_paths", "ProgramW6432", "ProgramFiles(Arm)", "ProgramFiles(x86)", "CREATE_NO_WINDOW", "creation_flags", "APPDATA", "windows_shell_arg", "ComSpec", "ends_with(\".cmd\")", "command_line.push_str", "call {}", "windows_package_install_result", "windows_vc_runtime_version", "Microsoft.VCRedist.2015+", "npm_version", "run_npm_in_directory(&[\"--version\"], None)", "Node.js and npm are already installed and ready.", "installed EAI CLI could not be started."]) {
+for (const value of ["windows_package_bin_dirs", "windows_resolved_path", "windows_best_candidate", "env::split_paths", "ProgramW6432", "ProgramFiles(Arm)", "ProgramFiles(x86)", "CREATE_NO_WINDOW", "creation_flags", "APPDATA", "windows_shell_arg", "ComSpec", "ends_with(\".cmd\")", "command_line.push_str", "call {}", "windows_package_install_result", "windows_vc_runtime_version", "Microsoft.VCRedist.2015+", "npm_version", "run_npm_in_directory(&[\"--version\"], None)", "winget_node_action", "\"upgrade\"", "Node.js and npm are already installed and ready.", "npm finished, but the installed EAI CLI is missing the compatible Deploy to EAI command."]) {
   if (!rust.includes(value)) throw new Error(`Tauri adapter is missing Windows prerequisite safety support: ${value}`);
 }
 for (const value of ["xcode-select", "full Xcode is not required", "softwareupdate", "latest_command_line_tools_label", "refresh_macos_command_line_tools_catalog", "Refreshing Apple Software Update", "with administrator privileges", "secure administrator dialog", "native administrator install", "latest_node_artifact", "nodejs.org/dist/index.json", "osx-arm64-pkg", "osx-x64-pkg", "osx-arm64-tar", "osx-x64-tar", "SHASUMS256.txt", "shasum", "uname", "--prefix", "expose_user_npm_bin", "NVM_DIR", "versions/node", "NVM_BIN", "nvm_node_bin_dirs", "macos_package_bin_dirs"]) {
@@ -454,10 +512,10 @@ if (!/function paint\(\)[\s\S]{0,900}?\breset\(\);/.test(app)) {
    together, rather than stopping at the first. The one exception is a
    tool that needed the failed one: the EAI CLI is installed with npm, so
    blaming it when Node is missing names the wrong thing. */
-if (!/for \(const step of missingSteps\(\)\)[\s\S]{0,600}?failed\.push\(step\)/.test(app)) {
+if (!/const plan = missingSteps\(\);[\s\S]{0,200}?for \(const \[index, step\] of plan\.entries\(\)\)[\s\S]{0,600}?failed\.push\(step\)/.test(app)) {
   throw new Error("wizard: the readiness sweep no longer collects the failures it finds");
 }
-if (!app.includes('raise("prereq", { steps: failed })')) {
+if (!app.includes('raiseReadinessFault("prereq", { steps: failed })')) {
   throw new Error("wizard: the prerequisite failure no longer names every tool that failed");
 }
 if (!/step === "eai-cli" && failed\.includes\("node"\)/.test(app)) {

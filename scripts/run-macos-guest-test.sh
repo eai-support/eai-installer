@@ -26,7 +26,8 @@ normal_pid_file="/tmp/eai-setup-normal.pid"
 e2e_pid_file="/tmp/eai-setup-e2e.pid"
 guest_node="/Users/$guest_user/.eai-setup/node/bin/node"
 guest_npm_cli="/Users/$guest_user/.eai-setup/node/lib/node_modules/npm/bin/npm-cli.js"
-guest_cli="/Users/$guest_user/.eai-setup/npm-global/lib/node_modules/@enterpriseai/cli/dist/index.js"
+guest_cli_package_root="/Users/$guest_user/.eai-setup/npm-global/lib/node_modules/@enterpriseai/cli"
+guest_cli_package="$guest_cli_package_root/package.json"
 input_helper="$ROOT/scripts/parallels-input.mjs"
 ocr_binary="${TMPDIR:-/tmp}/eai-installer-macos-ocr-match"
 work_dir="$(mktemp -d)"
@@ -284,6 +285,20 @@ semantic_version_at_least() {
     || (( major == minimum_major && minor == minimum_minor && patch >= minimum_patch ))
 }
 
+exact_semantic_version_at_least() {
+  local value="$1"
+  local minimum_major="$2"
+  local minimum_minor="$3"
+  local minimum_patch="$4"
+  [[ "$value" =~ ^v?([0-9]+)\.([0-9]+)\.([0-9]+)$ ]] || return 1
+  local major="${BASH_REMATCH[1]}"
+  local minor="${BASH_REMATCH[2]}"
+  local patch="${BASH_REMATCH[3]}"
+  (( major > minimum_major )) \
+    || (( major == minimum_major && minor > minimum_minor )) \
+    || (( major == minimum_major && minor == minimum_minor && patch >= minimum_patch ))
+}
+
 guest_git_version() {
   local developer_dir=""
   developer_dir="$(macos_prl_current_user_exec_idempotent /usr/bin/xcode-select -p 2>/dev/null | tr -d '\r\n' || true)"
@@ -302,9 +317,38 @@ guest_npm_version() {
   macos_prl_current_user_exec_idempotent "$guest_node" "$guest_npm_cli" --version 2>/dev/null | tr -d '\r\n'
 }
 
+guest_eai_entrypoint() {
+  macos_prl_current_user_eai_cli_entrypoint "$guest_node" "$guest_cli_package_root" 2>/dev/null
+}
+
 guest_eai_version() {
-  macos_prl_current_user_exec_idempotent /bin/test -f "$guest_cli" >/dev/null 2>&1 || return 1
+  local guest_cli=""
+  guest_cli="$(guest_eai_entrypoint)" || return 1
   macos_prl_current_user_exec_idempotent "$guest_node" "$guest_cli" --version 2>/dev/null | tr -d '\r\n'
+}
+
+guest_eai_package_version() {
+  macos_prl_current_user_exec_idempotent /bin/test -f "$guest_cli_package" >/dev/null 2>&1 || return 1
+  macos_prl_current_user_exec_idempotent "$guest_node" -e \
+    'const fs=require("node:fs"); const value=JSON.parse(fs.readFileSync(process.argv[1],"utf8")).version; if(!/^[0-9]+\.[0-9]+\.[0-9]+$/.test(value)){process.exit(1)} process.stdout.write(value)' \
+    "$guest_cli_package" 2>/dev/null | tr -d '\r\n'
+}
+
+guest_eai_help_has_option() {
+  local help_text="$1"
+  local option="$2"
+  [[ "$help_text" =~ (^|[[:space:]])${option}([=[:space:]]|$) ]]
+}
+
+guest_eai_managed_deploy_ready() {
+  local guest_cli=""
+  local deploy_help=""
+  guest_cli="$(guest_eai_entrypoint)" || return 1
+  deploy_help="$(macos_prl_current_user_exec_idempotent "$guest_node" "$guest_cli" deploy app --help 2>/dev/null)" \
+    || return 1
+  guest_eai_help_has_option "$deploy_help" --source \
+    && guest_eai_help_has_option "$deploy_help" --github-link-session \
+    && guest_eai_help_has_option "$deploy_help" --target-tenant-id
 }
 
 prerequisite_versions_satisfy_contract() {
@@ -312,10 +356,12 @@ prerequisite_versions_satisfy_contract() {
   local node_version="$2"
   local npm_version="$3"
   local eai_version="$4"
+  local eai_package_version="$5"
   [[ "$git_version" == git\ version* ]] \
     && semantic_version_at_least "$node_version" 24 0 0 \
     && semantic_version_at_least "$npm_version" 1 0 0 \
-    && semantic_version_at_least "$eai_version" 3 15 10
+    && exact_semantic_version_at_least "$eai_version" "$expected_cli_major" "$expected_cli_minor" "$expected_cli_patch" \
+    && [[ "${eai_version#v}" == "$eai_package_version" ]]
 }
 
 guest_prerequisites_ready() {
@@ -323,11 +369,14 @@ guest_prerequisites_ready() {
   local node_version=""
   local npm_version=""
   local eai_version=""
+  local eai_package_version=""
   git_version="$(guest_git_version || true)"
   node_version="$(guest_node_version || true)"
   npm_version="$(guest_npm_version || true)"
   eai_version="$(guest_eai_version || true)"
-  prerequisite_versions_satisfy_contract "$git_version" "$node_version" "$npm_version" "$eai_version"
+  eai_package_version="$(guest_eai_package_version || true)"
+  prerequisite_versions_satisfy_contract "$git_version" "$node_version" "$npm_version" "$eai_version" "$eai_package_version" \
+    && guest_eai_managed_deploy_ready
 }
 
 guest_current_command_exists() {
@@ -497,8 +546,11 @@ guest_test_require prlctl
 guest_test_require node
 guest_test_require security
 guest_test_require_environment
-[[ "$expected_cli_version" == 3.17.0 ]] \
-  || guest_test_fail "The macOS release harness is pinned to EAI CLI 3.17.0."
+[[ "$expected_cli_version" =~ ^([0-9]+)[.]([0-9]+)[.]([0-9]+)$ ]] \
+  || guest_test_fail "The macOS EAI CLI minimum must be a semantic version."
+expected_cli_major="${BASH_REMATCH[1]}"
+expected_cli_minor="${BASH_REMATCH[2]}"
+expected_cli_patch="${BASH_REMATCH[3]}"
 [[ -f "$input_helper" ]] || guest_test_fail "The Parallels input helper is missing."
 [[ "$guest_user" == "$mac_admin_account" ]] \
   || guest_test_fail "The controlled macOS release guest must use the testmac account."
@@ -664,8 +716,11 @@ after_git="$(guest_git_version)"
 after_node="$(guest_node_version)"
 after_npm="$(guest_npm_version)"
 after_eai="$(guest_eai_version)"
-prerequisite_versions_satisfy_contract "$after_git" "$after_node" "$after_npm" "$after_eai" \
+after_eai_package="$(guest_eai_package_version)"
+prerequisite_versions_satisfy_contract "$after_git" "$after_node" "$after_npm" "$after_eai" "$after_eai_package" \
   || guest_test_fail "Installed prerequisite versions do not satisfy the release contract."
+guest_eai_managed_deploy_ready \
+  || guest_test_fail "The installed EAI CLI does not expose source choice, GitHub-link handoff, and target-tenant binding."
 stage prerequisite-install-passed
 
 stage normal-app-stop
@@ -894,9 +949,9 @@ export EAI_VM_AI_HANDOFF_PROCESS_VERIFIED=1
 export EAI_VM_AI_HANDOFF_SCREENSHOT_VERIFIED=1
 
 guest_hash="$(macos_prl_current_user_exec_idempotent /usr/bin/shasum -a 256 /tmp/eai-setup-under-test.dmg | /usr/bin/awk '{print $1}')"
-versions="$(node --input-type=module - "$after_git" "$after_node" "$after_npm" "$after_eai" <<'NODE'
-const [git, node, npm, eai] = process.argv.slice(2);
-process.stdout.write(JSON.stringify({ git, node, npm, eai }));
+versions="$(node --input-type=module - "$after_git" "$after_node" "$after_npm" "$after_eai" "$after_eai_package" <<'NODE'
+const [git, node, npm, eai, eaiPackage] = process.argv.slice(2);
+process.stdout.write(JSON.stringify({ git, node, npm, eai, eaiPackage }));
 NODE
 )"
 before_versions="$(node --input-type=module - "$before_git" "$before_node" "$before_npm" "$before_eai" <<'NODE'

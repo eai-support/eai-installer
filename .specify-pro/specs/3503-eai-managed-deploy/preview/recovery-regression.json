@@ -1,0 +1,14 @@
+{
+  "baseline": "d9b60935371f6e2d43086f3088cd90d10ac5469b",
+  "scenario": "Successful retry must advance the actual action handler to sign-in (panel 3)",
+  "before": {
+    "returned": true,
+    "transitions": []
+  },
+  "after": {
+    "returned": true,
+    "transitions": [
+      3
+    ]
+  }
+}

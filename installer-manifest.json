@@ -86,7 +86,11 @@
       "eai whoami",
       "eai tenant list",
       "eai tenant select <tenant>",
-      "eai init <project-name>"
+      "eai init <project-name>",
+      "eai deploy app <app-key> --target eai --tenant-id <tenant-id> --target-tenant-id <target-tenant-id> --source eai-managed",
+      "eai deploy app <app-key> --target eai --tenant-id <tenant-id> --target-tenant-id <target-tenant-id> --source customer-owned --repo <owner/name> --installation-id <id>",
+      "eai deploy app <app-key> --target eai --tenant-id <tenant-id> --target-tenant-id <target-tenant-id> --source eai-managed --github-link-session <session-id>",
+      "eai deploy app <app-key> --target eai --tenant-id <tenant-id> --target-tenant-id <target-tenant-id> --source eai-managed --resume <operation-id>"
     ],
     "secrets": "No token, password, client secret, or tenant secret is bundled in the installer.",
     "deviceIdentity": "A random local device identifier may be stored for future activation; it is not hardware fingerprinting and is not transmitted by this repository.",

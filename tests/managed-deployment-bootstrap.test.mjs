@@ -1,0 +1,260 @@
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { delimiter, dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import test from "node:test";
+
+const repositoryRoot = dirname(dirname(fileURLToPath(import.meta.url)));
+const isWindows = process.platform === "win32";
+const bootstrapPath = join(repositoryRoot, "scripts", isWindows ? "bootstrap.ps1" : "bootstrap.sh");
+const missingCliPattern = isWindows
+  ? /Missing EAI CLI[\s\S]*-AutoInstall/
+  : /Missing eai\. Re-run with EAI_SETUP_AUTO_INSTALL=1/;
+const incompatibleCliPattern = isWindows
+  ? /installed EAI CLI is incompatible[\s\S]*-AutoInstall/i
+  : /installed EAI CLI is incompatible[\s\S]*EAI_SETUP_AUTO_INSTALL=1/i;
+
+async function writeExecutable(path, source) {
+  await writeFile(path, `#!/bin/sh\nset -eu\n${source}\n`);
+  await chmod(path, 0o755);
+}
+
+async function createBootstrapHarness({ version = "", versionExitCode = 0, deployReady = false, sourceReady = deployReady, targetTenantReady = sourceReady, lookalikeOptions = false, autoInstall = false, installed = true }) {
+  const root = await mkdtemp(join(tmpdir(), "eai-installer-managed-deploy-"));
+  const bin = join(root, "bin");
+  await mkdir(bin);
+  const windowsHelp = lookalikeOptions
+    ? "--source-path ^<path^> --github-link-session-token ^<token^> --target-tenant-id-alias ^<tenant^>"
+    : sourceReady
+      ? `--source ^<choice^> --github-link-session ^<id^>${targetTenantReady ? " --target-tenant-id ^<tenant^>" : ""}`
+      : "--repo ^<owner/name^>";
+  const posixHelp = lookalikeOptions
+    ? "--source-path <path> --github-link-session-token <token> --target-tenant-id-alias <tenant>"
+    : sourceReady
+      ? `--source <choice> --github-link-session <id>${targetTenantReady ? " --target-tenant-id <tenant>" : ""}`
+      : "--repo <owner/name>";
+
+  if (isWindows) {
+    const fixtures = {
+      git: 'if "%~1"=="--version" echo git version 2.45.0\nexit /b 0',
+      node: 'if "%~1"=="-p" (echo 24 & exit /b 0)\nif "%~1"=="--version" (echo v24.8.0 & exit /b 0)\nexit /b 1',
+      npm: 'if "%~1"=="--version" (echo 10.9.0 & exit /b 0)\necho %*>> "%EAI_TEST_NPM_LOG%"\nexit /b 0',
+      eai: `echo %*>> "%EAI_TEST_EAI_LOG%"
+if "%~1"=="--version" (
+${String(version).split(/\r?\n/).map((line) => `echo ${line}`).join("\n")}
+exit /b ${versionExitCode}
+)
+if "%~1"=="deploy" if "%~2"=="app" if "%~3"=="--help" (echo ${windowsHelp} & exit /b ${deployReady ? 0 : 7})
+exit /b 1`,
+    };
+    if (!installed) delete fixtures.eai;
+    for (const [name, source] of Object.entries(fixtures)) {
+      await writeFile(join(bin, `${name}.cmd`), `@echo off\n${source}\n`.replaceAll("\n", "\r\n"));
+    }
+  } else {
+    await writeExecutable(
+      join(bin, "git"),
+      'if [ "${1:-}" = "--version" ]; then echo "git version 2.45.0"; exit 0; fi\nexit 0',
+    );
+    await writeExecutable(
+      join(bin, "node"),
+      'if [ "${1:-}" = "-p" ]; then echo "24"; exit 0; fi\nif [ "${1:-}" = "--version" ]; then echo "v24.8.0"; exit 0; fi\nexit 1',
+    );
+    await writeExecutable(
+      join(bin, "npm"),
+      'if [ "${1:-}" = "--version" ]; then echo "10.9.0"; exit 0; fi\nprintf "%s\\n" "$*" >> "$EAI_TEST_NPM_LOG"\nexit 0',
+    );
+    if (installed) {
+      await writeExecutable(
+        join(bin, "eai"),
+        `printf "%s\\n" "$*" >> "$EAI_TEST_EAI_LOG"
+if [ "\${1:-}" = "--version" ]; then echo "${version}"; exit ${versionExitCode}; fi
+if [ "\${1:-}" = "deploy" ] && [ "\${2:-}" = "app" ] && [ "\${3:-}" = "--help" ]; then echo "${posixHelp}"; exit ${deployReady ? 0 : 7}; fi
+exit 1`,
+      );
+    }
+  }
+
+  const npmLog = join(root, "npm.log");
+  const eaiLog = join(root, "eai.log");
+  const environment = Object.fromEntries(
+    Object.entries(process.env).filter(([key]) => key.toUpperCase() !== "PATH"),
+  );
+  const inheritedPath = Object.entries(process.env).find(([key]) => key.toUpperCase() === "PATH")?.[1];
+  const shell = isWindows ? "pwsh.exe" : "/bin/bash";
+  const args = isWindows
+    ? ["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", bootstrapPath]
+    : [bootstrapPath];
+  const run = spawnSync(shell, args, {
+    cwd: repositoryRoot,
+    encoding: "utf8",
+    env: {
+      ...environment,
+      EAI_SETUP_AUTO_INSTALL: autoInstall ? "1" : "0",
+      EAI_TEST_EAI_LOG: eaiLog,
+      EAI_TEST_NPM_LOG: npmLog,
+      PATH: isWindows ? `${bin}${delimiter}${inheritedPath ?? ""}` : `${bin}:/usr/bin:/bin`,
+    },
+  });
+  if (run.error) {
+    await rm(root, { recursive: true, force: true });
+    throw run.error;
+  }
+  return { root, eaiLog, npmLog, run };
+}
+
+test("accepts the minimum CLI only when managed deployment is executable", async () => {
+  const harness = await createBootstrapHarness({ version: "3.17.0", deployReady: true });
+  try {
+    assert.equal(harness.run.status, 0, harness.run.stderr);
+    assert.match(harness.run.stdout, /^(?:EAI CLI: )?3\.17\.0\s*$/m);
+    assert.match(harness.run.stdout, /Use 'eai deploy app --help' when you are ready to choose hosting/);
+    await assert.rejects(readFile(harness.npmLog, "utf8"), { code: "ENOENT" });
+    assert.deepEqual((await readFile(harness.eaiLog, "utf8")).trim().split(/\r?\n/), [
+      "--version",
+      "deploy app --help",
+    ]);
+  } finally {
+    await rm(harness.root, { recursive: true, force: true });
+  }
+});
+
+test("does not reinstall an already capable CLI when automatic installation is allowed", async () => {
+  const harness = await createBootstrapHarness({ version: "3.17.0", deployReady: true, autoInstall: true });
+  try {
+    assert.equal(harness.run.status, 0, harness.run.stderr);
+    await assert.rejects(readFile(harness.npmLog, "utf8"), { code: "ENOENT" });
+  } finally {
+    await rm(harness.root, { recursive: true, force: true });
+  }
+});
+
+test("reports a missing CLI separately from an incompatible installed CLI", async () => {
+  const harness = await createBootstrapHarness({ installed: false });
+  try {
+    assert.equal(harness.run.status, 1, harness.run.stderr);
+    assert.match(harness.run.stderr, missingCliPattern);
+    await assert.rejects(readFile(harness.npmLog, "utf8"), { code: "ENOENT" });
+  } finally {
+    await rm(harness.root, { recursive: true, force: true });
+  }
+});
+
+test("rejects a CLI below the released baseline without silently replacing it", async () => {
+  const harness = await createBootstrapHarness({ version: "3.16.99", deployReady: true });
+  try {
+    assert.equal(harness.run.status, 1, harness.run.stderr);
+    assert.match(harness.run.stderr, incompatibleCliPattern);
+    await assert.rejects(readFile(harness.npmLog, "utf8"), { code: "ENOENT" });
+  } finally {
+    await rm(harness.root, { recursive: true, force: true });
+  }
+});
+
+test("rejects ambiguous or wrapped CLI version output", async () => {
+  const harness = await createBootstrapHarness({
+    version: "3.17.0; actual runtime 3.16.0",
+    deployReady: true,
+  });
+  try {
+    assert.equal(harness.run.status, 1, harness.run.stderr);
+    assert.match(harness.run.stderr, incompatibleCliPattern);
+    await assert.rejects(readFile(harness.npmLog, "utf8"), { code: "ENOENT" });
+  } finally {
+    await rm(harness.root, { recursive: true, force: true });
+  }
+});
+
+test("rejects multiline CLI version output", async () => {
+  const harness = await createBootstrapHarness({
+    version: "3.17.0\nactual runtime 3.16.0",
+    deployReady: true,
+  });
+  try {
+    assert.equal(harness.run.status, 1, harness.run.stderr);
+    assert.match(harness.run.stderr, incompatibleCliPattern);
+  } finally {
+    await rm(harness.root, { recursive: true, force: true });
+  }
+});
+
+test("rejects a version command that exits unsuccessfully", async () => {
+  const harness = await createBootstrapHarness({
+    version: "3.17.0",
+    versionExitCode: 7,
+    deployReady: true,
+  });
+  try {
+    assert.equal(harness.run.status, 1, harness.run.stderr);
+    assert.match(harness.run.stderr, incompatibleCliPattern);
+  } finally {
+    await rm(harness.root, { recursive: true, force: true });
+  }
+});
+
+test("rejects a compatible version when the deploy command is unavailable", async () => {
+  const harness = await createBootstrapHarness({ version: "3.17.0", deployReady: false });
+  try {
+    assert.equal(harness.run.status, 1, harness.run.stderr);
+    assert.match(harness.run.stderr, incompatibleCliPattern);
+    await assert.rejects(readFile(harness.npmLog, "utf8"), { code: "ENOENT" });
+  } finally {
+    await rm(harness.root, { recursive: true, force: true });
+  }
+});
+
+test("rejects customer-only CLI help that lacks source choice and GitHub-link handoff", async () => {
+  const harness = await createBootstrapHarness({ version: "3.17.0", deployReady: true, sourceReady: false });
+  try {
+    assert.equal(harness.run.status, 1, harness.run.stderr);
+    assert.match(harness.run.stderr, incompatibleCliPattern);
+    await assert.rejects(readFile(harness.npmLog, "utf8"), { code: "ENOENT" });
+  } finally {
+    await rm(harness.root, { recursive: true, force: true });
+  }
+});
+
+test("rejects managed deployment help that lacks target-tenant binding", async () => {
+  const harness = await createBootstrapHarness({ version: "3.17.0", deployReady: true, targetTenantReady: false });
+  try {
+    assert.equal(harness.run.status, 1, harness.run.stderr);
+    assert.match(harness.run.stderr, incompatibleCliPattern);
+    await assert.rejects(readFile(harness.npmLog, "utf8"), { code: "ENOENT" });
+  } finally {
+    await rm(harness.root, { recursive: true, force: true });
+  }
+});
+
+test("rejects lookalike managed deployment option names", async () => {
+  const harness = await createBootstrapHarness({ version: "3.17.0", deployReady: true, lookalikeOptions: true });
+  try {
+    assert.equal(harness.run.status, 1, harness.run.stderr);
+    assert.match(harness.run.stderr, incompatibleCliPattern);
+    await assert.rejects(readFile(harness.npmLog, "utf8"), { code: "ENOENT" });
+  } finally {
+    await rm(harness.root, { recursive: true, force: true });
+  }
+});
+
+test("maps the executable bootstrap proof to both deployed contracts", async () => {
+  const coverage = JSON.parse(
+    await readFile(join(repositoryRoot, ".eai", "test-coverage.json"), "utf8"),
+  );
+  const feature = coverage.repositories["eai-installer"].features.find(
+    ({ id }) => id === "managed-deployment-cli-bootstrap",
+  );
+  const contractPaths = feature.required_deployed_contracts.map(({ path }) => path);
+
+  assert.ok(feature.owned_paths.includes("tests/managed-deployment-bootstrap.test.mjs"));
+  assert.ok(feature.required_repo_tests.includes("tests/managed-deployment-bootstrap.test.mjs"));
+  assert.ok(feature.required_cross_service_surfaces.includes("eai-managed-deploy"));
+  assert.deepEqual(
+    contractPaths.filter((path) => path.includes("eai-managed-deploy")),
+    [
+      "tests/cross-service/contracts/eai-cli/eai-managed-deploy.spec.ts",
+      "tests/cross-service/contracts/eai-cli/eai-managed-deploy-mutation.spec.ts",
+    ],
+  );
+});

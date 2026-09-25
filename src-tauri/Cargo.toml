@@ -7,6 +7,12 @@ edition = "2021"
 rust-version = "1.77"
 build = "build.rs"
 
+[features]
+# Local templates can execute repository-controlled setup scripts. Keep that
+# capability out of production artifacts and opt into it only for controlled
+# debug/E2E builds.
+e2e-local-template = []
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

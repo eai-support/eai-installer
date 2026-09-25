@@ -272,6 +272,12 @@ assert.match(macosGuestPreparerSource, /trap cleanup EXIT/);
 assert.match(macosGuestPreparerSource, /READY_FOR_UI.*mount=%s/);
 assert.match(macosGuestAdapterSource, /login-macos-guest\.sh/);
 assert.match(macosGuestAdapterSource, /prepare-macos-ai-workspace\.sh/);
+assert.match(macosGuestAdapterSource, /guest_eai_entrypoint/);
+assert.match(macosGuestLoginSource, /macos_prl_current_user_eai_cli_entrypoint/);
+assert.match(macosCurrentUserLibrarySource, /macos_prl_current_user_eai_cli_entrypoint/);
+assert.match(macosCurrentUserLibrarySource, /manifest\.bin\.eai/);
+assert.doesNotMatch(macosGuestAdapterSource, /@enterpriseai\/cli\/dist\/index[.]js/);
+assert.doesNotMatch(macosGuestLoginSource, /@enterpriseai\/cli\/dist\/index[.]js/);
 assert.doesNotMatch(macosGuestAdapterSource, /tell application "System Events"/);
 assert.doesNotMatch(macosGuestAdapterSource, /click Allow/);
 const cleanSnapshotPreflight = macosGuestAdapterSource.indexOf("stage clean-snapshot-preflight");
@@ -2528,6 +2534,15 @@ for (const source of [releaseWorkflow, releaseReadinessWorkflow]) {
   );
 }
 assert.match(publishSection, /canonical_deprovision="\$ROOT\/scripts\/run-v4-app-deprovision\.sh"/);
+assert.match(publishSection, /node scripts\/verify-published-cli\.mjs/);
+assert.ok(publishSection.indexOf("verify-published-cli.mjs") < publishSection.indexOf("release-e2e.mjs"));
+assert.match(releaseWorkflow, /^  verify-published-cli:\n/m);
+assert.match(releaseWorkflow, /run: node scripts\/verify-published-cli\.mjs/);
+assert.equal(
+  (releaseWorkflow.match(/needs: \[validate-readiness-provenance, verify-published-cli\]/g) ?? []).length,
+  3,
+  "every platform build must depend on published CLI verification",
+);
 assert.match(publishSection, /--driver command --vms macos,windows,ubuntu --deprovision api --preflight/);
 assert.match(publishSection, /--driver command --vms macos,windows,ubuntu --deprovision api/);
 assert.match(publishSection, /gh workflow run release-readiness\.yml/);
@@ -3189,7 +3204,25 @@ assert.match(ubuntuGuestCoreSource, /Released-product prerequisite defect/);
 assert.match(ubuntuGuestCoreSource, /noHarnessPrerequisiteRepair: true/);
 assert.match(ubuntuGuestCoreSource, /prerequisite-contract-validation/);
 assert.match(ubuntuGuestCoreSource, /minimumNodeMajor: 24/);
-assert.match(ubuntuGuestCoreSource, /pinned to EAI CLI 3[.]17[.]0/);
+assert.match(ubuntuGuestCoreSource, /The Ubuntu EAI CLI minimum must be a semantic version/);
+assert.match(ubuntuGuestCoreSource, /eai_managed_deploy_ready/);
+assert.match(ubuntuGuestCoreSource, /eai_help_has_option/);
+assert.match(ubuntuGuestCoreSource, /exact_semver_at_least "\$eai_value"/);
+assert.match(ubuntuGuestCoreSource, /EAI CLI executable returned ambiguous version output/);
+assert.doesNotMatch(ubuntuGuestCoreSource, /grep -Eo '[^']*0-9[^']*' <<<"\$after_eai"/);
+assert.match(macosGuestAdapterSource, /guest_eai_help_has_option/);
+assert.match(macosGuestAdapterSource, /exact_semantic_version_at_least "\$eai_version"/);
+assert.match(macosGuestAdapterSource, /guest_eai_package_version/);
+assert.match(macosGuestAdapterSource, /eai_version#v/);
+assert.match(windowsGuestAdapterSource, /Has-HelpOption/);
+assert.match(windowsGuestAdapterSource, /Read-EaiPackageVersion/);
+assert.match(windowsGuestAdapterSource, /cliPackageVersion !== cliVersion/);
+assert.ok(
+  windowsGuestAdapterSource.includes('match(/^v?([0-9]+\\.[0-9]+\\.[0-9]+)$/)?.[1]'),
+  "Windows guest evidence must require exact EAI CLI version output",
+);
+assert.match(ubuntuGuestCoreSource, /managedDeployCapabilityRequired: true/);
+assert.match(ubuntuGuestCoreSource, /managedDeployCapabilityVerified: true/);
 for (const npmProviderCheck of [
   /validate_npm_provider_values\(\)/,
   /installed_node_package_status=/,

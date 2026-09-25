@@ -1255,6 +1255,14 @@ function missingSteps() {
  * the screen only ever shows the result: a tick, or the row for what
  * stood in the way.
  */
+function raiseReadinessFault(faultId, context) {
+  // Readiness starts on the welcome screen, whose state machine does not own
+  // prerequisite faults. Move only failed preparation to the sign-in screen
+  // before raising it so the shipped Retry control can actually recover it.
+  if (state.screen === "start") machine.goTo(state, "signin");
+  raise(faultId, context);
+}
+
 async function runReadiness() {
   if (readinessInProgress) return false;
   readinessInProgress = true;
@@ -1265,14 +1273,14 @@ async function runReadiness() {
 
     if (!await detect()) {
       facts.prereqBusy = null;
-      raise("prereq", { steps: ["detect"] });
+      raiseReadinessFault("prereq", { steps: ["detect"] });
       return false;
     }
 
     const reachable = await checkConnectivity();
     if (reachable && reachable.ok === false) {
       facts.prereqBusy = null;
-      raise("network", { host: reachable.host || "the EAI API" });
+      raiseReadinessFault("network", { host: reachable.host || "the EAI API" });
       return false;
     }
 
@@ -1297,9 +1305,10 @@ async function runReadiness() {
        that it could not be installed when the real cause is that Node is
        missing names the wrong thing. */
     const failed = [];
-    facts.prereqPlan = missingSteps();
+    const plan = missingSteps();
+    facts.prereqPlan = plan;
     facts.prereqCompleted = 0;
-    for (const step of missingSteps()) {
+    for (const [index, step] of plan.entries()) {
       if (step === "eai-cli" && failed.includes("node")) {
         note("Skipped the EAI CLI: it is installed with npm, and Node.js is not ready.");
         continue;
@@ -1308,17 +1317,21 @@ async function runReadiness() {
       facts.prereqDetail = "";
       if (state.screen === "signin" || state.screen === "start") paint();
       if (!await runBootstrapStep(step, { collect: true })) failed.push(step);
-      else facts.prereqCompleted = facts.prereqPlan.indexOf(step) + 1;
-      await detect();
+      else facts.prereqCompleted = index + 1;
     }
 
+    const refreshed = plan.length === 0 || await detect();
     facts.prereqBusy = null;
+    if (!refreshed) {
+      raiseReadinessFault("prereq", { steps: failed.length ? failed : ["detect"] });
+      return false;
+    }
     if (failed.length) {
-      raise("prereq", { steps: failed });
+      raiseReadinessFault("prereq", { steps: failed });
       return false;
     }
     if (!helpers.prerequisitesReady(facts.environment, facts.demo)) {
-      raise("prereq", { steps: missingSteps().length ? missingSteps() : ["git"] });
+      raiseReadinessFault("prereq", { steps: missingSteps().length ? missingSteps() : ["git"] });
       return false;
     }
     note("Everything EAI needs is ready.");

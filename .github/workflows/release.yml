@@ -79,9 +79,24 @@ jobs:
           }
           NODE
 
+  verify-published-cli:
+    name: Require the feature-bearing published EAI CLI
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Verify the exact public CLI package and deployment command
+        run: node scripts/verify-published-cli.mjs
+
   build-windows:
     name: Build and stage unsigned Windows (${{ matrix.target }})
-    needs: validate-readiness-provenance
+    needs: [validate-readiness-provenance, verify-published-cli]
     strategy:
       fail-fast: false
       matrix:
@@ -268,7 +283,7 @@ jobs:
 
   release-apple:
     name: Build, sign, and verify macOS (${{ matrix.target }})
-    needs: validate-readiness-provenance
+    needs: [validate-readiness-provenance, verify-published-cli]
     strategy:
       fail-fast: false
       matrix:
@@ -442,7 +457,7 @@ jobs:
 
   release-linux:
     name: Build, sign, and verify Linux (${{ matrix.target }})
-    needs: validate-readiness-provenance
+    needs: [validate-readiness-provenance, verify-published-cli]
     strategy:
       fail-fast: false
       matrix:

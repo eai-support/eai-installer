@@ -16,6 +16,18 @@ const readSource = (sourcePath) => fs.readFileSync(sourcePath, "utf8").replace(/
 const workflow = readSource(workflowPath);
 const readinessWorkflow = readSource(readinessWorkflowPath);
 const adapter = readSource(adapterPath);
+const tauriSource = readSource(path.join(root, "src-tauri", "src", "main.rs"));
+const cargoManifest = readSource(path.join(root, "src-tauri", "Cargo.toml"));
+const allWorkflowSources = fs.readdirSync(path.join(root, ".github", "workflows"))
+  .filter((name) => name.endsWith(".yml") || name.endsWith(".yaml"))
+  .map((name) => readSource(path.join(root, ".github", "workflows", name)))
+  .join("\n");
+
+assert.match(cargoManifest, /^e2e-local-template = \[\]$/m);
+assert.match(tauriSource, /cfg\(all\(feature = "e2e-local-template", not\(debug_assertions\)\)\)/);
+assert.match(tauriSource, /compile_error!\("the e2e-local-template feature is restricted to debug and test builds"\)/);
+assert.match(tauriSource, /cfg!\(any\(test, feature = "e2e-local-template"\)\)/);
+assert.doesNotMatch(allWorkflowSources, /e2e-local-template/);
 
 const section = (start, end) => {
   const startIndex = workflow.indexOf(start);

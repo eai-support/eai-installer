@@ -424,12 +424,19 @@ use only its fixed receipt and exact non-symlink project/package paths, parse an
 exact scoped package name privately on the host, preserve richer receipts, and emit a
 boolean failure checkpoint without enumerating tenant resources.
 
-The Ubuntu static contract additionally proves that the expected CLI is pinned
-to `3.17.0`, Node.js 24+ is verified after the released product runs without a
+The Ubuntu static contract additionally proves the released `3.17.0` CLI
+minimum plus source, GitHub-link, and target-tenant help flags, while Node.js 24+ is verified after the released product runs without a
 harness repair, and an executable npm is resolved to a root-owned target owned
 by the fully installed `nodejs` package without requiring a separate `npm`
 Debian package. A host-only provider fixture covers the NodeSource-style layout
 where `npm --version` succeeds while `dpkg-query -W npm` does not.
+
+The production release preflight separately downloads the current canonical
+CLI package into an isolated, script-disabled npm prefix and executes its exact
+entry point with a minimal environment. Fixture tests prove that the gate
+rejects an old package, extra or mismatched version text, lookalike option
+names, or a command missing any required managed-deployment option. Static
+release checks require every protected platform build to depend on this gate.
 
 Both checkpoint and final Resource API queries execute from the exact generated
 project, use the scalar `{"verticalKey":"<exact-app-key>"}` filter expected by

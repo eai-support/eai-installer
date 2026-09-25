@@ -39,6 +39,30 @@ case "$(uname -s)" in
 esac
 
 has() { command -v "$1" >/dev/null 2>&1; }
+EAI_CLI_VERSION=""
+eai_version_supported() {
+  local current=""
+  current="$(eai --version 2>/dev/null)" || return 1
+  [[ "$current" =~ ^v?([0-9]+)[.]([0-9]+)[.]([0-9]+)$ ]] || return 1
+  EAI_CLI_VERSION="$current"
+  local major="${BASH_REMATCH[1]}"
+  local minor="${BASH_REMATCH[2]}"
+  local patch="${BASH_REMATCH[3]}"
+  (( major > 3 )) || (( major == 3 && minor > 17 )) || (( major == 3 && minor == 17 && patch >= 0 ))
+}
+eai_help_has_option() {
+  local help_text="$1"
+  local option="$2"
+  [[ "$help_text" =~ (^|[[:space:]])${option}([=[:space:]]|$) ]]
+}
+eai_managed_deploy_ready() {
+  has eai && eai_version_supported || return 1
+  local deploy_help=""
+  deploy_help="$(eai deploy app --help 2>/dev/null)" || return 1
+  eai_help_has_option "$deploy_help" --source \
+    && eai_help_has_option "$deploy_help" --github-link-session \
+    && eai_help_has_option "$deploy_help" --target-tenant-id
+}
 require_auto_install() {
   if [ "$AUTO_INSTALL" != "1" ]; then
     echo "Missing $1. Re-run with EAI_SETUP_AUTO_INSTALL=1 after reviewing the fixed package-manager steps." >&2
@@ -107,15 +131,28 @@ if ! has node || ! has npm; then echo "Node.js and npm are required after instal
 NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]')"
 if [ "$NODE_MAJOR" -lt 24 ]; then echo "Node.js 24 or newer is required; found $(node --version)." >&2; exit 1; fi
 
-if ! has eai || [ "$AUTO_INSTALL" = "1" ]; then
+EAI_MANAGED_DEPLOY_READY=0
+if eai_managed_deploy_ready; then EAI_MANAGED_DEPLOY_READY=1; fi
+if [ "$EAI_MANAGED_DEPLOY_READY" != "1" ]; then
+  if has eai && [ "$AUTO_INSTALL" != "1" ]; then
+    echo "The installed EAI CLI is incompatible. EAI Setup requires version 3.17.0 or newer with source choice, GitHub-link handoff, and target-tenant binding. Re-run with EAI_SETUP_AUTO_INSTALL=1 to update it." >&2
+    exit 1
+  fi
   require_auto_install eai
   npm install --global @enterpriseai/cli
+  EAI_MANAGED_DEPLOY_READY=0
+  if eai_managed_deploy_ready; then EAI_MANAGED_DEPLOY_READY=1; fi
+fi
+
+if [ "$EAI_MANAGED_DEPLOY_READY" != "1" ]; then
+  echo "The installed EAI CLI is incompatible. EAI Setup requires version 3.17.0 or newer with source choice, GitHub-link handoff, and target-tenant binding." >&2
+  exit 1
 fi
 
 echo "Git: $(git --version)"
 echo "Node: $(node --version)"
 echo "npm: $(npm --version)"
-echo "EAI CLI: $(eai --version)"
+echo "EAI CLI: $EAI_CLI_VERSION"
 
 if [ -n "$PROJECT_NAME" ]; then
   case "$PROJECT_NAME" in
@@ -130,5 +167,5 @@ if [ -n "$PROJECT_NAME" ]; then
     eai init "$PROJECT_NAME" --current-dir
   fi
 else
-  echo "Next: eai login, eai whoami, then eai init <project-name>."
+  echo "Next: eai login, eai whoami, then eai init <project-name>. Use 'eai deploy app --help' when you are ready to choose hosting. EAI hosting verifies your linked GitHub identity, then offers EAI-maintained or customer-owned source."
 fi

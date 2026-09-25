@@ -203,6 +203,32 @@ macos_prl_current_user_shell_idempotent() {
   return "$status"
 }
 
+macos_prl_current_user_eai_cli_entrypoint() {
+  local node_binary="$1"
+  local package_root="$2"
+
+  macos_prl_current_user_exec_idempotent "$node_binary" -e '
+const fs = require("node:fs");
+const path = require("node:path");
+try {
+  const root = fs.realpathSync(process.argv[1]);
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
+  const bin = manifest.name === "@enterpriseai/cli" && manifest.bin && typeof manifest.bin === "object"
+    ? manifest.bin.eai
+    : null;
+  if (typeof bin !== "string" || !bin || path.isAbsolute(bin)) throw new Error("invalid eai bin");
+  const entrypoint = fs.realpathSync(path.resolve(root, bin));
+  const relative = path.relative(root, entrypoint);
+  if (!relative || relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative) || !fs.statSync(entrypoint).isFile()) {
+    throw new Error("eai bin is outside the package");
+  }
+  process.stdout.write(entrypoint);
+} catch {
+  process.exitCode = 1;
+}
+' "$package_root"
+}
+
 macos_prl_signed_in_user_exec() {
   [[ "$MACOS_PRL_CURRENT_USER_READY" == 1 ]] || {
     printf 'The signed-in macOS user has not been verified.\n' >&2

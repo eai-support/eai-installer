@@ -89,6 +89,20 @@ semver_at_least() {
     || (( major == wanted_major && minor == wanted_minor && patch >= wanted_patch ))
 }
 
+exact_semver_at_least() {
+  local value="$1"
+  local wanted_major="$2"
+  local wanted_minor="$3"
+  local wanted_patch="$4"
+  [[ "$value" =~ ^v?([0-9]+)\.([0-9]+)\.([0-9]+)$ ]] || return 1
+  local major="${BASH_REMATCH[1]}"
+  local minor="${BASH_REMATCH[2]}"
+  local patch="${BASH_REMATCH[3]}"
+  (( major > wanted_major )) \
+    || (( major == wanted_major && minor > wanted_minor )) \
+    || (( major == wanted_major && minor == wanted_minor && patch >= wanted_patch ))
+}
+
 validate_npm_provider_values() {
   local version="$1"
   local command_path="$2"
@@ -258,19 +272,35 @@ eai_version() {
   ubuntu_prl_user_exec "$UBUNTU_PRL_HOME/.eai-setup/npm-global/bin/eai" --version 2>/dev/null \
     | tr -d '\r\n'
 }
+eai_help_has_option() {
+  local help_text="$1"
+  local option="$2"
+  [[ "$help_text" =~ (^|[[:space:]])${option}([=[:space:]]|$) ]]
+}
+eai_managed_deploy_ready() {
+  local deploy_help=""
+  deploy_help="$(ubuntu_prl_user_exec "$UBUNTU_PRL_HOME/.eai-setup/npm-global/bin/eai" deploy app --help 2>/dev/null)" \
+    || return 1
+  eai_help_has_option "$deploy_help" --source \
+    && eai_help_has_option "$deploy_help" --github-link-session \
+    && eai_help_has_option "$deploy_help" --target-tenant-id
+}
 
 versions_json() {
   local git_value=""
   local node_value=""
   local npm_value=""
   local eai_value=""
+  local eai_managed_deploy="false"
   git_value="$(git_version || true)"
   node_value="$(node_version || true)"
   npm_value="$(npm_version || true)"
   eai_value="$(eai_version || true)"
-  node --input-type=module - "$git_value" "$node_value" "$npm_value" "$eai_value" <<'NODE'
-const [git, nodeVersion, npm, eai] = process.argv.slice(2);
-process.stdout.write(JSON.stringify({git: git || null, node: nodeVersion || null, npm: npm || null, eai: eai || null}));
+  if eai_managed_deploy_ready; then eai_managed_deploy="true"; fi
+  node --input-type=module - "$git_value" "$node_value" "$npm_value" "$eai_value" "$eai_managed_deploy" <<'NODE'
+const [git, nodeVersion, npm, eai, eaiManagedDeploy] = process.argv.slice(2);
+process.stdout.write(JSON.stringify({git: git || null, node: nodeVersion || null, npm: npm || null,
+  eai: eai || null, eaiManagedDeploy: eaiManagedDeploy === "true"}));
 NODE
 }
 
@@ -281,16 +311,18 @@ versions_ready() {
   local node_value=""
   local npm_value=""
   local eai_value=""
+  local eai_managed_deploy=""
   parsed="$(EAI_UBUNTU_VERSION_JSON="$value" node --input-type=module <<'NODE'
 const v = JSON.parse(process.env.EAI_UBUNTU_VERSION_JSON);
-process.stdout.write([v.git || "", v.node || "", v.npm || "", v.eai || ""].join("\t"));
+process.stdout.write([v.git || "", v.node || "", v.npm || "", v.eai || "", v.eaiManagedDeploy === true ? "true" : "false"].join("\t"));
 NODE
 )" || return 1
-  IFS=$'\t' read -r git_value node_value npm_value eai_value <<<"$parsed"
+  IFS=$'\t' read -r git_value node_value npm_value eai_value eai_managed_deploy <<<"$parsed"
   [[ "$git_value" == git\ version* ]] \
     && semver_at_least "$node_value" 24 0 0 \
     && semver_at_least "$npm_value" 0 0 0 \
-    && [[ "$eai_value" == "$expected_cli_version" ]]
+    && exact_semver_at_least "$eai_value" "$expected_cli_major" "$expected_cli_minor" "$expected_cli_patch" \
+    && [[ "$eai_managed_deploy" == true ]]
 }
 
 process_alive() {
@@ -829,8 +861,11 @@ expected_download_url="https://github.com/eai-support/eai-installer/releases/dow
 [[ "$(basename "$EAI_VM_ASSET")" == "$expected_asset_name" \
   && "$EAI_VM_DOWNLOAD_URL" == "$expected_download_url" ]] \
   || guest_test_fail "The Ubuntu adapter requires the exact published ARM64 prerelease asset URL and filename."
-[[ "$expected_cli_version" == 3.17.0 ]] \
-  || guest_test_fail "The Ubuntu diagnostic harness is pinned to EAI CLI 3.17.0."
+[[ "$expected_cli_version" =~ ^([0-9]+)[.]([0-9]+)[.]([0-9]+)$ ]] \
+  || guest_test_fail "The Ubuntu EAI CLI minimum must be a semantic version."
+expected_cli_major="${BASH_REMATCH[1]}"
+expected_cli_minor="${BASH_REMATCH[2]}"
+expected_cli_patch="${BASH_REMATCH[3]}"
 [[ "$guest_user" =~ ^[a-z_][a-z0-9_-]*[$]?$ && "$autologin_user" == "$guest_user" ]] \
   || guest_test_fail "The Ubuntu test and automatic-login users must be the same valid local account."
 [[ -f "$input_helper" && -f "$ocr_source" ]] \
@@ -980,8 +1015,8 @@ import fs from "node:fs";
 const evidence = {
   status: "pinned", platform: "ubuntu", minimumNodeMajor: 24,
   npmRequired: true, npmMinimumVersionImposedByHarness: false,
-  expectedCliVersion: process.env.EAI_UBUNTU_EXPECTED_CLI,
-  expectedCliVersionPinned: process.env.EAI_UBUNTU_EXPECTED_CLI === "3.17.0",
+  minimumCliVersion: process.env.EAI_UBUNTU_EXPECTED_CLI,
+  managedDeployCapabilityRequired: true,
   aptCandidatePredictedByHarness: false, aptIndexesRefreshedByHarness: false,
   repositoryAddedByHarness: false,
   noHarnessPrerequisiteRepair: true, verifiedAt: new Date().toISOString(),
@@ -1222,6 +1257,8 @@ after_npm="$(npm_version)"
 after_eai="$(eai_version)"
 versions_ready "$(versions_json)" \
   || guest_test_fail "Installed prerequisite versions do not satisfy the Ubuntu release contract."
+eai_managed_deploy_ready \
+  || guest_test_fail "The installed EAI CLI does not expose source choice, GitHub-link handoff, and target-tenant binding."
 [[ "$(guest_value 'command -v git')" == /usr/bin/git ]] \
   || guest_test_fail "Git was not installed at the expected system path."
 [[ "$(guest_value 'command -v node')" == /usr/bin/node ]] \
@@ -1255,7 +1292,10 @@ cli_package="$UBUNTU_PRL_HOME/.eai-setup/npm-global/lib/node_modules/@enterprise
 cli_package_version="$(printf '%s\n' \
   "import json; print(json.load(open('$cli_package'))['version'])" \
   | ubuntu_prl_user_exec /usr/bin/python3 2>/dev/null | tr -d '\r\n')"
-[[ "$cli_package_version" == "$expected_cli_version" ]] \
+[[ "$after_eai" =~ ^v?([0-9]+)[.]([0-9]+)[.]([0-9]+)$ ]] \
+  || guest_test_fail "The EAI CLI executable returned ambiguous version output."
+executable_cli_version="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}.${BASH_REMATCH[3]}"
+[[ -n "$executable_cli_version" && "$cli_package_version" == "$executable_cli_version" ]] \
   || guest_test_fail "The EAI CLI package metadata does not match its executable version."
 installed_node_package_status="$(prlctl exec "$vm_name" /usr/bin/dpkg-query -W -f='${Status}' nodejs 2>/dev/null | tr -d '\r\n')"
 [[ "$installed_node_package_status" == 'install ok installed' ]] \
@@ -1283,8 +1323,8 @@ const evidence = {status: "verified", platform: "ubuntu", normalReleasedAppLaunc
     ownerPackageVersion: process.env.EAI_NODE_PACKAGE_VERSION,
     ownerPackageStatus: "install ok installed"},
   npmSeparateDebPackageRequired: false,
-  expectedCliVersion: process.env.EAI_EXPECTED_CLI,
-  expectedCliVersionPinned: process.env.EAI_EXPECTED_CLI === "3.17.0", packageOwnershipVerified: true,
+  minimumCliVersion: process.env.EAI_EXPECTED_CLI,
+  managedDeployCapabilityVerified: true, packageOwnershipVerified: true,
   eaiUserPrefixVerified: true, graphicalPolkitApprovalCount: Number(process.env.EAI_POLKIT_APPROVALS),
   verifiedAt: new Date().toISOString(), sanitized: true, diagnostic: true, productionGate: false};
 fs.writeFileSync(process.env.EAI_UBUNTU_PREREQ_FILE, `${JSON.stringify(evidence, null, 2)}\n`);
