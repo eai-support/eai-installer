@@ -311,7 +311,9 @@ guest_eai_managed_deploy_ready() {
   local deploy_help=""
   deploy_help="$(macos_prl_current_user_exec_idempotent "$guest_node" "$guest_cli" deploy app --help 2>/dev/null)" \
     || return 1
-  [[ "$deploy_help" == *"--source"* && "$deploy_help" == *"--github-link-session"* ]]
+  [[ "$deploy_help" == *"--source"* \
+    && "$deploy_help" == *"--github-link-session"* \
+    && "$deploy_help" == *"--target-tenant-id"* ]]
 }
 
 prerequisite_versions_satisfy_contract() {
@@ -678,7 +680,7 @@ after_eai="$(guest_eai_version)"
 prerequisite_versions_satisfy_contract "$after_git" "$after_node" "$after_npm" "$after_eai" \
   || guest_test_fail "Installed prerequisite versions do not satisfy the release contract."
 guest_eai_managed_deploy_ready \
-  || guest_test_fail "The installed EAI CLI does not expose both managed deployment source choices."
+  || guest_test_fail "The installed EAI CLI does not expose source choice, GitHub-link handoff, and target-tenant binding."
 stage prerequisite-install-passed
 
 stage normal-app-stop

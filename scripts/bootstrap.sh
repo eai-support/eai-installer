@@ -54,7 +54,9 @@ eai_managed_deploy_ready() {
   has eai && eai_version_supported || return 1
   local deploy_help=""
   deploy_help="$(eai deploy app --help 2>/dev/null)" || return 1
-  [[ "$deploy_help" == *"--source"* && "$deploy_help" == *"--github-link-session"* ]]
+  [[ "$deploy_help" == *"--source"* \
+    && "$deploy_help" == *"--github-link-session"* \
+    && "$deploy_help" == *"--target-tenant-id"* ]]
 }
 require_auto_install() {
   if [ "$AUTO_INSTALL" != "1" ]; then
@@ -128,7 +130,7 @@ EAI_MANAGED_DEPLOY_READY=0
 if eai_managed_deploy_ready; then EAI_MANAGED_DEPLOY_READY=1; fi
 if [ "$EAI_MANAGED_DEPLOY_READY" != "1" ]; then
   if has eai && [ "$AUTO_INSTALL" != "1" ]; then
-    echo "The installed EAI CLI is incompatible. EAI Setup requires version 3.17.0 or newer with source choice and GitHub-link handoff. Re-run with EAI_SETUP_AUTO_INSTALL=1 to update it." >&2
+    echo "The installed EAI CLI is incompatible. EAI Setup requires version 3.17.0 or newer with source choice, GitHub-link handoff, and target-tenant binding. Re-run with EAI_SETUP_AUTO_INSTALL=1 to update it." >&2
     exit 1
   fi
   require_auto_install eai
@@ -138,7 +140,7 @@ if [ "$EAI_MANAGED_DEPLOY_READY" != "1" ]; then
 fi
 
 if [ "$EAI_MANAGED_DEPLOY_READY" != "1" ]; then
-  echo "The installed EAI CLI is incompatible. EAI Setup requires version 3.17.0 or newer with source choice and GitHub-link handoff." >&2
+  echo "The installed EAI CLI is incompatible. EAI Setup requires version 3.17.0 or newer with source choice, GitHub-link handoff, and target-tenant binding." >&2
   exit 1
 fi
 

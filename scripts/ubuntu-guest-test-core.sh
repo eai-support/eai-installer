@@ -262,7 +262,9 @@ eai_managed_deploy_ready() {
   local deploy_help=""
   deploy_help="$(ubuntu_prl_user_exec "$UBUNTU_PRL_HOME/.eai-setup/npm-global/bin/eai" deploy app --help 2>/dev/null)" \
     || return 1
-  [[ "$deploy_help" == *"--source"* && "$deploy_help" == *"--github-link-session"* ]]
+  [[ "$deploy_help" == *"--source"* \
+    && "$deploy_help" == *"--github-link-session"* \
+    && "$deploy_help" == *"--target-tenant-id"* ]]
 }
 
 versions_json() {
@@ -1237,7 +1239,7 @@ after_eai="$(eai_version)"
 versions_ready "$(versions_json)" \
   || guest_test_fail "Installed prerequisite versions do not satisfy the Ubuntu release contract."
 eai_managed_deploy_ready \
-  || guest_test_fail "The installed EAI CLI does not expose both managed deployment source choices."
+  || guest_test_fail "The installed EAI CLI does not expose source choice, GitHub-link handoff, and target-tenant binding."
 [[ "$(guest_value 'command -v git')" == /usr/bin/git ]] \
   || guest_test_fail "Git was not installed at the expected system path."
 [[ "$(guest_value 'command -v node')" == /usr/bin/node ]] \

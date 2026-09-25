@@ -950,6 +950,7 @@ fn eai_cli_is_compatible(current_version: (u64, u64, u64), deploy_help: &str) ->
     current_version >= MIN_EAI_CLI_VERSION
         && deploy_help.contains("--source")
         && deploy_help.contains("--github-link-session")
+        && deploy_help.contains("--target-tenant-id")
 }
 
 fn eai_cli_version_for(program: &str) -> Option<String> {
@@ -2067,7 +2068,7 @@ fn run_bootstrap_sync(app: AppHandle, step: String, project_name: Option<String>
                     }
                     emit_progress(&app, "eai-cli", "EAI CLI ready", "Verifying the eai command.", Some(90), Some(5));
                     if eai_cli_version().is_none() {
-                        return command_result("eai-cli", false, "npm finished, but the installed EAI CLI is missing the compatible Deploy to EAI command.", Some("Choose Try again. EAI Setup requires EAI CLI 3.17.0 or newer with `eai deploy app --source` and GitHub-link handoff."), Some(format!("{stdout}\n{stderr}")), true);
+                        return command_result("eai-cli", false, "npm finished, but the installed EAI CLI is missing the compatible Deploy to EAI command.", Some("Choose Try again. EAI Setup requires EAI CLI 3.17.0 or newer with source choice, GitHub-link handoff, and explicit target-tenant binding."), Some(format!("{stdout}\n{stderr}")), true);
                     }
                     let command = if cfg!(target_os = "windows") {
                         "npm install --global --prefix %APPDATA%\\npm @enterpriseai/cli"
@@ -2343,11 +2344,15 @@ mod tests {
 
     #[test]
     fn eai_cli_readiness_requires_the_released_baseline_and_managed_deploy_capability() {
-        let complete_help = "--target <target> --source <choice> --github-link-session <id>";
+        let complete_help = "--target <target> --source <choice> --github-link-session <id> --target-tenant-id <tenant>";
         assert!(!eai_cli_is_compatible((3, 16, 99), complete_help));
         assert!(!eai_cli_is_compatible((3, 17, 0), ""));
         assert!(!eai_cli_is_compatible((3, 17, 0), "--source <choice>"));
         assert!(!eai_cli_is_compatible((3, 17, 0), "--github-link-session <id>"));
+        assert!(!eai_cli_is_compatible(
+            (3, 17, 0),
+            "--source <choice> --github-link-session <id>"
+        ));
         assert!(eai_cli_is_compatible((3, 17, 0), complete_help));
         assert!(eai_cli_is_compatible((4, 0, 0), complete_help));
     }
@@ -2363,7 +2368,7 @@ mod tests {
             let path = directory.join("eai");
             fs::write(
                 &path,
-                "#!/bin/sh\nif [ \"${1:-}\" = --version ]; then echo 3.17.0; exit 0; fi\nif [ \"$*\" = \"deploy app --help\" ]; then echo '--source <choice> --github-link-session <id>'; exit 0; fi\nexit 1\n",
+                "#!/bin/sh\nif [ \"${1:-}\" = --version ]; then echo 3.17.0; exit 0; fi\nif [ \"$*\" = \"deploy app --help\" ]; then echo '--source <choice> --github-link-session <id> --target-tenant-id <tenant>'; exit 0; fi\nexit 1\n",
             )
             .expect("CLI probe fixture should be written");
             let mut permissions = fs::metadata(&path).expect("CLI probe metadata should be readable").permissions();
@@ -2377,7 +2382,7 @@ mod tests {
             let path = directory.join("eai.cmd");
             fs::write(
                 &path,
-                "@echo off\r\nif \"%~1\"==\"--version\" (echo 3.17.0& exit /b 0)\r\nif \"%*\"==\"deploy app --help\" (echo --source ^<choice^> --github-link-session ^<id^>& exit /b 0)\r\nexit /b 1\r\n",
+                "@echo off\r\nif \"%~1\"==\"--version\" (echo 3.17.0& exit /b 0)\r\nif \"%*\"==\"deploy app --help\" (echo --source ^<choice^> --github-link-session ^<id^> --target-tenant-id ^<tenant^>& exit /b 0)\r\nexit /b 1\r\n",
             )
             .expect("CLI probe fixture should be written");
             path

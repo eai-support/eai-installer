@@ -52,3 +52,12 @@ test("rejects a version-compatible package without the complete managed deployme
     await rm(fixture, { recursive: true, force: true });
   }
 });
+
+test("rejects a package whose managed deployment command cannot bind the target tenant", async () => {
+  const fixture = await createCliFixture({ help: "--source --github-link-session" });
+  try {
+    await assert.rejects(verifyInstalledCliPackage(fixture, "3.17.0"), /lacks --target-tenant-id/);
+  } finally {
+    await rm(fixture, { recursive: true, force: true });
+  }
+});

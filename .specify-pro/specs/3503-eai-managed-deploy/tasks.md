@@ -12,9 +12,9 @@
 
 ## Local validation on 2026-09-25
 
-- `npm test`: passed on the final local source, including 16 owned tests, 77 scenario states, release-gate contracts, Windows watchdog tests, and production safeguards; required cross-platform CI remains pending.
-- Focused managed-deployment tests: 13 passed, including distinct missing/incompatible CLI diagnostics and real Retry control recovery.
-- Published-package gate fixtures: 3 passed. Live readback failed closed as intended because npm `@enterpriseai/cli@3.18.1` lacks `--source`; Installer publication stays blocked until the CLI producer releases the feature.
+- `npm test`: passed on the final local source, including 18 owned tests, 77 scenario states, release-gate contracts, Windows watchdog tests, and production safeguards; required cross-platform CI remains pending.
+- Focused managed-deployment tests: 14 passed, covering distinct missing/incompatible CLI diagnostics, all three required command capabilities, and real Retry control recovery.
+- Published-package gate fixtures: 4 passed, covering the released baseline and all three required command capabilities. Live readback failed closed as intended because npm `@enterpriseai/cli@3.18.1` lacks `--source`; Installer publication stays blocked until the CLI producer releases the feature.
 - `npm run test:journey`: passed, 2 Playwright journeys.
 - Managed-deployment browser capture: passed at 900×680 and 720×540 with the shipped Retry control, keyboard recovery, no overflow, and no browser errors.
 - `bash -n scripts/bootstrap.sh scripts/release-preflight.sh`, `node --check ui/app.js`, and `git diff --check`: passed.

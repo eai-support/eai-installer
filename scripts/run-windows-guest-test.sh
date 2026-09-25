@@ -5586,7 +5586,7 @@ $eaiManagedDeployHelp = Read-Command $eai 'deploy app --help'
   node = Read-Version $node
   npm = Read-Version $npm
   eai = Read-Version $eai
-  eaiManagedDeploy = [bool]($eaiManagedDeployHelp -and $eaiManagedDeployHelp.Contains('--source') -and $eaiManagedDeployHelp.Contains('--github-link-session'))
+  eaiManagedDeploy = [bool]($eaiManagedDeployHelp -and $eaiManagedDeployHelp.Contains('--source') -and $eaiManagedDeployHelp.Contains('--github-link-session') -and $eaiManagedDeployHelp.Contains('--target-tenant-id'))
 } | ConvertTo-Json -Compress
 POWERSHELL
 }

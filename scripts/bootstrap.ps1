@@ -31,7 +31,7 @@ function Has-EaiManagedDeploy {
   $deployHelp = & eai deploy app --help 2>$null
   if ($LASTEXITCODE -ne 0) { return $false }
   $helpText = $deployHelp -join "`n"
-  return $helpText.Contains("--source") -and $helpText.Contains("--github-link-session")
+  return $helpText.Contains("--source") -and $helpText.Contains("--github-link-session") -and $helpText.Contains("--target-tenant-id")
 }
 
 if (-not (Has-Command "git")) {
@@ -56,7 +56,7 @@ if ($nodeMajor -lt 24) { throw "Node.js 24 or newer is required." }
 $eaiManagedDeployReady = Has-EaiManagedDeploy
 if (-not $eaiManagedDeployReady) {
   if ((Has-Command "eai") -and -not $AutoInstall) {
-    throw "The installed EAI CLI is incompatible. EAI Setup requires version 3.17.0 or newer with source choice and GitHub-link handoff. Re-run with -AutoInstall to update it."
+    throw "The installed EAI CLI is incompatible. EAI Setup requires version 3.17.0 or newer with source choice, GitHub-link handoff, and target-tenant binding. Re-run with -AutoInstall to update it."
   }
   Require-AutoInstall "EAI CLI"
   npm install --global @enterpriseai/cli
@@ -64,7 +64,7 @@ if (-not $eaiManagedDeployReady) {
 }
 
 if (-not $eaiManagedDeployReady) {
-  throw "The installed EAI CLI is incompatible. EAI Setup requires version 3.17.0 or newer with source choice and GitHub-link handoff."
+  throw "The installed EAI CLI is incompatible. EAI Setup requires version 3.17.0 or newer with source choice, GitHub-link handoff, and target-tenant binding."
 }
 
 Write-Host (git --version)

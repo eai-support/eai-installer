@@ -425,7 +425,7 @@ exact scoped package name privately on the host, preserve richer receipts, and e
 boolean failure checkpoint without enumerating tenant resources.
 
 The Ubuntu static contract additionally proves the released `3.17.0` CLI
-minimum plus the managed-deploy help flags, while Node.js 24+ is verified after the released product runs without a
+minimum plus source, GitHub-link, and target-tenant help flags, while Node.js 24+ is verified after the released product runs without a
 harness repair, and an executable npm is resolved to a root-owned target owned
 by the fully installed `nodejs` package without requiring a separate `npm`
 Debian package. A host-only provider fixture covers the NodeSource-style layout

@@ -922,7 +922,8 @@ repair those prerequisites. After the product runs, package ownership is proved,
 Node.js must be version 24 or newer, npm must be available with a parseable
 version, and the Ubuntu diagnostic contract requires EAI CLI `3.17.0` or newer.
 The executable and package metadata must report the same version, and
-`eai deploy app --help` must expose both source choice and GitHub-link handoff.
+`eai deploy app --help` must expose source choice, GitHub-link handoff, and
+explicit target-tenant binding.
 
 The approved Node.js 24 repository can supply npm from the installed `nodejs`
 package rather than a separate Debian package named `npm`. The adapter therefore
