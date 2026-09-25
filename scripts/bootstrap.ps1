@@ -19,6 +19,11 @@ function Require-AutoInstall([string]$Name) {
   }
 }
 
+function Has-HelpOption([string]$Text, [string]$Option) {
+  $pattern = '(?:^|\s)' + [regex]::Escape($Option) + '(?:[=\s]|$)'
+  return $Text -cmatch $pattern
+}
+
 function Has-EaiManagedDeploy {
   if (-not (Has-Command "eai")) { return $false }
   $rawVersion = & eai --version 2>$null | Select-Object -First 1
@@ -31,7 +36,9 @@ function Has-EaiManagedDeploy {
   $deployHelp = & eai deploy app --help 2>$null
   if ($LASTEXITCODE -ne 0) { return $false }
   $helpText = $deployHelp -join "`n"
-  return $helpText.Contains("--source") -and $helpText.Contains("--github-link-session") -and $helpText.Contains("--target-tenant-id")
+  return (Has-HelpOption $helpText "--source") `
+    -and (Has-HelpOption $helpText "--github-link-session") `
+    -and (Has-HelpOption $helpText "--target-tenant-id")
 }
 
 if (-not (Has-Command "git")) {

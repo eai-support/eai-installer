@@ -32,3 +32,4 @@ The owner approved this hardening scope on 2026-09-25. It covers reviewed Instal
 5. Bootstrap scripts reject a version-compatible CLI that lacks the managed deployment flags.
 6. Release preflight refuses publication until the actual feature-bearing CLI release and capabilities are available.
 7. macOS, Windows, and Ubuntu guest evidence accepts a CLI at or above the released baseline only when the installed executable exposes source choice, GitHub-link handoff, and explicit target-tenant binding; executable and package evidence stay bound to the actual installed version.
+8. Capability probes match complete option tokens, package/executable version output is exact, and every production publication entry point depends on the published-package gate.

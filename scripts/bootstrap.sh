@@ -50,13 +50,18 @@ eai_version_supported() {
   local patch="${BASH_REMATCH[3]}"
   (( major > 3 )) || (( major == 3 && minor > 17 )) || (( major == 3 && minor == 17 && patch >= 0 ))
 }
+eai_help_has_option() {
+  local help_text="$1"
+  local option="$2"
+  [[ "$help_text" =~ (^|[[:space:]])${option}([=[:space:]]|$) ]]
+}
 eai_managed_deploy_ready() {
   has eai && eai_version_supported || return 1
   local deploy_help=""
   deploy_help="$(eai deploy app --help 2>/dev/null)" || return 1
-  [[ "$deploy_help" == *"--source"* \
-    && "$deploy_help" == *"--github-link-session"* \
-    && "$deploy_help" == *"--target-tenant-id"* ]]
+  eai_help_has_option "$deploy_help" --source \
+    && eai_help_has_option "$deploy_help" --github-link-session \
+    && eai_help_has_option "$deploy_help" --target-tenant-id
 }
 require_auto_install() {
   if [ "$AUTO_INSTALL" != "1" ]; then

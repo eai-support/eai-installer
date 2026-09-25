@@ -307,13 +307,19 @@ guest_eai_version() {
   macos_prl_current_user_exec_idempotent "$guest_node" "$guest_cli" --version 2>/dev/null | tr -d '\r\n'
 }
 
+guest_eai_help_has_option() {
+  local help_text="$1"
+  local option="$2"
+  [[ "$help_text" =~ (^|[[:space:]])${option}([=[:space:]]|$) ]]
+}
+
 guest_eai_managed_deploy_ready() {
   local deploy_help=""
   deploy_help="$(macos_prl_current_user_exec_idempotent "$guest_node" "$guest_cli" deploy app --help 2>/dev/null)" \
     || return 1
-  [[ "$deploy_help" == *"--source"* \
-    && "$deploy_help" == *"--github-link-session"* \
-    && "$deploy_help" == *"--target-tenant-id"* ]]
+  guest_eai_help_has_option "$deploy_help" --source \
+    && guest_eai_help_has_option "$deploy_help" --github-link-session \
+    && guest_eai_help_has_option "$deploy_help" --target-tenant-id
 }
 
 prerequisite_versions_satisfy_contract() {

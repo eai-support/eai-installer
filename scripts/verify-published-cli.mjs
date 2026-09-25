@@ -24,6 +24,10 @@ function isAtLeast(value, minimum) {
     || (current[0] === required[0] && current[1] === required[1] && current[2] >= required[2]);
 }
 
+function helpHasOption(help, option) {
+  return String(help).split(/\s+/u).some((token) => token === option || token.startsWith(`${option}=`));
+}
+
 function isolatedCliEnvironment(home) {
   const environment = {};
   for (const key of ["PATH", "SystemRoot", "ComSpec", "TMPDIR", "TEMP", "TMP", "LANG", "LC_ALL"]) {
@@ -87,13 +91,13 @@ export async function verifyInstalledCliPackage(packageRoot, minimumVersion, hom
   if (!(await stat(entrypoint)).isFile()) throw new Error(`Published ${packageName} eai executable is not a regular file.`);
 
   const versionOutput = runCli(entrypoint, ["--version"], home).trim();
-  const versionMatch = versionOutput.match(/v?(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)/);
-  if (!versionMatch || versionMatch[1] !== manifest.version) {
+  const executableVersion = versionOutput.startsWith("v") ? versionOutput.slice(1) : versionOutput;
+  if (!/^\d+\.\d+\.\d+$/.test(executableVersion) || executableVersion !== manifest.version) {
     throw new Error(`Published ${packageName} executable version does not match package ${manifest.version}.`);
   }
   const help = runCli(entrypoint, ["deploy", "app", "--help"], home);
   for (const flag of ["--source", "--github-link-session", "--target-tenant-id"]) {
-    if (!help.includes(flag)) throw new Error(`Published ${packageName} ${manifest.version} lacks ${flag} in eai deploy app --help.`);
+    if (!helpHasOption(help, flag)) throw new Error(`Published ${packageName} ${manifest.version} lacks ${flag} in eai deploy app --help.`);
   }
   return { version: manifest.version, entrypoint };
 }

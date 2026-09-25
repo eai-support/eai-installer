@@ -946,11 +946,17 @@ fn node_version() -> Option<String> {
     (current_version.0 >= MIN_NODE_MAJOR_VERSION).then_some(current)
 }
 
+fn deploy_help_has_option(deploy_help: &str, option: &str) -> bool {
+    deploy_help
+        .split_ascii_whitespace()
+        .any(|token| token == option || token.strip_prefix(option).is_some_and(|suffix| suffix.starts_with('=')))
+}
+
 fn eai_cli_is_compatible(current_version: (u64, u64, u64), deploy_help: &str) -> bool {
     current_version >= MIN_EAI_CLI_VERSION
-        && deploy_help.contains("--source")
-        && deploy_help.contains("--github-link-session")
-        && deploy_help.contains("--target-tenant-id")
+        && deploy_help_has_option(deploy_help, "--source")
+        && deploy_help_has_option(deploy_help, "--github-link-session")
+        && deploy_help_has_option(deploy_help, "--target-tenant-id")
 }
 
 fn eai_cli_version_for(program: &str) -> Option<String> {
@@ -2352,6 +2358,10 @@ mod tests {
         assert!(!eai_cli_is_compatible(
             (3, 17, 0),
             "--source <choice> --github-link-session <id>"
+        ));
+        assert!(!eai_cli_is_compatible(
+            (3, 17, 0),
+            "--source-path <path> --github-link-session-token <token> --target-tenant-id-alias <tenant>"
         ));
         assert!(eai_cli_is_compatible((3, 17, 0), complete_help));
         assert!(eai_cli_is_compatible((4, 0, 0), complete_help));

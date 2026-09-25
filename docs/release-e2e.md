@@ -1509,6 +1509,9 @@ minimal environment. The version must meet the manifest minimum and match the
 package metadata, while `eai deploy app --help` must expose `--source`,
 `--github-link-session`, and `--target-tenant-id`. A static version string or a
 locally installed CLI cannot satisfy this producer-before-consumer gate.
+Each option is matched as a complete help token, so lookalike option names do
+not pass. Both the local production command and the protected tag/dispatch
+workflow run this same gate before any platform build can publish an asset.
 
 Receipt publication is fail-closed: the adapter creates a private temporary
 receipt and uses an atomic no-overwrite hard link. A path created between the

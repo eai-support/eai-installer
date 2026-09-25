@@ -2530,6 +2530,13 @@ for (const source of [releaseWorkflow, releaseReadinessWorkflow]) {
 assert.match(publishSection, /canonical_deprovision="\$ROOT\/scripts\/run-v4-app-deprovision\.sh"/);
 assert.match(publishSection, /node scripts\/verify-published-cli\.mjs/);
 assert.ok(publishSection.indexOf("verify-published-cli.mjs") < publishSection.indexOf("release-e2e.mjs"));
+assert.match(releaseWorkflow, /^  verify-published-cli:\n/m);
+assert.match(releaseWorkflow, /run: node scripts\/verify-published-cli\.mjs/);
+assert.equal(
+  (releaseWorkflow.match(/needs: \[validate-readiness-provenance, verify-published-cli\]/g) ?? []).length,
+  3,
+  "every platform build must depend on published CLI verification",
+);
 assert.match(publishSection, /--driver command --vms macos,windows,ubuntu --deprovision api --preflight/);
 assert.match(publishSection, /--driver command --vms macos,windows,ubuntu --deprovision api/);
 assert.match(publishSection, /gh workflow run release-readiness\.yml/);
@@ -3193,6 +3200,9 @@ assert.match(ubuntuGuestCoreSource, /prerequisite-contract-validation/);
 assert.match(ubuntuGuestCoreSource, /minimumNodeMajor: 24/);
 assert.match(ubuntuGuestCoreSource, /The Ubuntu EAI CLI minimum must be a semantic version/);
 assert.match(ubuntuGuestCoreSource, /eai_managed_deploy_ready/);
+assert.match(ubuntuGuestCoreSource, /eai_help_has_option/);
+assert.match(macosGuestAdapterSource, /guest_eai_help_has_option/);
+assert.match(windowsGuestAdapterSource, /Has-HelpOption/);
 assert.match(ubuntuGuestCoreSource, /managedDeployCapabilityRequired: true/);
 assert.match(ubuntuGuestCoreSource, /managedDeployCapabilityVerified: true/);
 for (const npmProviderCheck of [

@@ -6,7 +6,7 @@ import test from "node:test";
 
 import { verifyInstalledCliPackage } from "../scripts/verify-published-cli.mjs";
 
-async function createCliFixture({ version = "3.17.0", help = "--source --github-link-session --target-tenant-id" } = {}) {
+async function createCliFixture({ version = "3.17.0", versionOutput = version, help = "--source --github-link-session --target-tenant-id" } = {}) {
   const root = await mkdtemp(join(tmpdir(), "eai-installer-published-cli-"));
   const dist = join(root, "dist");
   await mkdir(dist);
@@ -18,7 +18,7 @@ async function createCliFixture({ version = "3.17.0", help = "--source --github-
   }, null, 2)}\n`);
   await writeFile(join(dist, "index.js"), `
 const args = process.argv.slice(2);
-if (args.length === 1 && args[0] === "--version") console.log(${JSON.stringify(version)});
+if (args.length === 1 && args[0] === "--version") console.log(${JSON.stringify(versionOutput)});
 else if (args.join(" ") === "deploy app --help") console.log(${JSON.stringify(help)});
 else process.exitCode = 2;
 `);
@@ -57,6 +57,26 @@ test("rejects a package whose managed deployment command cannot bind the target 
   const fixture = await createCliFixture({ help: "--source --github-link-session" });
   try {
     await assert.rejects(verifyInstalledCliPackage(fixture, "3.17.0"), /lacks --target-tenant-id/);
+  } finally {
+    await rm(fixture, { recursive: true, force: true });
+  }
+});
+
+test("rejects lookalike option names", async () => {
+  const fixture = await createCliFixture({
+    help: "--source-path --github-link-session-token --target-tenant-id-alias",
+  });
+  try {
+    await assert.rejects(verifyInstalledCliPackage(fixture, "3.17.0"), /lacks --source/);
+  } finally {
+    await rm(fixture, { recursive: true, force: true });
+  }
+});
+
+test("rejects extra or mismatched version text", async () => {
+  const fixture = await createCliFixture({ versionOutput: "wrapper 3.17.0; actual runtime 3.16.0" });
+  try {
+    await assert.rejects(verifyInstalledCliPackage(fixture, "3.17.0"), /executable version does not match/);
   } finally {
     await rm(fixture, { recursive: true, force: true });
   }

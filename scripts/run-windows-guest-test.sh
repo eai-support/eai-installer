@@ -5576,6 +5576,10 @@ function Read-Command([string]$path, [string]$arguments) {
   }
 }
 function Read-Version([string]$path) { return Read-Command $path '--version' }
+function Has-HelpOption([string]$text, [string]$option) {
+  $pattern = '(?:^|\s)' + [regex]::Escape($option) + '(?:[=\s]|$)'
+  return $text -cmatch $pattern
+}
 $git = Resolve-Program git.exe @('Git\cmd\git.exe', 'Programs\Git\cmd\git.exe')
 $node = Resolve-Program node.exe @('nodejs\node.exe', 'Programs\nodejs\node.exe')
 $npm = Resolve-Program npm.cmd @('nodejs\npm.cmd', 'Programs\nodejs\npm.cmd', 'npm\npm.cmd')
@@ -5586,7 +5590,10 @@ $eaiManagedDeployHelp = Read-Command $eai 'deploy app --help'
   node = Read-Version $node
   npm = Read-Version $npm
   eai = Read-Version $eai
-  eaiManagedDeploy = [bool]($eaiManagedDeployHelp -and $eaiManagedDeployHelp.Contains('--source') -and $eaiManagedDeployHelp.Contains('--github-link-session') -and $eaiManagedDeployHelp.Contains('--target-tenant-id'))
+  eaiManagedDeploy = [bool]($eaiManagedDeployHelp `
+    -and (Has-HelpOption $eaiManagedDeployHelp '--source') `
+    -and (Has-HelpOption $eaiManagedDeployHelp '--github-link-session') `
+    -and (Has-HelpOption $eaiManagedDeployHelp '--target-tenant-id'))
 } | ConvertTo-Json -Compress
 POWERSHELL
 }

@@ -11,6 +11,7 @@
             ".eai/test-coverage.json",
             "docs/release-e2e.md",
             "docs/testing.md",
+            ".github/workflows/release.yml",
             "installer-manifest.json",
             "package.json",
             "scripts/bootstrap.sh",

@@ -258,13 +258,18 @@ eai_version() {
   ubuntu_prl_user_exec "$UBUNTU_PRL_HOME/.eai-setup/npm-global/bin/eai" --version 2>/dev/null \
     | tr -d '\r\n'
 }
+eai_help_has_option() {
+  local help_text="$1"
+  local option="$2"
+  [[ "$help_text" =~ (^|[[:space:]])${option}([=[:space:]]|$) ]]
+}
 eai_managed_deploy_ready() {
   local deploy_help=""
   deploy_help="$(ubuntu_prl_user_exec "$UBUNTU_PRL_HOME/.eai-setup/npm-global/bin/eai" deploy app --help 2>/dev/null)" \
     || return 1
-  [[ "$deploy_help" == *"--source"* \
-    && "$deploy_help" == *"--github-link-session"* \
-    && "$deploy_help" == *"--target-tenant-id"* ]]
+  eai_help_has_option "$deploy_help" --source \
+    && eai_help_has_option "$deploy_help" --github-link-session \
+    && eai_help_has_option "$deploy_help" --target-tenant-id
 }
 
 versions_json() {

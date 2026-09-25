@@ -434,7 +434,9 @@ where `npm --version` succeeds while `dpkg-query -W npm` does not.
 The production release preflight separately downloads the current canonical
 CLI package into an isolated, script-disabled npm prefix and executes its exact
 entry point with a minimal environment. Fixture tests prove that the gate
-rejects an old package or one missing any required managed-deployment flag.
+rejects an old package, extra or mismatched version text, lookalike option
+names, or a command missing any required managed-deployment option. Static
+release checks require every protected platform build to depend on this gate.
 
 Both checkpoint and final Resource API queries execute from the exact generated
 project, use the scalar `{"verticalKey":"<exact-app-key>"}` filter expected by

@@ -21,10 +21,20 @@ async function writeExecutable(path, source) {
   await chmod(path, 0o755);
 }
 
-async function createBootstrapHarness({ version = "", deployReady = false, sourceReady = deployReady, targetTenantReady = sourceReady, autoInstall = false, installed = true }) {
+async function createBootstrapHarness({ version = "", deployReady = false, sourceReady = deployReady, targetTenantReady = sourceReady, lookalikeOptions = false, autoInstall = false, installed = true }) {
   const root = await mkdtemp(join(tmpdir(), "eai-installer-managed-deploy-"));
   const bin = join(root, "bin");
   await mkdir(bin);
+  const windowsHelp = lookalikeOptions
+    ? "--source-path ^<path^> --github-link-session-token ^<token^> --target-tenant-id-alias ^<tenant^>"
+    : sourceReady
+      ? `--source ^<choice^> --github-link-session ^<id^>${targetTenantReady ? " --target-tenant-id ^<tenant^>" : ""}`
+      : "--repo ^<owner/name^>";
+  const posixHelp = lookalikeOptions
+    ? "--source-path <path> --github-link-session-token <token> --target-tenant-id-alias <tenant>"
+    : sourceReady
+      ? `--source <choice> --github-link-session <id>${targetTenantReady ? " --target-tenant-id <tenant>" : ""}`
+      : "--repo <owner/name>";
 
   if (isWindows) {
     const fixtures = {
@@ -33,7 +43,7 @@ async function createBootstrapHarness({ version = "", deployReady = false, sourc
       npm: 'if "%~1"=="--version" (echo 10.9.0 & exit /b 0)\necho %*>> "%EAI_TEST_NPM_LOG%"\nexit /b 0',
       eai: `echo %*>> "%EAI_TEST_EAI_LOG%"
 if "%~1"=="--version" (echo ${version} & exit /b 0)
-if "%~1"=="deploy" if "%~2"=="app" if "%~3"=="--help" (echo ${sourceReady ? `--source ^<choice^> --github-link-session ^<id^>${targetTenantReady ? " --target-tenant-id ^<tenant^>" : ""}` : "--repo ^<owner/name^>"} & exit /b ${deployReady ? 0 : 7})
+if "%~1"=="deploy" if "%~2"=="app" if "%~3"=="--help" (echo ${windowsHelp} & exit /b ${deployReady ? 0 : 7})
 exit /b 1`,
     };
     if (!installed) delete fixtures.eai;
@@ -58,7 +68,7 @@ exit /b 1`,
         join(bin, "eai"),
         `printf "%s\\n" "$*" >> "$EAI_TEST_EAI_LOG"
 if [ "\${1:-}" = "--version" ]; then echo "${version}"; exit 0; fi
-if [ "\${1:-}" = "deploy" ] && [ "\${2:-}" = "app" ] && [ "\${3:-}" = "--help" ]; then echo "${sourceReady ? `--source <choice> --github-link-session <id>${targetTenantReady ? " --target-tenant-id <tenant>" : ""}` : "--repo <owner/name>"}"; exit ${deployReady ? 0 : 7}; fi
+if [ "\${1:-}" = "deploy" ] && [ "\${2:-}" = "app" ] && [ "\${3:-}" = "--help" ]; then echo "${posixHelp}"; exit ${deployReady ? 0 : 7}; fi
 exit 1`,
       );
     }
@@ -164,6 +174,17 @@ test("rejects customer-only CLI help that lacks source choice and GitHub-link ha
 
 test("rejects managed deployment help that lacks target-tenant binding", async () => {
   const harness = await createBootstrapHarness({ version: "3.17.0", deployReady: true, targetTenantReady: false });
+  try {
+    assert.equal(harness.run.status, 1, harness.run.stderr);
+    assert.match(harness.run.stderr, incompatibleCliPattern);
+    await assert.rejects(readFile(harness.npmLog, "utf8"), { code: "ENOENT" });
+  } finally {
+    await rm(harness.root, { recursive: true, force: true });
+  }
+});
+
+test("rejects lookalike managed deployment option names", async () => {
+  const harness = await createBootstrapHarness({ version: "3.17.0", deployReady: true, lookalikeOptions: true });
   try {
     assert.equal(harness.run.status, 1, harness.run.stderr);
     assert.match(harness.run.stderr, incompatibleCliPattern);
