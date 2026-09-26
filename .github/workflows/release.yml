@@ -110,7 +110,7 @@ jobs:
       - name: Check Rust target
         run: cargo check --manifest-path src-tauri/Cargo.toml --target ${{ matrix.target }}
       - name: Build Windows bundle without publishing
-        uses: tauri-apps/tauri-action@944946e3e4cac6603d1fe8f514171e9ecd3c78aa # v1
+        uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1
         with:
           projectPath: src-tauri
           args: --ci --target ${{ matrix.target }} --bundles nsis
@@ -338,7 +338,7 @@ jobs:
 
       - name: Build notarized macOS bundle without publishing
         if: steps.apple_signing.outputs.enabled == 'true'
-        uses: tauri-apps/tauri-action@944946e3e4cac6603d1fe8f514171e9ecd3c78aa # v1
+        uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -354,7 +354,7 @@ jobs:
 
       - name: Build unsigned macOS bundle without publishing
         if: steps.apple_signing.outputs.enabled != 'true'
-        uses: tauri-apps/tauri-action@944946e3e4cac6603d1fe8f514171e9ecd3c78aa # v1
+        uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1
         with:
           projectPath: src-tauri
           args: --ci --target ${{ matrix.target }} --bundles dmg
@@ -492,7 +492,7 @@ jobs:
       - name: Check Rust target
         run: cargo check --manifest-path src-tauri/Cargo.toml --target ${{ matrix.target }}
       - name: Build Linux bundle without publishing
-        uses: tauri-apps/tauri-action@944946e3e4cac6603d1fe8f514171e9ecd3c78aa # v1
+        uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1
         with:
           projectPath: src-tauri
           args: --ci --target ${{ matrix.target }} --bundles deb
